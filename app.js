@@ -11,7 +11,7 @@ function save(fn){if(localStorage.getItem(KEY)!==JSON.stringify(db))throw Error(
 try{
   const stored=localStorage.getItem(KEY),raw=stored===null?null:JSON.parse(stored);
   db=M.migrate(raw);state=M.replay(db);
-  if(raw?.version!==3||raw?.cardRestoration!==db.cardRestoration){if(stored!==null)localStorage.setItem(raw?.version===3?'tanaka-db-before-card-restoration':'tanaka-db-before-v3',stored);localStorage.setItem(KEY,JSON.stringify(db));}
+  if(raw?.version!==3||raw?.cardRestoration!==db.cardRestoration||raw?.roomCountRestoration!==db.roomCountRestoration){if(stored!==null)localStorage.setItem(raw?.version===3?'tanaka-db-before-card-restoration':'tanaka-db-before-v3',stored);localStorage.setItem(KEY,JSON.stringify(db));}
 }catch(e){fatal=e.message;}
 function sowButton(id){return `<button class="sowlink" data-action="detail" data-id="${esc(id)}">${esc(id)}</button>`;}
 function cardLink(title,value,sub,target){return `<button class="card metric" data-action="page" data-id="${target}"><span class="muted">${title}</span><strong>${value}</strong><small>${sub}　›</small></button>`;}
