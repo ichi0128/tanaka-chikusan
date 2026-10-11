@@ -20,7 +20,7 @@ function history(logs,limit=Infinity){return logs.slice().reverse().slice(0,limi
 function scheduleHome(){
   const all=M.schedules(db),day=today(),due=all.filter(x=>x.date<=day),next=all.filter(x=>x.date>day).slice(0,8);
   const rows=xs=>xs.map(x=>`<div class="row"><div><b>${esc(x.id)}　${esc(x.label)}</b><p class="muted">${esc(x.date)}${x.date<day?' · 未実施':''}</p></div><button class="sowlink" data-action="scheduled-record" data-id="${esc(x.id)}" data-type="${esc(x.type)}">記録</button></div>`).join('');
-  return `<h2>今日の予定</h2><div class="card">${rows(due)||'<div class="empty">今日の予定はありません</div>'}</div><h2>次の予定</h2><div class="card">${rows(next)||'<div class="empty">次の予定はありません</div>'}</div><p class="muted">記録した種付け日・分娩日から計算します。元カードの月日だけの記録は、年を確認して作業記録に登録すると予定に反映されます。</p>`;
+  return `<h2>今日の予定</h2><div class="card">${rows(due)||'<div class="empty">今日の予定はありません</div>'}</div><h2>これからの予定</h2><div class="card">${rows(next)||'<div class="empty">これからの予定はありません</div>'}</div><p class="muted">記録した種付け日・分娩日から計算します。元カードの予定も2026年の種付け分として反映しています。</p>`;
 }
 function home(){
   const active=Object.values(state.sows).filter(s=>s.active).length,used=state.rooms.filter(r=>r.state!=='empty').length;
