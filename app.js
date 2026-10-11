@@ -4,7 +4,7 @@ let db,state,page='home',selected='',fatal='',toastTimer;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 const names={family:'母豚＋子豚',piglets:'子豚のみ',empty:'空き'};
-const roomName=r=>r.label?`部屋 ${r.label}`:`管理枠 ${r.key.slice(1)}（部屋未設定）`;
+const roomName=r=>r.label?`部屋 ${r.label}`:`管理枠 ${r.key.slice(1)}`;
 const dateText=l=>l.date|| (l.t&&Number.isFinite(Date.parse(l.t))?new Date(l.t).toLocaleString('ja-JP'): '日付未確認');
 function toast(s){document.getElementById('toast').textContent=s;document.getElementById('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>document.getElementById('toast').classList.remove('show'),3500);}
 function save(fn){if(localStorage.getItem(KEY)!==JSON.stringify(db))throw Error('別画面でデータが変更されました。画面を開き直してから保存してください。');const next=M.commit(db,fn);localStorage.setItem(KEY,JSON.stringify(next));db=next;state=M.replay(db);render();}
