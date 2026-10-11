@@ -1,0 +1,17 @@
+{
+  "name": "田中畜産",
+  "short_name": "田中畜産",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fffaf2",
+  "theme_color": "#fffaf2",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

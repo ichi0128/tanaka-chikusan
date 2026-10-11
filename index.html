@@ -1,0 +1,42 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#fffaf2"><link rel="manifest" href="manifest.webmanifest">
+<title>田中畜産</title><style>
+*{box-sizing:border-box}body{margin:0;background:#fffaf2;color:#2b241d;font-family:system-ui,-apple-system,sans-serif}
+main{max-width:700px;margin:auto;padding:18px 16px 90px}.head{text-align:center}.pig{font-size:54px;filter:grayscale(1) brightness(.25)}
+h1{margin:0;font-size:28px}.date{color:#80766d;margin:6px 0 16px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:#fff;border:1px solid #eadfce;border-radius:18px;padding:15px;margin-bottom:10px}.big{font-size:30px;font-weight:800}.muted{color:#82776d;font-size:13px}
+h2{font-size:18px;margin:22px 4px 10px}.row{display:flex;align-items:center;gap:10px;padding:14px 2px;border-bottom:1px solid #eee;cursor:pointer}.row:last-child{border:0}
+.grow{flex:1}.title{font-weight:800}.chev{font-size:24px;color:#aaa}.tag{font-size:11px;background:#f5ead5;padding:3px 7px;border-radius:99px}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #eadfce;display:flex;justify-content:space-around;padding:8px 0}
+nav button{border:0;background:none;font-size:12px}nav b{display:block;font-size:22px}
+dialog{border:0;border-radius:20px;width:min(92vw,500px);padding:20px;box-shadow:0 20px 70px #0005}dialog::backdrop{background:#0006}
+.btn{width:100%;padding:14px;border:0;border-radius:13px;background:#29251f;color:#fff;font-size:16px;font-weight:800;margin-top:10px}
+.close{background:#eee8df;color:#332e29}
+</style></head><body><main>
+<div class="head"><div class="pig">🐖</div><h1>田中畜産</h1><div class="muted">KUROBUTA FARM</div><div id="date" class="date"></div></div>
+<div class="grid"><div class="card"><div class="muted">現役母豚</div><div class="big">17頭</div></div><div class="card"><div class="muted">分娩舎</div><div class="big">5 / 10</div><div class="muted">空き 5室</div></div></div>
+<div class="card"><div class="row"><span class="pig" style="font-size:22px">●</span><div class="grow"><b>母豚＋子豚</b><div class="muted">512・912・106</div></div><b>3室</b></div>
+<div class="row"><span class="pig" style="font-size:22px">●</span><div class="grow"><b>子豚のみ</b><div class="muted">812の子・132の子</div></div><b>2室</b></div></div>
+<h2>これからの予定</h2><div class="card" id="plans"></div>
+<h2>すぐ記録</h2><div class="card" id="quick"></div>
+<h2>最近の更新</h2><div class="card" id="recent"><div class="muted">まだこの端末での更新はありません</div></div>
+</main><nav><button><b>⌂</b>ホーム</button><button onclick="listSows()"><b>●</b>母豚</button><button onclick="rooms()"><b>▦</b>分娩舎</button><button onclick="quick('記録')"><b>✎</b>記録</button></nav>
+<dialog id="dlg"><div id="modal"></div></dialog>
+<script>
+const SOWS=["512", "912", "106", "46", "53", "101", "149", "132", "60", "812", "21", "47", "38", "98", "51", "18", "88"];
+let db=JSON.parse(localStorage.getItem("tanaka-db")||'{"logs":[]}');
+const D=document,dlg=D.getElementById("dlg"),modal=D.getElementById("modal");
+let n=new Date(),wd="日月火水木金土"[n.getDay()];D.getElementById("date").textContent=`${n.getFullYear()}年${n.getMonth()+1}月${n.getDate()}日（${wd}）`;
+const plans=[["10月16日","21・47","スイムジェン"],["10月20日","88","分娩予定"],["10月24日","18","スイムジェン"],["10月26日","51","スイムジェン"],["10月28日","98","スイムジェン"],["10月30日","38","スイムジェン"]];
+D.getElementById("plans").innerHTML=plans.map(x=>`<div class="row" onclick="task('${x[1]}','${x[2]}')"><div class="grow"><div class="title">${x[0]}　${x[1]}</div><div class="muted">${x[2]}　<span class="tag">タップして記録</span></div></div><span class="chev">›</span></div>`).join("");
+const qs=[["種付けした","種付け"],["分娩した","分娩"],["離乳した","離乳"],["子豚を移動した","子豚移動"]];
+D.getElementById("quick").innerHTML=qs.map(x=>`<div class="row" onclick="quick('${x[1]}')"><div class="grow"><div class="title">✏️ ${x[0]}</div><div class="muted">実際に行った時だけ入力</div></div><span class="chev">›</span></div>`).join("");
+function task(ids,type){modal.innerHTML=`<h2>${ids}　${type}</h2><p>この予定から、そのまま作業を記録できます。</p><button class="btn" onclick="rec('${ids}','${type} 実施')">✏️ 実施を記録</button><button class="btn close" onclick="dlg.close()">閉じる</button>`;dlg.showModal()}
+function quick(type){modal.innerHTML=`<h2>${type}を記録</h2><input id="sid" placeholder="母豚番号" inputmode="numeric" style="width:100%;padding:13px;font-size:16px;border:1px solid #ddd;border-radius:12px"><button class="btn" onclick="rec(D.getElementById('sid').value,'${type}')">記録する</button><button class="btn close" onclick="dlg.close()">閉じる</button>`;dlg.showModal()}
+function rec(id,type){if(!id)return;db.logs.unshift({id,type,t:new Date().toISOString()});localStorage.setItem("tanaka-db",JSON.stringify(db));dlg.close();recent()}
+function recent(){D.getElementById("recent").innerHTML=db.logs.slice(0,6).map(x=>`<div class="row"><div><b>${x.id}　${x.type}</b><div class="muted">${new Date(x.t).toLocaleString("ja-JP")}</div></div></div>`).join("")||'<div class="muted">まだこの端末での更新はありません</div>'}
+function listSows(){modal.innerHTML="<h2>現役母豚 17頭</h2><p>"+SOWS.join("・")+"</p><button class='btn close' onclick='dlg.close()'>閉じる</button>";dlg.showModal()}
+function rooms(){modal.innerHTML="<h2>分娩舎 5 / 10</h2><p>母豚＋子豚：512・912・106</p><p>子豚のみ：812の子・132の子</p><p>空き：5室</p><button class='btn close' onclick='dlg.close()'>閉じる</button>";dlg.showModal()}
+recent();if("serviceWorker"in navigator)navigator.serviceWorker.register("service-worker.js");
+</script></body></html>
