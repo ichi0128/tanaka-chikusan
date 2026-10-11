@@ -2,6 +2,16 @@
 (function(root){
   'use strict';
   const IDS=['512','912','106','46','53','101','149','132','60','812','21','47','38','98','51','18','88'];
+  const CARD_BASELINE=[{"id": "512", "parity": 3, "mother": "60", "birth": "R6.12.6", "boar": "B2・B1", "mating": "6/8", "reheat": "6/29", "due": "9/30", "wean": "6/4", "result": "6→5", "csf": "済", "swimgen": "9/16", "reheatCount": 0, "history": [], "birthDate": "2024-12-06"}, {"id": "912", "parity": 3, "mother": "60", "birth": "R6.12.6", "boar": "B1・B2", "mating": "5/29", "reheat": "6/19", "due": "9/20", "wean": "5/25", "result": "7→6", "csf": "済", "swimgen": "9/6", "reheatCount": 0, "history": [], "birthDate": "2024-12-06"}, {"id": "106", "parity": 3, "mother": "A58", "birth": "R6.10.25", "boar": "B1・B2", "mating": "5/28", "reheat": "6/18", "due": "9/19", "wean": "5/13", "result": "6→5", "csf": "済", "swimgen": "未確認", "reheatCount": 0, "history": [], "birthDate": "2024-10-25"}, {"id": "46", "parity": 7, "mother": "142", "birth": "R5.5.21", "boar": "B2・B1", "mating": "8/10", "reheat": "8/31", "due": "12/2", "wean": "8/6", "result": "10→10", "csf": "済", "swimgen": "未", "reheatCount": 0, "history": [], "birthDate": "2023-05-21"}, {"id": "53", "parity": 8, "mother": "111", "birth": "R3.3.14", "boar": "B2", "mating": "8/6", "reheat": "8/27", "due": "11/28", "wean": "2/25", "result": "11→8", "csf": "未", "swimgen": "未", "reheatCount": 1, "history": [], "birthDate": "2021-03-14"}, {"id": "101", "parity": 4, "mother": "58", "birth": "R6.10.25", "boar": "B2・B1", "mating": "9/7", "reheat": "9/28", "due": "12/30", "wean": "9/3", "result": "10→10", "csf": "済", "swimgen": "未", "reheatCount": 0, "history": [], "birthDate": "2024-10-25"}, {"id": "149", "parity": 4, "mother": "46", "birth": "R6.4.28", "boar": "B2・B1", "mating": "9/4", "reheat": "9/25", "due": "12/27", "wean": "8/20", "result": "12→11", "csf": "済", "swimgen": "未", "reheatCount": 0, "history": [], "birthDate": "2024-04-28"}, {"id": "132", "parity": 8, "mother": "19", "birth": "R4.12.3", "boar": "B2", "mating": "10/11", "reheat": "11/1", "due": "2/2", "wean": "10/7", "result": "11→11", "csf": "済", "swimgen": "未", "reheatCount": 0, "history": [], "birthDate": "2022-12-03"}, {"id": "60", "parity": 9, "mother": "祖（渡辺バークシャー導入）", "birth": "不明", "boar": "B2・B1", "mating": "9/12", "reheat": "10/3", "due": "1/4", "wean": "9/8", "result": "9→7", "csf": "済", "swimgen": "未", "reheatCount": 0, "history": [], "birthDate": ""}, {"id": "812", "parity": 4, "mother": "60", "birth": "R6.12.6", "boar": "B2・B1", "mating": "10/5", "reheat": "10/26", "due": "1/27", "wean": "10/1", "result": "10→7", "csf": "済", "swimgen": "未", "reheatCount": 0, "history": [], "birthDate": "2024-12-06"}, {"id": "21", "parity": 9, "mother": "212", "birth": "R4.1.21", "boar": "B1・B2", "mating": "7/8", "reheat": "7/29", "due": "10/30", "wean": "4/27", "result": "9→7", "csf": "未", "swimgen": "10/16", "reheatCount": 1, "history": [{"date": "6/21", "event": "種付け", "boar": "B2・B1"}, {"date": "7/12以前", "event": "再発情"}, {"date": "7/8", "event": "再種付け", "boar": "B1・B2"}], "birthDate": "2022-01-21"}, {"id": "47", "parity": 6, "mother": "53", "birth": "R5.7.23", "boar": "B2・B1", "mating": "7/8", "reheat": "7/29", "due": "10/30", "wean": "6/20", "result": "7→5", "csf": "未", "swimgen": "10/16", "reheatCount": 0, "history": [], "birthDate": "2023-07-23"}, {"id": "38", "parity": 4, "mother": "19", "birth": "R6.8.7", "boar": "B2・B1", "mating": "7/22", "reheat": "8/12", "due": "11/13", "wean": "6/29", "result": "8→8", "csf": "未", "swimgen": "10/30", "reheatCount": 0, "history": [], "birthDate": "2024-08-07"}, {"id": "98", "parity": 4, "mother": "19", "birth": "R6.8.7", "boar": "B2・B1", "mating": "7/20", "reheat": "8/10", "due": "11/11", "wean": "7/6", "result": "6→6", "csf": "未", "swimgen": "10/28", "reheatCount": 0, "history": [], "birthDate": "2024-08-07"}, {"id": "51", "parity": 7, "mother": "142", "birth": "R5.5.21", "boar": "B2・B1", "mating": "7/18", "reheat": "8/8", "due": "11/9", "wean": "7/14", "result": "11→10", "csf": "未", "swimgen": "10/26", "reheatCount": 0, "history": [], "birthDate": "2023-05-21"}, {"id": "18", "parity": 7, "mother": "142", "birth": "R5.5.21", "boar": "B2・B1", "mating": "7/16", "reheat": "8/6", "due": "11/7", "wean": "7/11", "result": "11→11", "csf": "未", "swimgen": "10/24", "reheatCount": 0, "history": [], "birthDate": "2023-05-21"}, {"id": "88", "parity": 4, "mother": "19", "birth": "R6.8.7", "boar": "B2・B1", "mating": "6/28", "reheat": "7/19", "due": "10/20", "wean": "6/24", "result": "3→3", "csf": "未", "swimgen": "10/6", "reheatCount": 0, "history": [], "birthDate": "2024-08-07"}];
+  function restoreProfiles(data){
+    if(data.cardRestoration===1)return data;
+    for(const sow of data.sows){
+      const card=CARD_BASELINE.find(c=>c.id===sow.id);if(!card)continue;
+      sow.cardBaseline=clone(card);
+      if(!sow.birthDate && !data.logs.some(l=>l.profileAfter?.id===sow.id))sow.birthDate=card.birthDate;
+    }
+    data.cardRestoration=1;return data;
+  }
   const STATES=['family','piglets','empty'];
   const TYPES=['種付け','分娩','離乳','子豚移動','スイムジェン 実施','追記','分娩舎修正','廃豚','現役復帰'];
   const PLANS=[['10月16日',['21','47'],'スイムジェン'],['10月20日',['88'],'分娩予定'],['10月24日',['18'],'スイムジェン'],['10月26日',['51'],'スイムジェン'],['10月28日',['98'],'スイムジェン'],['10月30日',['38'],'スイムジェン']];
@@ -9,12 +19,12 @@
   function baseline(){return Array.from({length:10},(_,i)=>({key:'r'+(i+1),label:'',state:i<3?'family':i<5?'piglets':'empty',sowId:['512','912','106','812','132'][i]||'',count:null}));}
   function uid(){return root.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);}
   function migrate(raw){
-    if(raw?.version===3){validate(raw);return clone(raw);}
+    if(raw?.version===3){validate(raw);const data=restoreProfiles(clone(raw));validate(data);return data;}
     if(raw?.version!=null)throw Error('この更新版では読み込めないデータのバージョンです。');
     if(raw!=null && (typeof raw!=='object'||Array.isArray(raw)||!Array.isArray(raw.logs)))throw Error('保存済みデータの形式を確認できません。上書きせず停止しました。');
     const old=raw||{logs:[]};
     const data={...clone(old),version:3,sows:IDS.map(id=>({id,breed:'',birthDate:'',note:''})),plans:clone(PLANS),baseline:baseline(),logs:(old.logs||[]).map(x=>({...x,key:uid(),legacy:true})).reverse()};
-    validate(data);return data;
+    restoreProfiles(data);validate(data);return data;
   }
   function validate(data){
     if(data.version!==3||!Array.isArray(data.sows)||!Array.isArray(data.logs)||!Array.isArray(data.baseline)||data.baseline.length!==10)throw Error('データの形式が正しくありません。');
@@ -74,3 +84,4 @@
   root.TanakaModel={IDS,STATES,TYPES,PLANS,clone,uid,migrate,validate,replay,commit,baseline};
   if(typeof module!=='undefined')module.exports=root.TanakaModel;
 })(typeof globalThis!=='undefined'?globalThis:this);
+
