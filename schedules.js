@@ -15,6 +15,25 @@
       if(mating&&(!birth||birth.date<mating.date)){
         add(mating,21,'再発情確認','再発情確認');add(mating,100,'スイムジェン','スイムジェン 実施');add(mating,114,'分娩予定','分娩');
       }
+      if(!mating&&!birth&&sow.cardBaseline){
+        const card=sow.cardBaseline;
+        const parse=raw=>{const match=/^(\d{1,2})\/(\d{1,2})$/.exec(raw||'');return match?match.slice(1).map(Number):null;};
+        const md=parse(card.mating),due=parse(card.due);
+        const confirmedFrom='2026-10-12';
+        if(due){
+          const year=2026+(md&&(due[0]<md[0]||(due[0]===md[0]&&due[1]<md[1]))?1:0);
+          const dueDate=year+'-'+String(due[0]).padStart(2,'0')+'-'+String(due[1]).padStart(2,'0');
+          const seeds=[[dueDate,'分娩予定','分娩'],[addDays(dueDate,-14),'スイムジェン','スイムジェン 実施']];
+          for(const [date,label,type] of seeds){
+            if(date>=confirmedFrom&&!logs.some(l=>l.type===type&&l.date>=confirmedFrom))out.push({id:sow.id,date,label,type,baseKey:'card'});
+          }
+        }
+        const rh=parse(card.reheat);
+        if(rh&&md){
+          const year=2026+(rh[0]<md[0]?1:0),date=year+'-'+String(rh[0]).padStart(2,'0')+'-'+String(rh[1]).padStart(2,'0');
+          if(date>=confirmedFrom&&!logs.some(l=>l.type==='再発情確認'&&l.date>=confirmedFrom))out.push({id:sow.id,date,label:'再発情確認',type:'再発情確認',baseKey:'card'});
+        }
+      }
       if(birth){
         add(birth,4,'子豚 バイコックス','バイコックス 実施');add(birth,10,'子豚 レシュピシュア','レシュピシュア 実施');add(birth,21,'子豚 フォステラ','フォステラ 実施');
       }
