@@ -23,4 +23,15 @@
   }
 
 for(const t of ['再発情確認','バイコックス 実施','レシュピシュア 実施','フォステラ 実施'])if(!M.TYPES.includes(t))M.TYPES.push(t);M.addDays=addDays;M.schedules=schedules;
+const migrate=M.migrate;
+M.migrate=function(raw){
+  const data=migrate(raw);
+  if(data.roomCountRestoration===1)return data;
+  const counts=[['r1','512','family',9],['r2','912','family',9],['r3','106','family',9],['r4','812','piglets',6],['r5','132','piglets',11]];
+  for(const [key,id,state,count] of counts){
+    const room=data.baseline.find(r=>r.key===key);
+    if(room&&room.sowId===id&&room.state===state&&room.count===null&&!data.logs.some(l=>!l.legacy&&l.roomKey===key))room.count=count;
+  }
+  data.roomCountRestoration=1;M.validate(data);return data;
+};
 })();
