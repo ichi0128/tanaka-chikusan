@@ -13,10 +13,12 @@
     data.cardRestoration=1;return data;
   }
   const STATES=['family','piglets','empty'];
-  const TYPES=['種付け','分娩','離乳','子豚移動','スイムジェン 実施','追記','分娩舎修正','廃豚','現役復帰'];
+  const TYPES=['育成舎修正','育成舎から移動','種付け','分娩','離乳','子豚移動','スイムジェン 実施','追記','分娩舎修正','廃豚','現役復帰'];
   const PLANS=[['10月16日',['21','47'],'スイムジェン'],['10月20日',['88'],'分娩予定'],['10月24日',['18'],'スイムジェン'],['10月26日',['51'],'スイムジェン'],['10月28日',['98'],'スイムジェン'],['10月30日',['38'],'スイムジェン']];
   const clone=x=>JSON.parse(JSON.stringify(x));
   function baseline(){return Array.from({length:10},(_,i)=>({key:'r'+(i+1),label:'',state:i<3?'family':i<5?'piglets':'empty',sowId:['512','912','106','812','132'][i]||'',count:null}));}
+  function nurseryBaseline(){return Array.from({length:5},(_,i)=>({key:'n'+(i+1),state:'unknown',sowId:'',count:null,entered:'',birthDate:''}));}
+  function checkNursery(rs){if(rs.length!==5||new Set(rs.map(r=>r.key)).size!==5)throw Error('育成舎は5枠で管理します。');for(const r of rs){if(!/^n[1-5]$/.test(r.key)||!['unknown','empty','occupied'].includes(r.state)||typeof r.sowId!=='string'||(r.count!==null&&(!Number.isInteger(r.count)||r.count<0))||(r.state!=='occupied'&&(r.sowId||r.count!==null||r.entered))||(r.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.birthDate)||!Number.isFinite(Date.parse(r.birthDate))||new Date(r.birthDate).toISOString().slice(0,10)!==r.birthDate))||(r.entered&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.entered)||!Number.isFinite(Date.parse(r.entered))||new Date(r.entered).toISOString().slice(0,10)!==r.entered)))throw Error('育成舎の状態・頭数・入室日を確認してください。');}}
   function uid(){return root.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);}
   function migrate(raw){
     if(raw?.version===3){validate(raw);const data=restoreProfiles(clone(raw));validate(data);return data;}
@@ -51,34 +53,39 @@
   }
   function replay(data){
     const sows=Object.assign(Object.create(null),Object.fromEntries(data.sows.map(s=>[s.id,{...clone(s),active:true}])));
-    const rooms=clone(data.baseline);checkRooms(rooms,sows);
+    const rooms=clone(data.baseline),nursery=clone(data.nurseryBaseline||nurseryBaseline());checkRooms(rooms,sows);checkNursery(nursery);
     for(const l of data.logs){
       if(l.legacy)continue;
       const sow=sows[l.id],room=rooms.find(r=>r.key===l.roomKey);
-      if(l.type==='分娩舎修正'){
+      if(['育成舎修正','育成舎から移動'].includes(l.type)){
+        const n=nursery.find(r=>r.key===l.nurseryKey);if(!n)throw Error('育成舎の枠が見つかりません。');
+        if(l.type==='育成舎修正'){if(!l.nursery)throw Error('育成舎の内容がありません。');Object.assign(n,clone(l.nursery),{key:n.key});}
+        else{if(n.state!=='occupied')throw Error('移動対象の子豚が育成舎にいません。');Object.assign(n,{state:'empty',sowId:'',count:null,entered:'',birthDate:''});}
+      }else if(l.type==='分娩舎修正'){
         if(!room||!l.room)throw Error('修正先の部屋が見つかりません。');Object.assign(room,clone(l.room),{key:room.key});
       }else{
         if(!sow)throw Error('記録対象の母豚が見つかりません。');
         if(['種付け','分娩','離乳','廃豚','スイムジェン 実施'].includes(l.type)&&!sow.active)throw Error('廃豚済みの母豚にはこの作業を記録できません。');
         if(l.type==='分娩'){
           if(!room||room.state!=='empty')throw Error('分娩の入室先が空きではありません。先の記録を確認してください。');
-          Object.assign(room,{state:'family',sowId:l.id,count:l.count??null});
+          Object.assign(room,{state:'family',sowId:l.id,count:l.count??null,birthDate:l.date});
         }
         if(l.type==='離乳'){
           if(!room||room.state!=='family'||room.sowId!==l.id)throw Error('離乳対象の母豚と在室状態が一致しません。');room.state='piglets';if(l.count!==null&&l.count!==undefined)room.count=l.count;
         }
         if(l.type==='子豚移動'){
           if(!room||room.state!=='piglets'||room.sowId!==l.id)throw Error('移動対象の子豚が部屋にいません。');
-          Object.assign(room,{state:'empty',sowId:'',count:null});
+          if(l.nurseryKey){const n=nursery.find(r=>r.key===l.nurseryKey);if(!n||n.state!=='empty')throw Error('移動先の育成舎が空きではありません。');Object.assign(n,{state:'occupied',sowId:room.sowId,count:room.count,entered:l.date,birthDate:room.birthDate||''});}
+          Object.assign(room,{state:'empty',sowId:'',count:null,birthDate:''});
         }
         if(l.type==='廃豚'){
           if(rooms.some(r=>r.state==='family'&&r.sowId===l.id))throw Error('母豚が分娩舎にいます。先に離乳または分娩舎の修正を記録してください。');sow.active=false;
         }
         if(l.type==='現役復帰')sow.active=true;
       }
-      checkRooms(rooms,sows);
+      checkRooms(rooms,sows);checkNursery(nursery);
     }
-    return {sows,rooms};
+    return {sows,rooms,nursery};
   }
   function commit(data,fn){const next=clone(data);fn(next);validate(next);return next;}
   root.TanakaModel={IDS,STATES,TYPES,PLANS,clone,uid,migrate,validate,replay,commit,baseline};
