@@ -3,3 +3,5 @@
 .room-summary{display:inline-flex;flex-direction:column;align-items:center;gap:4px;vertical-align:top;margin-top:6px;min-width:64px}.room-summary small{font-size:12px;font-weight:400;white-space:nowrap}
 
 nav button{width:20%}.nursery-count{font-size:26px;font-weight:800}
+
+.home-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.home-metrics .metric{min-width:0;padding:12px 8px}.home-metrics .metric strong{font-size:clamp(20px,5.8vw,30px);white-space:nowrap}.home-metrics .metric .muted{font-size:12px}.home-metrics .metric small{display:block;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
