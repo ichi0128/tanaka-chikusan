@@ -22,7 +22,7 @@ function history(logs,limit=Infinity){return logs.slice().reverse().slice(0,limi
 
 function scheduleHome(){
   const all=M.schedules(db),day=today(),due=all.filter(x=>x.date<=day),next=all.filter(x=>x.date>day).slice(0,8);
-  const rows=xs=>xs.map(x=>`<div class="row"><div><b>${esc(x.id)}　${esc(x.label)}</b><p class="muted">${esc(x.date)}${x.date<day?' · 未実施':''}</p></div><button class="sowlink" data-action="scheduled-record" data-id="${esc(x.id)}" data-type="${esc(x.type)}">${x.type==='分娩舎へ移動'?'移動':'記録'}</button>${x.type==='分娩'&&!state.rooms.some(r=>['waiting','family'].includes(r.state)&&r.sowId===x.id)?`<button class="sowlink" data-action="waiting-enter" data-id="${esc(x.id)}">分娩舎へ移動</button>`:''}</div>`).join('');
+  const rows=xs=>xs.map(x=>`<div class="row"><div><b>${esc(x.id)}　${esc(x.label)}</b><p class="muted">${esc(x.date)}${x.completedKey?' · 実施済み':x.date<day?' · 未実施':''}</p></div><button class="sowlink" data-action="${x.completedKey?'cancel-scheduled':'scheduled-record'}" data-id="${esc(x.completedKey||x.id)}" data-type="${esc(x.type)}">${x.completedKey?'取消':'実施'}</button>${x.type==='分娩'&&!state.rooms.some(r=>['waiting','family'].includes(r.state)&&r.sowId===x.id)?`<button class="sowlink" data-action="waiting-enter" data-id="${esc(x.id)}">分娩舎へ移動</button>`:''}</div>`).join('');
   return `<h2>今日の予定</h2><div class="card">${rows(due)||'<div class="empty">今日の予定はありません</div>'}</div><h2>直近の予定</h2><div class="card">${rows(next)||'<div class="empty">直近の予定はありません</div>'}</div><p class="muted">記録した種付け日・分娩日から計算します。元カードの予定も2026年の種付け分として反映しています。</p>`;
 }
 function home(){
@@ -106,6 +106,7 @@ document.addEventListener('click',e=>{
   if(fatal)return;
   if(a==='page')go(id);if(a==='detail')go('detail',id);if(a==='add')profile();if(a==='profile')profile(id);if(a==='card-edit')editOriginalCard(id);
   if(a==='record')record(id);if(a==='sow-record'){form('母豚 '+id+'の作業',`<label for="type">記録内容</label><select id="type" name="type">${['種付け','分娩','離乳','子豚移動','再発情確認','スイムジェン 実施','バイコックス 実施','レシュピシュア 実施','フォステラ 実施','追記'].map(t=>`<option>${t}</option>`).join('')}</select>`,'次へ',f=>{setTimeout(()=>record(f.get('type'),id),0);});}
+  if(a==='cancel-scheduled')cancelScheduled(id);
   if(a==='scheduled-record'){if(b.dataset.type==='分娩舎へ移動')enterWaiting(id);else record(b.dataset.type,id);}
   if(a==='lifecycle')record(state.sows[id].active?'廃豚':'現役復帰',id);
   if(a==='room-edit')editRoom(id);if(a==='room-group')roomGroup(id);
@@ -175,3 +176,5 @@ function sowDue(id){return M.schedules(db).find(x=>x.id===id&&x.type==='分娩')
 function enterWaiting(id){const sow=state.sows[id];if(!sow?.active)return;const occupied=state.rooms.find(r=>['waiting','family'].includes(r.state)&&r.sowId===id);if(occupied){toast('この母豚は既に分娩舎にいます');return;}const room=state.rooms.filter(r=>r.state==='empty').sort((a,b)=>Number(a.key.slice(1))-Number(b.key.slice(1)))[0];if(!room){toast('分娩舎が満室です');return;}form('分娩舎へ移動',`<p>母豚 ${esc(id)}を分娩待ちにします。</p><p class="muted">出産予定日：${esc(sowDue(id))}<br>空いている ${esc(roomName(room))}に入ります。</p>`,'移動する',()=>save(d=>d.logs.push({...makeLog('分娩舎へ移動',id),roomKey:room.key})));}
 function cancelWaiting(key){const r=state.rooms.find(x=>x.key===key);if(r?.state!=='waiting'){toast('出産前の分娩待ちだけ取り消せます');return;}form('移動を取り消す',`<p>母豚 ${esc(r.sowId)}を母豚舎に戻し、この管理枠を空けます。</p>`,'取り消す',()=>save(d=>d.logs.push({...makeLog('移動取り消し',r.sowId),roomKey:key})));}
 function waitingLog(l){form(l.type,`<p>母豚 ${esc(l.id)} · ${esc(l.roomKey)}</p><p class="muted">${l.type==='分娩舎へ移動'?'分娩待ちへの移動記録です。出産前なら移動を取り消せます。':'移動を取り消した記録です。'}</p>`,'閉じる',()=>{});showRevisions(l);if(l.type==='分娩舎へ移動'&&state.rooms.some(r=>r.key===l.roomKey&&r.state==='waiting'&&r.sowId===l.id))modal.insertAdjacentHTML('beforeend',`<button class="btn secondary" data-action="waiting-cancel" data-id="${l.roomKey}">移動を取り消す</button>`);}
+
+function cancelScheduled(key){const l=db.logs.find(x=>x.key===key);if(!l)return;form('実施を取り消す',`<p>母豚 ${esc(l.id)} · ${esc(recordTitle(l))}を取り消し、未実施に戻します。</p><p class="muted">頭数・在室状態も取り消し前に戻ります。後の記録と矛盾する場合は取消できません。</p>`,'取消する',()=>save(d=>{const i=d.logs.findIndex(x=>x.key===key);if(i<0)throw Error('対象の記録が見つかりません。');const removed=d.logs.splice(i,1)[0];d.deletedLogs=d.deletedLogs||[];d.deletedLogs.push({...removed,deletedAt:new Date().toISOString(),reason:'予定の実施を取消'});}));}

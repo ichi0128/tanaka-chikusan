@@ -1,6 +1,7 @@
 (function(){'use strict';const M=TanakaModel,replay=M.replay;
   function addDays(date,days){const d=new Date(date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
-  function schedules(data){
+  function schedules(data,day){
+    if(!day){const d=new Date();day=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
     const state=replay(data),out=[];
     for(const sow of Object.values(state.sows)){
       if(!sow.active)continue;
@@ -9,13 +10,14 @@
       const mating=last('種付け'),birth=last('分娩');
       function add(base,days,label,type){
         const date=addDays(base.date,days);
-        const complete=logs.some(l=>l.type===type&&l.date>=base.date&&data.logs.indexOf(l)>data.logs.indexOf(base));
-        if(!complete)out.push({id:sow.id,date,label,type,baseKey:base.key});
+        const complete=logs.filter(l=>l.type===type&&l.date>=base.date&&data.logs.indexOf(l)>data.logs.indexOf(base)).at(-1);
+        if(!complete||date>=day)out.push({id:sow.id,date,label,type,baseKey:base.key,completedKey:complete?.key||''});
       }
       if(mating&&(!birth||birth.date<mating.date)){
         add(mating,21,'再発情確認','再発情確認');add(mating,100,'スイムジェン','スイムジェン 実施');add(mating,114,'分娩予定','分娩');
       }
-      if(!mating&&!birth&&sow.cardBaseline){
+      if(mating&&birth&&birth.date>=mating.date)add(mating,114,'分娩予定','分娩');
+      if(!mating&&sow.cardBaseline){
         const card=sow.cardBaseline;
         const parse=raw=>{const match=/^(\d{1,2})\/(\d{1,2})$/.exec(raw||'');return match?match.slice(1).map(Number):null;};
         const md=parse(card.mating),due=parse(card.due);
@@ -25,13 +27,16 @@
           const dueDate=year+'-'+String(due[0]).padStart(2,'0')+'-'+String(due[1]).padStart(2,'0');
           const seeds=[[dueDate,'分娩予定','分娩'],[addDays(dueDate,-14),'スイムジェン','スイムジェン 実施']];
           for(const [date,label,type] of seeds){
-            if(date>=confirmedFrom&&!logs.some(l=>l.type===type&&l.date>=confirmedFrom))out.push({id:sow.id,date,label,type,baseKey:'card'});
+            if(birth&&type!=='分娩')continue;
+            const complete=logs.filter(l=>l.type===type&&l.date>=confirmedFrom).at(-1);
+            if(date>=confirmedFrom&&(!complete||date>=day))out.push({id:sow.id,date,label,type,baseKey:'card',completedKey:complete?.key||''});
           }
         }
         const rh=parse(card.reheat);
-        if(rh&&md){
+        if(rh&&md&&!birth){
           const year=2026+(rh[0]<md[0]?1:0),date=year+'-'+String(rh[0]).padStart(2,'0')+'-'+String(rh[1]).padStart(2,'0');
-          if(date>=confirmedFrom&&!logs.some(l=>l.type==='再発情確認'&&l.date>=confirmedFrom))out.push({id:sow.id,date,label:'再発情確認',type:'再発情確認',baseKey:'card'});
+          const complete=logs.filter(l=>l.type==='再発情確認'&&l.date>=confirmedFrom).at(-1);
+          if(date>=confirmedFrom&&(!complete||date>=day))out.push({id:sow.id,date,label:'再発情確認',type:'再発情確認',baseKey:'card',completedKey:complete?.key||''});
         }
       }
       if(birth){
@@ -39,10 +44,11 @@
       }
     }
     for(const plan of out.filter(x=>x.type==='分娩')){
-      if(state.rooms.some(r=>['waiting','family'].includes(r.state)&&r.sowId===plan.id))continue;
-      const sow=state.sows[plan.id],base=sow.cardBaseline?.parity,parity=base===undefined||base===''?null:Number(base)+data.logs.filter(l=>!l.legacy&&l.id===plan.id&&l.type==='分娩').length;
+      const occupied=state.rooms.find(r=>['waiting','family'].includes(r.state)&&r.sowId===plan.id),entry=occupied?data.logs.filter(l=>l.id===plan.id&&l.type==='分娩舎へ移動'&&l.key===occupied.entryKey).at(-1):null;
+      const sow=state.sows[plan.id],base=sow.cardBaseline?.parity,parity=base===undefined||base===''?null:Number(base)+data.logs.filter(l=>!l.legacy&&l.id===plan.id&&l.type==='分娩'&&l.key!==plan.completedKey).length;
       if(parity===null)continue;
-      out.push({id:plan.id,date:addDays(plan.date,parity===0?-7:-4),label:'分娩舎へ移動',type:'分娩舎へ移動',baseKey:plan.baseKey});
+      const moveDate=addDays(plan.date,parity===0?-7:-4);
+      if(!occupied||entry&&moveDate>=day)out.push({id:plan.id,date:moveDate,label:'分娩舎へ移動',type:'分娩舎へ移動',baseKey:plan.baseKey,completedKey:entry?.key||''});
     }
     return out.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
   }
