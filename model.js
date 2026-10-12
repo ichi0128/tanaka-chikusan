@@ -13,7 +13,7 @@
     data.cardRestoration=1;return data;
   }
   const STATES=['family','piglets','empty'];
-  const TYPES=['育成舎修正','育成舎から移動','種付け','分娩','離乳','子豚移動','スイムジェン 実施','追記','分娩舎修正','廃豚','現役復帰'];
+  const TYPES=['分娩舎内移動','育成舎修正','育成舎から移動','種付け','分娩','離乳','子豚移動','スイムジェン 実施','追記','分娩舎修正','廃豚','現役復帰'];
   const PLANS=[['10月16日',['21','47'],'スイムジェン'],['10月20日',['88'],'分娩予定'],['10月24日',['18'],'スイムジェン'],['10月26日',['51'],'スイムジェン'],['10月28日',['98'],'スイムジェン'],['10月30日',['38'],'スイムジェン']];
   const clone=x=>JSON.parse(JSON.stringify(x));
   function baseline(){return Array.from({length:10},(_,i)=>({key:'r'+(i+1),label:'',state:i<3?'family':i<5?'piglets':'empty',sowId:['512','912','106','812','132'][i]||'',count:null}));}
@@ -44,7 +44,9 @@
       if(r.label){if(labels.includes(r.label))throw Error('部屋番号が重複しています。');labels.push(r.label);}
       if(r.count!==null && (!Number.isInteger(r.count)||r.count<0))throw Error('子豚頭数は0以上の整数で入力してください。');
       if(r.state==='empty'&&(r.sowId||r.count!==null))throw Error('空き部屋に母豚・子豚情報は登録できません。');
-      if(r.state!=='empty'&&(!sows[r.sowId]))throw Error('登録されている母豚番号を選んでください。');
+      if(r.mixed&&(r.state!=='piglets'||r.sowId))throw Error('混成は離乳後の子豚のみで登録してください。');
+      if(r.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.birthDate)||!Number.isFinite(Date.parse(r.birthDate))||new Date(r.birthDate).toISOString().slice(0,10)!==r.birthDate))throw Error('子豚の生まれた月日が不正です。');
+      if(r.state!=='empty'&&!r.mixed&&(!sows[r.sowId]))throw Error('登録されている母豚番号を選んでください。');
       if(r.state==='family'){
         if(!sows[r.sowId].active)throw Error('廃豚済みの母豚は入室できません。');
         if(occupied.includes(r.sowId))throw Error('同じ母豚が複数の部屋に入っています。');occupied.push(r.sowId);
@@ -57,26 +59,37 @@
     for(const l of data.logs){
       if(l.legacy)continue;
       const sow=sows[l.id],room=rooms.find(r=>r.key===l.roomKey);
-      if(['育成舎修正','育成舎から移動'].includes(l.type)){
+      if(l.type==='分娩舎内移動'){
+        const dest=rooms.find(r=>r.key===l.targetRoomKey);
+        if(!room||room.state!=='piglets'||!dest||dest===room||!['empty','piglets'].includes(dest.state))throw Error('離乳後の子豚だけを別の枠へ移動できます。');
+        if(!Number.isInteger(l.count)||l.count<=0||room.count===null||l.count>room.count||(dest.state==='piglets'&&dest.count===null))throw Error('移動元・移動先の頭数を確認してください。');
+        const birth=l.sourceBirthDate??room.birthDate??'',destBirth=l.targetBirthDate??dest.birthDate??'',wasEmpty=dest.state==='empty',mixed=!wasEmpty&&(room.mixed||dest.mixed||room.sowId!==dest.sowId);
+        if(mixed&&(!birth||!destBirth))throw Error('混ぜる子豚の生まれた月日を両方入力してください。');
+        for(const dt of [birth,destBirth])if(dt&&(!/^\d{4}-\d{2}-\d{2}$/.test(dt)||!Number.isFinite(Date.parse(dt))||new Date(dt).toISOString().slice(0,10)!==dt))throw Error('生まれた月日を確認してください。');
+        const targetCount=(wasEmpty?0:dest.count)+l.count;
+        Object.assign(dest,{state:'piglets',sowId:(wasEmpty?room.mixed:mixed)?'':room.sowId,mixed:wasEmpty?!!room.mixed:!!mixed,count:targetCount,birthDate:wasEmpty?birth:[birth,destBirth].sort().at(-1)});
+        room.count-=l.count;room.birthDate=birth;
+        if(room.count===0)Object.assign(room,{mixed:false,state:'empty',sowId:'',mixed:false,count:null,birthDate:''});
+      }else if(['育成舎修正','育成舎から移動'].includes(l.type)){
         const n=nursery.find(r=>r.key===l.nurseryKey);if(!n)throw Error('育成舎の枠が見つかりません。');
         if(l.type==='育成舎修正'){if(!l.nursery)throw Error('育成舎の内容がありません。');Object.assign(n,clone(l.nursery),{key:n.key,mixed:!!l.nursery.mixed});}
         else{if(n.state!=='occupied')throw Error('移動対象の子豚が育成舎にいません。');Object.assign(n,{mixed:false,state:'empty',sowId:'',count:null,entered:'',birthDate:''});}
       }else if(l.type==='分娩舎修正'){
-        if(!room||!l.room)throw Error('修正先の部屋が見つかりません。');Object.assign(room,clone(l.room),{key:room.key});
+        if(!room||!l.room)throw Error('修正先の部屋が見つかりません。');Object.assign(room,clone(l.room),{key:room.key,mixed:!!l.room.mixed});
       }else{
-        if(!sow)throw Error('記録対象の母豚が見つかりません。');
+        if(!sow&&!(l.type==='子豚移動'&&room?.mixed&&l.id===''))throw Error('記録対象の母豚が見つかりません。');
         if(['種付け','分娩','離乳','廃豚','スイムジェン 実施'].includes(l.type)&&!sow.active)throw Error('廃豚済みの母豚にはこの作業を記録できません。');
         if(l.type==='分娩'){
           if(!room||room.state!=='empty')throw Error('分娩の入室先が空きではありません。先の記録を確認してください。');
-          Object.assign(room,{state:'family',sowId:l.id,count:l.count??null,birthDate:l.date});
+          Object.assign(room,{mixed:false,state:'family',sowId:l.id,count:l.count??null,birthDate:l.date});
         }
         if(l.type==='離乳'){
           if(!room||room.state!=='family'||room.sowId!==l.id)throw Error('離乳対象の母豚と在室状態が一致しません。');room.state='piglets';if(l.count!==null&&l.count!==undefined)room.count=l.count;
         }
         if(l.type==='子豚移動'){
           if(!room||room.state!=='piglets'||room.sowId!==l.id)throw Error('移動対象の子豚が部屋にいません。');
-          if(l.nurseryKey){const n=nursery.find(r=>r.key===l.nurseryKey);if(!n||n.state!=='empty')throw Error('移動先の育成舎が空きではありません。');Object.assign(n,{mixed:false,state:'occupied',sowId:room.sowId,count:room.count,entered:l.date,birthDate:room.birthDate||''});}
-          Object.assign(room,{state:'empty',sowId:'',count:null,birthDate:''});
+          if(l.nurseryKey){const n=nursery.find(r=>r.key===l.nurseryKey);if(!n||n.state!=='empty')throw Error('移動先の育成舎が空きではありません。');Object.assign(n,{mixed:!!room.mixed,state:'occupied',sowId:room.sowId,count:room.count,entered:l.date,birthDate:room.birthDate||''});}
+          Object.assign(room,{mixed:false,state:'empty',sowId:'',count:null,birthDate:''});
         }
         if(l.type==='廃豚'){
           if(rooms.some(r=>r.state==='family'&&r.sowId===l.id))throw Error('母豚が分娩舎にいます。先に離乳または分娩舎の修正を記録してください。');sow.active=false;
