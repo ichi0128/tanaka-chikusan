@@ -38,6 +38,12 @@
         add(birth,4,'子豚 バイコックス','バイコックス 実施');add(birth,10,'子豚 レシュピシュア','レシュピシュア 実施');add(birth,21,'子豚 フォステラ','フォステラ 実施');
       }
     }
+    for(const plan of out.filter(x=>x.type==='分娩')){
+      if(state.rooms.some(r=>['waiting','family'].includes(r.state)&&r.sowId===plan.id))continue;
+      const sow=state.sows[plan.id],base=sow.cardBaseline?.parity,parity=base===undefined||base===''?null:Number(base)+data.logs.filter(l=>!l.legacy&&l.id===plan.id&&l.type==='分娩').length;
+      if(parity===null)continue;
+      out.push({id:plan.id,date:addDays(plan.date,parity===0?-7:-4),label:'分娩舎へ移動',type:'分娩舎へ移動',baseKey:plan.baseKey});
+    }
     return out.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
   }
 
