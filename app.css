@@ -5,3 +5,5 @@
 nav button{width:20%}.nursery-count{font-size:26px;font-weight:800}
 
 .home-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.home-metrics .metric{min-width:0;padding:12px 8px}.home-metrics .metric strong{font-size:clamp(20px,5.8vw,30px);white-space:nowrap}.home-metrics .metric .muted{font-size:12px}.home-metrics .metric small{display:block;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+
+nav .tab-icon{display:block;width:30px;height:30px;margin:0 auto 3px}nav button{color:#807567}nav button[aria-current=page]{color:#3c4832}
