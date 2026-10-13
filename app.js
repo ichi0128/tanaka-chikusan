@@ -215,6 +215,6 @@ function monthDayText(raw){const m=/^(?:\d{4}-)?(\d{1,2})[-/](\d{1,2})$/.exec(ra
 
 function sowParityText(id){const sow=state.sows[id],base=sow?.cardBaseline?.parity;if(base===null||base===undefined||base===''||!Number.isInteger(Number(base))||Number(base)<0)return '未入力';const births=db.logs.filter(l=>!l.legacy&&l.id===id&&l.type==='分娩').length;return (Number(base)+births)+'回';}
 
-function pigletAgeText(birthDate,day=today()){const birth=Date.parse(birthDate+'T00:00:00Z'),now=Date.parse(day+'T00:00:00Z');if(!Number.isFinite(birth)||!Number.isFinite(now))return '日齢不明';const days=Math.round((now-birth)/86400000);return days<0?'出産日を確認':days+'日齢';}
+function pigletAgeText(birthDate,day=today()){const birth=Date.parse(birthDate+'T00:00:00Z'),now=Date.parse(day+'T00:00:00Z');if(!Number.isFinite(birth)||!Number.isFinite(now))return '日令不明';const days=Math.round((now-birth)/86400000);return days<0?'出産日を確認':days+'日令';}
 let ageDisplayDay=today();setInterval(()=>{const day=today();if(day!==ageDisplayDay){ageDisplayDay=day;if(!fatal&&!dlg.open)render();}},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!fatal&&!dlg.open){ageDisplayDay=today();render();}});
