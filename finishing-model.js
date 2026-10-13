@@ -13,10 +13,10 @@
     if(g.mixed&&g.sowId)throw Error('混成の母豚番号は空欄にしてください。');
   }
   function check(rooms){
-    if(rooms.length!==24||new Set(rooms.map(r=>r.key)).size!==24)throw Error('肉豚舎は24部屋で管理します。');
-    for(const r of rooms){if(!/^f([1-9]|1\d|2[0-4])$/.test(r.key)||!['empty','occupied'].includes(r.state))throw Error('肉豚舎の部屋が不正です。');validGroup(group(r));if(r.state==='empty'&&(r.count!==0||r.sowId||r.birthDate||r.note||r.mixed)||r.state==='occupied'&&r.count<=0)throw Error('肉豚舎の在室状態と頭数を確認してください。');}
+    if(rooms.length!==25||new Set(rooms.map(r=>r.key)).size!==25)throw Error('肉豚舎は24部屋と運動場で管理します。');
+    for(const r of rooms){if(!(r.key==='yard'||/^f([1-9]|1\d|2[0-4])$/.test(r.key))||!['empty','occupied'].includes(r.state))throw Error('肉豚舎の部屋が不正です。');validGroup(group(r));if(r.state==='empty'&&(r.count!==0||r.sowId||r.birthDate||r.note||r.mixed)||r.state==='occupied'&&r.count<=0)throw Error('肉豚舎の在室状態と頭数を確認してください。');}
   }
-  function baseline(data){const rooms=M.clone(data.finishingBaseline||Array.from({length:24},(_,i)=>empty('f'+(i+1))));check(rooms);return rooms;}
+  function baseline(data){const rooms=M.clone(data.finishingBaseline||Array.from({length:24},(_,i)=>empty('f'+(i+1))));if(!rooms.some(r=>r.key==='yard'))rooms.push(empty('yard'));check(rooms);return rooms;}
   function same(a,b){return JSON.stringify(group(a))===JSON.stringify(group(b));}
   function put(r,g){validGroup(g);Object.assign(r,g,{state:g.count?'occupied':'empty'});if(!g.count)Object.assign(r,empty(r.key));}
   function apply(l,rooms,nursery){
