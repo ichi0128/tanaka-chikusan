@@ -39,9 +39,6 @@
           if(date>=confirmedFrom&&(!complete||date>=day))out.push({id:sow.id,date,label:'再発情確認',type:'再発情確認',baseKey:'card',completedKey:complete?.key||''});
         }
       }
-      if(birth){
-        add(birth,4,'子豚 バイコックス','バイコックス 実施');add(birth,10,'子豚 レシュピシュア','レシュピシュア 実施');add(birth,21,'子豚 フォステラ','フォステラ 実施');
-      }
     }
     for(const plan of out.filter(x=>x.type==='分娩')){
       const occupied=state.rooms.find(r=>['waiting','family'].includes(r.state)&&r.sowId===plan.id),entry=occupied?data.logs.filter(l=>l.id===plan.id&&l.type==='分娩舎へ移動'&&l.key===occupied.entryKey).at(-1):null;
@@ -78,3 +75,74 @@ M.migrate=function(raw){
   data.roomCountRestoration=1;M.validate(data);return data;
 };
 })();
+
+/* Optional check state: existing records and schema remain intact. */
+(function(){
+  'use strict';
+  const M=TanakaModel;
+  M.PIGLET_CARE=[{id:'baycox',days:4,label:'バイコックス',type:'バイコックス 実施'},{id:'respisure',days:10,label:'レシュピシュア',type:'レシュピシュア 実施'},{id:'fostera',days:21,label:'フォステラ',type:'フォステラ 実施'}];
+  M.roomBirthDate=function(data,room){
+    if(room.birthDate)return room.birthDate;
+    if(room.mixed||!room.sowId)return '';
+    const births=data.logs.map((l,index)=>({l,index})).filter(x=>!x.l.legacy&&x.l.type==='分娩'&&x.l.id===room.sowId);
+    const last=births.at(-1);if(!last||last.l.roomKey!==room.key)return '';
+    const after=data.logs.slice(last.index+1);
+    if(after.some(l=>!l.legacy&&(l.roomKey===room.key&&(l.type==='子豚移動'||l.type==='分娩舎修正'&&(l.room.state==='empty'||l.room.sowId!==room.sowId)||l.type==='分娩舎内移動')||l.targetRoomKey===room.key)))return '';
+    return last.l.date||'';
+  };
+  M.pigletCare=function(data,room){
+    if(!['family','piglets'].includes(room.state))return [];
+    let token='baseline',birthKey='',start=-1;
+    let identity=M.clone(data.baseline.find(r=>r.key===room.key));
+    for(let i=0;i<data.logs.length;i++){
+      const l=data.logs[i];if(l.legacy)continue;
+      if(l.roomKey===room.key&&l.type==='分娩'){
+        token=l.key;birthKey=l.key;start=i;identity={state:'family',sowId:l.id,mixed:false,birthDate:l.date};
+      }else if(l.roomKey===room.key&&l.type==='離乳')identity.state='piglets';
+      else if(l.type==='分娩舎内移動'&&(l.roomKey===room.key||l.targetRoomKey===room.key)){
+        token=l.key;birthKey='';start=i;identity=null;
+      }else if(l.roomKey===room.key&&['子豚移動','分娩舎へ移動','移動取り消し'].includes(l.type)){
+        token=l.key;birthKey='';start=i;identity={state:l.type==='分娩舎へ移動'?'waiting':'empty',sowId:l.type==='分娩舎へ移動'?l.id:'',mixed:false,birthDate:''};
+      }else if(l.roomKey===room.key&&l.type==='分娩舎修正'){
+        const r=l.room;
+        if(!identity||identity.sowId!==r.sowId||!!identity.mixed!==!!r.mixed||(identity.birthDate||'')!==(r.birthDate||'')||['empty','waiting'].includes(identity.state)!==['empty','waiting'].includes(r.state)){
+          token=l.key;birthKey='';start=i;
+        }
+        identity=M.clone(r);
+      }
+    }
+    const groupKey=JSON.stringify([room.key,token]),saved=data.pigletChecks?.[groupKey],birth=M.roomBirthDate(data,room);
+    return M.PIGLET_CARE.map(item=>{
+      const oldDone=!!birthKey&&data.logs.slice(start+1).some(l=>!l.legacy&&l.id===room.sowId&&l.type===item.type&&l.date>=birth);
+      return {...item,roomKey:room.key,groupKey,date:birth?M.addDays(birth,item.days):'',done:typeof saved?.[item.id]==='boolean'?saved[item.id]:oldDone};
+    });
+  };
+  M.setPigletCheck=function(data,roomKey,itemId){
+    const room=M.replay(data).rooms.find(r=>r.key===roomKey),item=room&&M.pigletCare(data,room).find(x=>x.id===itemId);
+    if(!item)throw Error('対象の子豚が変わりました。画面を開き直してください。');
+    data.pigletChecks=data.pigletChecks||{};
+    const values=data.pigletChecks[item.groupKey]||{};
+    data.pigletChecks[item.groupKey]={...values,[item.id]:!item.done};
+  };
+  M.maternalForest=function(data){
+    const sows=Object.values(M.replay(data).sows),nodes=new Map(),children=new Map();
+    for(const sow of sows)nodes.set(sow.id,{id:sow.id,sow,mother:String(sow.cardBaseline?.mother||'').trim()});
+    for(const node of [...nodes.values()]){
+      if(!node.mother||['不明','未確認','未入力'].includes(node.mother))continue;
+      if(!nodes.has(node.mother))nodes.set(node.mother,{id:node.mother,sow:null,mother:''});
+      if(!children.has(node.mother))children.set(node.mother,[]);
+      children.get(node.mother).push(node.id);
+    }
+    const seen=new Set();
+    function branch(id,path=new Set()){
+      const node=nodes.get(id);
+      if(path.has(id))return {...node,cycle:true,children:[]};
+      seen.add(id);const next=new Set(path);next.add(id);
+      return {...node,children:(children.get(id)||[]).map(child=>branch(child,next))};
+    }
+    const roots=[...nodes.values()].filter(n=>!n.mother||!nodes.has(n.mother)).map(n=>branch(n.id));
+    for(const id of nodes.keys())if(!seen.has(id))roots.push(branch(id));
+    return roots;
+  };
+})();
+

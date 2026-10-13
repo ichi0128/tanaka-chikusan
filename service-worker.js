@@ -1,4 +1,4 @@
-const CACHE='tanaka-chikusan-v3-settings-tab-20261013';
+const CACHE='tanaka-chikusan-v3-maternal-care-20261013';
 const ASSETS=['./','./index.html','./app.css','./model.js','./birth-validation.js','./app.js','./schedules.js','./manifest.webmanifest','./logo.png','./icon-192.png','./icon-512.png','./icon.svg'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('tanaka-chikusan-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
@@ -13,4 +13,5 @@ self.addEventListener('fetch',e=>{
     return new Response('Offline',{status:503});
   }));
 });
+
 
