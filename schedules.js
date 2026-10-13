@@ -53,6 +53,18 @@
     return out.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
   }
 
+function sowCard(data,id){
+  const sow=data.sows.find(s=>s.id===id),c=M.clone(sow?.cardBaseline||{});
+  const logs=data.logs.filter(l=>!l.legacy&&l.id===id).slice().sort((a,b)=>a.date.localeCompare(b.date)||data.logs.indexOf(a)-data.logs.indexOf(b));
+  const last=t=>logs.filter(l=>l.type===t).at(-1),mating=last('種付け'),birth=last('分娩'),wean=last('離乳');
+  const md=date=>date?Number(date.slice(5,7))+'/'+Number(date.slice(8,10)):'';
+  if(mating){c.boar=mating.boar||'未入力';c.mating=md(mating.date);c.reheat=md(addDays(mating.date,21));c.due=md(addDays(mating.date,114));c.swimgen=md(addDays(mating.date,100));}
+  if(wean){c.wean=md(wean.date);const previous=logs.filter(l=>l.type==='分娩'&&l.date<=wean.date).at(-1);c.result=(previous?.count??'―')+'－'+(wean.count??'―');}
+  const swim=last('スイムジェン 実施');if(swim&&(!mating||swim.date>=mating.date))c.swimgen=md(swim.date)+' 済';
+  c.reheatCount=(birth?0:Number(c.reheatCount)||0)+logs.filter(l=>l.type==='種付け'&&l.remating&&(!birth||l.date>birth.date)).length;
+  return c;
+}
+M.sowCard=sowCard;
 for(const t of ['再発情確認','バイコックス 実施','レシュピシュア 実施','フォステラ 実施'])if(!M.TYPES.includes(t))M.TYPES.push(t);M.addDays=addDays;M.schedules=schedules;
 const migrate=M.migrate;
 M.migrate=function(raw){
