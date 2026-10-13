@@ -56,9 +56,10 @@
   }
   function replay(data){
     const sows=Object.assign(Object.create(null),Object.fromEntries(data.sows.map(s=>[s.id,{...clone(s),active:true}])));
-    const rooms=clone(data.baseline),nursery=clone(data.nurseryBaseline||nurseryBaseline());checkRooms(rooms,sows);checkNursery(nursery);
+    const rooms=clone(data.baseline),nursery=clone(data.nurseryBaseline||nurseryBaseline()),fin=root.TanakaFinishing,finishing=fin?fin.baseline(data):[];checkRooms(rooms,sows);checkNursery(nursery);
     for(const l of data.logs){
       if(l.legacy)continue;
+      if(fin?.TYPES.includes(l.type)){fin.apply(l,finishing,nursery);checkRooms(rooms,sows);checkNursery(nursery);continue;}
       const sow=sows[l.id],room=rooms.find(r=>r.key===l.roomKey);
       if(['分娩舎へ移動','移動取り消し'].includes(l.type)){
         if(!sow||!sow.active||!room)throw Error('移動対象の母豚・管理枠を確認してください。');
@@ -77,7 +78,7 @@
         if(room.count===0)Object.assign(room,{mixed:false,state:'empty',sowId:'',mixed:false,count:null,birthDate:''});
       }else if(['育成舎修正','育成舎から移動'].includes(l.type)){
         const n=nursery.find(r=>r.key===l.nurseryKey);if(!n)throw Error('育成舎の枠が見つかりません。');
-        if(l.type==='育成舎修正'){if(!l.nursery)throw Error('育成舎の内容がありません。');Object.assign(n,clone(l.nursery),{key:n.key,mixed:!!l.nursery.mixed});}
+        if(l.type==='育成舎修正'){if(!l.nursery)throw Error('育成舎の内容がありません。');Object.assign(n,clone(l.nursery),{key:n.key,mixed:!!l.nursery.mixed,groupNote:l.note||'',csf:!!l.nursery.csf,weight:l.nursery.weight??30,kind:l.nursery.kind||'肉豚'});}
         else{if(n.state!=='occupied')throw Error('移動対象の子豚が育成舎にいません。');Object.assign(n,{mixed:false,state:'empty',sowId:'',count:null,entered:'',birthDate:''});}
       }else if(l.type==='分娩舎修正'){
         if(!room||!l.room)throw Error('修正先の部屋が見つかりません。');Object.assign(room,clone(l.room),{key:room.key,mixed:!!l.room.mixed});
@@ -104,7 +105,7 @@
       }
       checkRooms(rooms,sows);checkNursery(nursery);
     }
-    return {sows,rooms,nursery};
+    return {sows,rooms,nursery,finishing};
   }
   function commit(data,fn){const next=clone(data);fn(next);validate(next);return next;}
   root.TanakaModel={IDS,STATES,TYPES,PLANS,clone,uid,migrate,validate,replay,commit,baseline};
