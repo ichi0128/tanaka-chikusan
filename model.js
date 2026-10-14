@@ -105,7 +105,7 @@
       }
       checkRooms(rooms,sows);checkNursery(nursery);
     }
-    return {sows,rooms,nursery,finishing};
+    return {sows,rooms,nursery,finishing:fin?fin.current(finishing):finishing};
   }
   function commit(data,fn){const next=clone(data);fn(next);validate(next);return next;}
   root.TanakaModel={IDS,STATES,TYPES,PLANS,clone,uid,migrate,validate,replay,commit,baseline};
