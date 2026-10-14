@@ -1,5 +1,5 @@
-const CACHE='tanaka-chikusan-v3-yard-headcount-20261014';
-const ASSETS=['./','./index.html','./app.css','./model.js','./finishing-model.js','./finishing-ui.js','./birth-validation.js','./app.js','./cloud-config.js','./cloud-store.js','./cloud-ui.js','./vendor/supabase-2.49.8.js','./vendor/591.supabase.js','./schedules.js','./manifest.webmanifest','./logo.png','./icon-192.png','./icon-512.png','./icon.svg'];
+const CACHE='tanaka-chikusan-v3-yard-headcount-20261014-2';
+const ASSETS=['./','./index.html','./app.css','./app.css?v=yard-headcount-20261014','./model.js','./finishing-model.js','./finishing-ui.js','./finishing-ui.js?v=yard-headcount-20261014','./birth-validation.js','./app.js','./cloud-config.js','./cloud-store.js','./cloud-ui.js','./vendor/supabase-2.49.8.js','./vendor/591.supabase.js','./schedules.js','./manifest.webmanifest','./logo.png','./icon-192.png','./icon-512.png','./icon.svg'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('tanaka-chikusan-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
