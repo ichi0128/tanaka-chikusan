@@ -34,3 +34,9 @@ nav button{width:16.6667%;flex:1;min-width:0;font-size:11px;padding:6px 2px}.fin
 :root .cloud-strip{max-width:860px;margin:0 auto;padding:8px 20px;font-size:13px;line-height:1.5;overflow-wrap:anywhere;color:var(--muted)}
 .cloud-strip[data-state="error"],.cloud-strip[data-state="conflict"]{color:#a1312c}
 .cloud-message{line-height:1.6;overflow-wrap:anywhere}
+
+/* Yard headcount uses the same fitted numeric display as finishing rooms. */
+.fin-card.fin-yard{container-type:inline-size;min-height:290px}
+.fin-card.fin-yard .fin-primary{flex:1;justify-content:center;min-height:148px;margin:4px 0 10px}
+.fin-card.fin-yard .fin-primary .fin-count{font-size:clamp(42px,52cqw,124px);font-weight:850;line-height:.95;letter-spacing:-2px;margin:0}
+.fin-card.fin-yard .fin-birth{font-size:13px;line-height:1.5}
