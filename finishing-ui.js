@@ -10,7 +10,7 @@ function finishing(){
     if(number===null){if(col!==1||row!==1)return '';number='yard';}
     const r=state.finishing.find(r=>r.key===(number==='yard'?'yard':'f'+number)),occupied=r.state==='occupied',disabled=occupied&&finishingMoveMode;
     if(r.key==='yard')return `<button class="fin-card fin-yard ${occupied?'occupied':'vacant'}" style="grid-column:${col};grid-row:${row}" data-action="${occupied?'fin-detail':'fin-empty'}" data-id="yard" ${disabled?'disabled':''}><span class="fin-number">運動場</span>${occupied?`<strong class="fin-count">${r.count}<small>頭</small></strong><span class="fin-birth">${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生月日 未入力'}</span>`:'<span class="fin-empty-label">空き<br><small>タップして入室・移動</small></span>'}</button>`;
-    return `<button class="fin-card ${occupied?'occupied':'vacant'} ${r.kind==='育成母豚'&&occupied?'gilt':''}" style="grid-column:${col};grid-row:${row}${number===1?' / span 2':''}" data-action="${occupied?'fin-detail':'fin-empty'}" data-id="${r.key}" ${disabled?'disabled':''} aria-label="${finishingPlace(r.key)} ${occupied?r.kind+' '+r.count+'頭':'空室'}"><span class="fin-number">${number==='yard'?'運動場':number}</span>${occupied?`<span class="fin-kind">${esc(r.kind)}</span><div class="fin-primary"><strong class="fin-count">${r.count}<small>頭</small></strong><strong class="fin-weight" aria-label="重量の目安 ${r.weight}kg">${r.weight}<small>kg</small></strong></div><span class="fin-birth">${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生月日 未入力'}</span><span>母 ${r.mixed?'混成':esc(r.sowId||'未入力')}</span><span class="fin-vaccine ${r.csf?'complete':''}">豚熱 ${r.csf?'済':'未'}</span>${r.note?`<span class="fin-note">${esc(r.note)}</span>`:''}`:`<span class="fin-empty-label">${number==='yard'?'空き':'空室'}<br><small>タップして入室・移動</small></span>`}</button>`;
+    return `<button class="fin-card ${occupied?'occupied':'vacant'} ${r.kind==='育成母豚'&&occupied?'gilt':''}" style="grid-column:${col};grid-row:${row}${number===1?' / span 2':''}" data-action="${occupied?'fin-detail':'fin-empty'}" data-id="${r.key}" ${disabled?'disabled':''} aria-label="${finishingPlace(r.key)} ${occupied?r.kind+' '+r.count+'頭':'空室'}"><span class="fin-number">${number==='yard'?'運動場':number}</span>${occupied?`<span class="fin-kind">${esc(r.kind)}</span><div class="fin-primary"><strong class="fin-count"><span class="fin-count-number">${r.count}</span><small>頭</small></strong><strong class="fin-weight" aria-label="重量の目安 ${r.weight}kg">${r.weight}<small>kg</small></strong></div><span class="fin-birth">${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生月日 未入力'}</span><span>母 ${r.mixed?'混成':esc(r.sowId||'未入力')}</span><span class="fin-vaccine ${r.csf?'complete':''}">豚熱 ${r.csf?'済':'未'}</span>${r.note?`<span class="fin-note">${esc(r.note)}</span>`:''}`:`<span class="fin-empty-label">${number==='yard'?'空き':'空室'}<br><small>タップして入室・移動</small></span>`}</button>`;
   };
   return `<div class="subhead"><h2>肉豚舎</h2><span class="badge">${occupiedRooms.length} / 24室 · ${heads}頭（運動場含む）</span></div>${gilts.length?`<p class="fin-gilt-summary">育成母豚：${gilts.map(r=>(r.key==='yard'?'運動場':r.key.slice(1)+'番')+' '+r.count+'頭').join(' ／ ')}</p>`:''}<button class="btn secondary" data-action="fin-mode">${finishingMoveMode?'移動先選択を終了':'移動先を選ぶ'}</button><p class="muted">${finishingMoveMode?'移動先の空室をタップしてください。使用中の部屋は選択できません。':'使用中の部屋は詳細を表示。空室は移動するグループを選べます。'}</p><div class="fin-east">東 ↑</div><div class="fin-map-wrap"><span class="fin-north">北</span><div class="fin-map"><div class="fin-corridor">廊下</div>${left.map((n,i)=>card(n,1,i+1)).join('')}${right.map((n,i)=>card(n,3,i+1)).join('')}</div><span class="fin-south">南</span></div><div class="fin-west">↓ 西</div>`;
 }
@@ -86,3 +86,30 @@ document.addEventListener('click',e=>{
     if(a==='fin-from'){finishingMoveMode=true;finishingPreferred=key;dlg.close();go('finishing');toast('移動先の空室をタップしてください');}
   }catch(err){toast(err.message);}
 });
+
+// Fit only the display text; stored headcounts are never changed.
+(function(){
+  const main=document.getElementById('app');
+  if(!main||typeof MutationObserver==='undefined')return;
+  let pending=false;
+  function fit(){
+    pending=false;
+    const canvas=document.createElement('canvas'),measure=canvas.getContext('2d');
+    if(!measure)return;
+    main.querySelectorAll('.fin-primary .fin-count-number').forEach(number=>{
+      const width=number.parentElement.getBoundingClientRect().width-2;
+      if(width<=0)return;
+      const style=getComputedStyle(number),digits=number.textContent;
+      let lo=12,hi=124;
+      for(let i=0;i<12;i++){
+        const mid=(lo+hi)/2;measure.font='850 '+mid+'px '+style.fontFamily;
+        if(measure.measureText(digits).width<=width)lo=mid;else hi=mid;
+      }
+      number.style.fontSize=Math.floor(lo)+'px';
+    });
+  }
+  function schedule(){if(!pending){pending=true;requestAnimationFrame(fit);}}
+  new MutationObserver(schedule).observe(main,{childList:true});
+  if(typeof ResizeObserver!=='undefined')new ResizeObserver(schedule).observe(main);
+  schedule();
+})();
