@@ -1,7 +1,7 @@
 'use strict';
 let cloudStore;
 function cloudSettings(){
-  return `<h2>クラウド保存</h2><section class="card" id="cloud-settings">${cloudSettingsBody()}</section>`;
+  return `<h2>クラウド保存</h2><section class="card" id="cloud-settings">${cloudSettingsBody()}${cloudVerificationSummary()}</section>`;
 }
 function cloudSettingsBody(){
   const c=cloudStore,locked=!c||c.busy||!!c.saving||c.status==='saving',disabled=locked?'disabled':'';
@@ -19,8 +19,34 @@ function cloudSettingsBody(){
   }
   return `<p class="cloud-message" role="status">${esc(status)}</p>${actions}<p class="muted">端末保存とJSONの保存・読込も引き続き使えます。クラウド使用中の変更は、端末保存後に送信します。</p>`;
 }
+function cloudDisplayState(){
+  const c=cloudStore,online=navigator.onLine;
+  if(c?.status==='saving')return {label:'クラウド保存中',mode:'saving'};
+  if(c?.status==='ready'&&c.user&&c.row?.user_id===c.user.id){
+    const same=!fatal&&db&&TanakaCloud.signature(db)===TanakaCloud.signature(c.row.data);
+    if(!online)return {label:'クラウド・オフライン',mode:'offline'};
+    return {label:same?'クラウド使用中':'クラウド未同期',mode:same?'ready':'unsynced'};
+  }
+  if(c?.status==='pending')return {label:'クラウド切替待ち',mode:'pending'};
+  if(c?.status==='empty')return {label:'初回保存待ち',mode:'empty'};
+  if(c?.status==='loading')return {label:'クラウド確認中',mode:'loading'};
+  if(c?.user&&['error','conflict'].includes(c.status))return {label:'端末保存・未同期',mode:c.status};
+  return {label:online?'端末保存':'オフライン',mode:'local'};
+}
+function updateCloudBadge(){
+  const badge=document.getElementById('network');if(!badge)return;
+  const display=cloudDisplayState();badge.textContent=display.label;badge.dataset.cloudState=display.mode;
+  badge.title='端末保存は継続します。クラウド使用中の変更は端末保存後にクラウドへ送信します。';
+}
+function cloudVerificationSummary(){
+  const c=cloudStore;
+  if(c?.status!=='ready'||!c.user||c.row?.user_id!==c.user.id)return '';
+  const same=!fatal&&db&&TanakaCloud.signature(db)===TanakaCloud.signature(c.row.data);
+  return `<p class="muted cloud-verification">本人のクラウド行：確認済み<br>読み込んだ更新番号：${esc(c.row.revision)}<br>最後に確認したクラウドデータとの一致：${same?'一致':'未同期の変更あり'}<br>現在使用中：母豚 ${db?.sows?.length??'—'}頭・履歴 ${db?.logs?.length??'—'}件</p>`;
+}
 function updateCloudUI(){
-  const panel=document.getElementById('cloud-settings');if(panel)panel.innerHTML=cloudSettingsBody();
+  updateCloudBadge();
+  const panel=document.getElementById('cloud-settings');if(panel)panel.innerHTML=cloudSettingsBody()+cloudVerificationSummary();
   const strip=document.getElementById('cloud-status');
   if(strip){strip.textContent=cloudStore?.message||'端末に保存しています';strip.dataset.state=cloudStore?.status||'signedout';}
 }

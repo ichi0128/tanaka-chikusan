@@ -135,7 +135,7 @@ document.addEventListener('click',e=>{
   if(a==='export')download(JSON.stringify(db,null,2),'tanaka-data-'+today()+'.json');if(a==='import')importData();
 });
 document.addEventListener('input',e=>{if(e.target.id==='filter'){const q=e.target.value.trim();document.getElementById('histories').innerHTML=history(db.logs.filter(l=>`${l.id} ${l.type} ${l.note||''} ${dateText(l)}`.includes(q)));}});
-function network(){document.getElementById('network').textContent=navigator.onLine?'端末保存':'オフライン';}window.addEventListener('online',network);window.addEventListener('offline',network);network();
+function network(){if(typeof updateCloudBadge==='function'){updateCloudBadge();return;}document.getElementById('network').textContent=navigator.onLine?'端末保存':'オフライン';}window.addEventListener('online',network);window.addEventListener('offline',network);network();
 window.addEventListener('storage',e=>{if(e.key===KEY){try{db=M.migrate(JSON.parse(e.newValue));state=M.replay(db);fatal='';dlg.close();render();toast('別画面の更新を反映しました');}catch(err){fatal=err.message;render();}}});
 render();
 if('serviceWorker' in navigator&&location.protocol!=='file:'){

@@ -64,3 +64,55 @@ test('existing JSON import preserves its before-import backup and all unknown fi
   assert.equal(b.storage.getItem('tanaka-db-before-import'),original);
   assert.deepEqual(JSON.parse(b.storage.getItem('tanaka-db')),replacement);
 });
+test('cloud acceptance switches real app data, revision and header without a cloud write',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));
+  const before=b.storage.getItem('tanaka-db');
+  vm.runInContext("cloudStore.user={id:'owner'};const remote=M.clone(db);remote.sows[0].note='cloud chosen';const remoteRow={id:'farm-row',user_id:'owner',data:remote,revision:7};cloudStore.pending={row:remoteRow,localSignature:TanakaCloud.signature(db)};cloudStore.emit('pending','切替待ち');",b.context);
+  assert.equal(b.elements.get('network').textContent,'クラウド切替待ち');
+  vm.runInContext('cloudStore.acceptCloud();',b.context);
+  assert.equal(b.elements.get('network').textContent,'クラウド使用中');
+  assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).sows[0].note,'cloud chosen');
+  assert.equal(vm.runInContext('cloudStore.row.revision',b.context),7);
+  assert.equal(vm.runInContext('TanakaCloud.signature(db)===TanakaCloud.signature(cloudStore.row.data)',b.context),true);
+  assert.match(b.elements.get('cloud-settings').innerHTML,/クラウドデータとの一致：一致/);
+  assert.match(b.elements.get('cloud-settings').innerHTML,/更新番号：7/);
+  assert.equal(vm.runInContext('cloudStore.client.from',b.context),undefined);
+  const backups=[];for(let i=0;i<b.storage.length;i++){const key=b.storage.key(i);if(key.startsWith('tanaka-db-before-cloud-'))backups.push(b.storage.getItem(key));}
+  assert.deepEqual(backups,[before]);
+});
+test('network status refresh does not overwrite active cloud indicator',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("cloudStore.user={id:'owner'};cloudStore.row={id:'row',user_id:'owner',data:M.clone(db),revision:1};cloudStore.emit('ready','一致');network();",b.context);
+  assert.equal(b.elements.get('network').textContent,'クラウド使用中');
+  vm.runInContext('navigator.onLine=false;network();',b.context);
+  assert.equal(b.elements.get('network').textContent,'クラウド・オフライン');
+  vm.runInContext('navigator.onLine=true;network();',b.context);
+  assert.equal(b.elements.get('network').textContent,'クラウド使用中');
+});
+test('local edits and saves display pending cloud sync then confirmed cloud state',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("cloudStore.user={id:'owner'};cloudStore.row={id:'row',user_id:'owner',data:M.clone(db),revision:1};cloudStore.emit('ready','一致');save(d=>{d.sows[0].note='未同期';});",b.context);
+  assert.equal(b.elements.get('network').textContent,'クラウド未同期');
+  vm.runInContext("cloudStore.emit('saving','送信中');",b.context);
+  assert.equal(b.elements.get('network').textContent,'クラウド保存中');
+  vm.runInContext("cloudStore.row={...cloudStore.row,data:M.clone(db),revision:2};cloudStore.emit('ready','保存済み');",b.context);
+  assert.equal(b.elements.get('network').textContent,'クラウド使用中');
+  assert.match(b.elements.get('cloud-settings').innerHTML,/更新番号：2/);
+});
+test('failure and conflict never display cloud save success',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("cloudStore.user={id:'owner'};cloudStore.emit('error','保存失敗');",b.context);
+  assert.equal(b.elements.get('network').textContent,'端末保存・未同期');
+  vm.runInContext("cloudStore.emit('conflict','競合');",b.context);
+  assert.equal(b.elements.get('network').textContent,'端末保存・未同期');
+});
+test('first insert is clearly distinguished from an active cloud row',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("cloudStore.user={id:'owner'};cloudStore.emit('empty','未登録');",b.context);
+  assert.equal(b.elements.get('network').textContent,'初回保存待ち');
+});
+test('logout returns header to local mode',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("cloudStore.user={id:'owner'};cloudStore.row={user_id:'owner',data:M.clone(db),revision:1};cloudStore.emit('ready','一致');cloudStore.user=null;cloudStore.row=null;cloudStore.emit('signedout','ログアウト');",b.context);
+  assert.equal(b.elements.get('network').textContent,'端末保存');
+});
