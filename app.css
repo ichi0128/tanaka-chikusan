@@ -86,3 +86,15 @@ nav .tab-icon{max-width:24px}
 @media(max-width:420px){nav button{font-size:10px}nav .tab-icon{width:22px;height:22px}.inventory-table{font-size:13px}.inventory-summary th,.inventory-summary td{padding:8px 5px}}
 
 .inventory-step-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:12px 0 16px;border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}.inventory-step-tabs button{min-width:0;min-height:48px;padding:10px 4px;border:0;border-right:1px solid var(--border);background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}.inventory-step-tabs button:last-child{border-right:0}.inventory-step-tabs button[aria-selected=true]{background:var(--soft);color:var(--accent);font-weight:800;box-shadow:inset 0 -3px var(--accent)}.inventory-step-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}#inventory-form [role=tabpanel][hidden]{display:none}@media(max-width:380px){.inventory-step-tabs button{font-size:11px;padding:10px 2px}}
+
+/* Keep monthly inventory work immediately below its compact date header. */
+.inventory-compact-header{display:grid;gap:4px;margin:8px 0;font-size:14px}
+.inventory-compact-header p{margin:0}
+.inventory-compact-date{display:flex;align-items:center;gap:8px}
+.inventory-compact-date label{margin:0;font-weight:600;white-space:nowrap}
+.inventory-compact-date input{width:160px;min-width:0;min-height:36px;margin:0;padding:6px 8px;font:inherit}
+.inventory-compact-header+.inventory-step-tabs{margin:8px 0}
+.inventory-options{margin-top:16px}
+.inventory-options>summary{cursor:pointer;font-weight:600;font-size:14px}
+.inventory-options .inventory-month{margin:12px 0;box-shadow:none;padding:0;border:0}
+.inventory-options .inventory-help{font-size:13px}
