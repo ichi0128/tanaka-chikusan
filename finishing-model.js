@@ -46,3 +46,17 @@
   }
   root.TanakaFinishing={TYPES,empty,group,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?simple(r):r)};
 })(typeof globalThis!=='undefined'?globalThis:this);
+
+// Read-only shipment projection, shared by Home and shipment history.
+TanakaFinishing.shipmentSummary=function(data,month){
+  const records=(data.logs||[]).filter(l=>l.type==='肉豚出荷'&&Number.isInteger(l.count)&&l.count>0&&typeof l.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(l.date)&&Number.isFinite(Date.parse(l.date))&&new Date(l.date).toISOString().slice(0,10)===l.date).map(l=>({key:l.key,date:l.date,count:l.count,finishingKey:l.finishingKey||'',note:l.note||''})).sort((a,b)=>b.date.localeCompare(a.date));
+  const months=new Map();
+  for(const record of records){
+    const key=record.date.slice(0,7);
+    if(!months.has(key))months.set(key,{month:key,total:0,days:new Map()});
+    const entry=months.get(key);entry.total+=record.count;
+    if(!entry.days.has(record.date))entry.days.set(record.date,{date:record.date,total:0,records:[]});
+    const day=entry.days.get(record.date);day.total+=record.count;day.records.push(record);
+  }
+  return {records,currentTotal:months.get(month)?.total||0,months:[...months.values()].map(m=>({month:m.month,total:m.total,days:[...m.days.values()]}))};
+};
