@@ -189,3 +189,24 @@ nav .tab-icon{max-width:24px}
 .fin-yard-separate .fin-yard .fin-primary{min-height:90px;max-width:200px;align-self:center}
 .fin-yard-separate .fin-yard .fin-primary .fin-count{align-items:center;text-align:center}
 @media(max-width:360px){.fin-map.fin-map-paired{grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr)}.fin-side-headings{grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr)}.fin-corridor-number{font-size:28px}}
+
+/* Inventory uses the barn's shared left/right room mapping. */
+.inventory-pair-headings,.inventory-finishing-map{display:grid;grid-template-columns:minmax(0,1fr) 42px minmax(0,1fr);gap:8px 4px}
+.inventory-pair-headings{margin:8px 0;text-align:center;font-size:13px}
+.inventory-pair-headings>span{font-size:11px;color:var(--muted)}
+.inventory-finishing-map{grid-template-rows:repeat(12,auto);align-items:stretch}
+.inventory-pair-corridor{grid-column:2;grid-row:1 / 13;border:1px solid var(--border);border-radius:8px;background:var(--soft)}
+.inventory-pair-number{display:flex;align-items:center;justify-content:center;min-width:0;z-index:1;color:var(--accent);font-size:32px;font-weight:850;line-height:1;font-variant-numeric:tabular-nums}
+.inventory-finishing-room{min-width:0;padding:10px 7px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.inventory-finishing-room label{margin:7px 0 3px;font-size:11px;color:var(--muted)}
+.inventory-finishing-room label:first-of-type{margin-top:0}
+.inventory-finishing-room input,.inventory-finishing-room select{min-width:0;max-width:100%;width:100%;min-height:34px;padding:5px 3px;margin:0;font-size:14px}
+.inventory-finishing-room input[type=hidden]{display:none}
+.inventory-finishing-room .inventory-counter{gap:2px}
+.inventory-finishing-room .inventory-counter input{width:100%;min-width:0;padding:0;font-size:28px;font-weight:800;text-align:center;height:42px}
+.inventory-finishing-room .inventory-counter button{min-width:25px;width:25px;min-height:36px;padding:0;font-size:17px}
+.inventory-finishing-room select{font-size:20px;font-weight:800}
+.inventory-finishing-room .inventory-notebook-birth summary{padding:5px 0;font-size:14px}
+.inventory-finishing-room .inventory-notebook-birth input{width:160px;max-width:none;background:var(--surface);border:1px solid var(--border);padding:6px}
+.inventory-finishing-room .inventory-gilt-label{font-size:10px;margin-bottom:4px}
+@media(max-width:360px){.inventory-pair-headings,.inventory-finishing-map{grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr)}.inventory-pair-number{font-size:28px}.inventory-finishing-room{padding:8px 5px}.inventory-finishing-room .inventory-counter button{min-width:23px;width:23px}}
