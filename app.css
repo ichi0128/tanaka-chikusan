@@ -245,7 +245,9 @@ nav .tab-icon{max-width:24px}
 .inventory-plan-table th:first-child{width:20%;text-align:center}
 .inventory-plan-table input{min-width:0;width:100%;box-sizing:border-box;font-size:18px;font-weight:700;padding:9px 3px;text-align:center;min-height:44px}
 .inventory-plan-table output{font-weight:700;font-size:17px}
-.inventory-plan-current{background:#fff3ce}
+.inventory-plan-table .inventory-plan-current{background:var(--soft,#eee9de);color:var(--text,#302a23)}
+.inventory-plan-table .inventory-plan-current>th,.inventory-plan-table .inventory-plan-current>td{background:inherit;color:inherit}
+.inventory-plan-table .inventory-plan-current input{background:var(--surface,#fff);color:var(--text,#302a23)}
 .inventory-plan-table tfoot{background:var(--soft,#eee9de);font-weight:700}
 .inventory-weekly-table th:first-child{width:50%}
 .inventory-plan-tools{margin-top:12px}
