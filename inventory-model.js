@@ -46,20 +46,52 @@ function aggregate(rows){
   return {totals,gilts,unclassified,unknown,total:Object.values(totals).reduce((a,b)=>a+b,0)};
 }
 function currentStock(report){return {...Object.fromEntries(STOCK.map(k=>[k,0])),...aggregate(report.rows).totals,'110':report.shipping110??0,'10':report.stock10??0};}
+// Actual inventory never includes the planning-only 110kg destination.
+function actualStock(report){return {...Object.fromEntries(STOCK.map(k=>[k,0])),...aggregate(report.rows).totals};}
+function plannedStock(report){return report.plannedStock?clone(report.plannedStock):currentStock(report);}
+function yearActual(data,year){
+  const reports=Object.values(data.inventoryMonths||{}).sort((a,b)=>b.month.localeCompare(a.month));
+  const same=reports.find(r=>r.month.startsWith(year+'-')&&Array.isArray(r.previousYearActual));
+  if(same)return clone(same.previousYearActual);
+  const prior=String(Number(year)-1),records=reports.filter(r=>r.month.startsWith(prior+'-'));
+  return Array.from({length:12},(_,i)=>{
+    const key=prior+'-'+String(i+1).padStart(2,'0');
+    for(const r of records){const x=r.monthly.find(x=>x.month===key);if(x?.actual!==null&&x?.actual!==undefined)return x.actual;}
+    return null;
+  });
+}
+function preparePlan(report,data){
+  if(!report.plannedStock){report.plannedStock=currentStock(report);report.stockPlanEdited=STOCK.slice();}
+  if(!report.stockPlanEdited)report.stockPlanEdited=STOCK.slice();
+  if(!report.previousYearActual)report.previousYearActual=yearActual(data,report.month.slice(0,4));
+  return report;
+}
+function syncPlan(report){
+  const actual=actualStock(report);
+  for(const k of STOCK)if(!report.stockPlanEdited.includes(k))report.plannedStock[k]=actual[k];
+  // Retain legacy fields for older backups/readers, without using them as actual inventory.
+  report.shipping110=report.plannedStock['110']??0;report.stock10=report.plannedStock['10']??0;
+}
+function weeklyTotal(report){return report.weekly.reduce((sum,n)=>sum+(n??0),0);}
 function create(data,state,month,date,roomBirthDate){
   if(!validMonth(month))fail('対象月を選んでください。');
   const prev=data.inventoryMonths?.[previousMonth(month)],year=month.slice(0,4);
-  return {month,date,status:'draft',rows:snapshot(data,state,date,roomBirthDate),shipping110:0,stock10:0,
-    previousStock:prev?.status==='confirmed'?currentStock(prev):Object.fromEntries(STOCK.map(k=>[k,null])),
+  const report={month,date,status:'draft',rows:snapshot(data,state,date,roomBirthDate),shipping110:0,stock10:0,
+    previousStock:prev?plannedStock(prev):Object.fromEntries(STOCK.map(k=>[k,null])),
     carriedFrom:prev?prev.month:'',previousConfirmed:prev?.status==='confirmed',
-    monthly:Array.from({length:12},(_,i)=>{const key=year+'-'+String(i+1).padStart(2,'0'),old=prev?.monthly.find(x=>x.month===key);return old?clone(old):{month:key,planned:null,actual:null};}),
+    monthly:Array.from({length:12},(_,i)=>{const key=year+'-'+String(i+1).padStart(2,'0'),old=prev?.monthly.find(x=>x.month===key);return old?clone(old):{month:key,planned:key>month?20:null,actual:null};}),
+    previousYearActual:yearActual(data,year),stockPlanEdited:[],
     weekly:[null,null,null,null,null],remarks:'',revisions:[]};
+  report.plannedStock=actualStock(report);return report;
 }
 function validateReport(r,month,history=false){
   if(!r||r.month!==month||!validMonth(month)||!validDate(r.date)||!['draft','confirmed'].includes(r.status)||!Array.isArray(r.rows)||r.rows.length>200)fail('頭数調べの月次記録を確認してください。');
   if(!Array.isArray(r.monthly)||r.monthly.length!==12||!Array.isArray(r.weekly)||r.weekly.length!==5||typeof r.remarks!=='string'||!r.previousStock)fail('出荷計画の形式を確認してください。');
   if(!count(r.shipping110,false)||!count(r.stock10,false)||STOCK.some(k=>!count(r.previousStock[k])))fail('棚卸の頭数を確認してください。');
   if(r.monthly.some((x,i)=>x.month!==month.slice(0,4)+'-'+String(i+1).padStart(2,'0')||!count(x.planned)||!count(x.actual))||r.weekly.some(x=>!count(x)))fail('出荷計画は0以上の整数で入力してください。');
+  if(r.plannedStock!==undefined&&(!r.plannedStock||STOCK.some(k=>!count(r.plannedStock[k]))))fail('当月計画の頭数を確認してください。');
+  if(r.stockPlanEdited!==undefined&&(!Array.isArray(r.stockPlanEdited)||r.stockPlanEdited.some(k=>!STOCK.includes(k))))fail('棚卸計画の形式を確認してください。');
+  if(r.previousYearActual!==undefined&&(!Array.isArray(r.previousYearActual)||r.previousYearActual.length!==12||r.previousYearActual.some(x=>!count(x))))fail('前年実績を確認してください。');
   const keys=new Set();
   for(const row of r.rows){
     if(!row||typeof row.key!=='string'||keys.has(row.key)||!['farrowing','nursery','finishing','yard'].includes(row.area)||typeof row.place!=='string'||typeof row.sowId!=='string'||!count(row.count)||!['肉豚','育成母豚'].includes(row.kind)||!(row.csf===null||typeof row.csf==='boolean')||!(row.birthDate===''||validDate(row.birthDate))||!(row.category===''||CATEGORIES.includes(row.category)))fail('頭数調べの明細を確認してください。');
@@ -82,5 +114,5 @@ function saveReport(data,report,expected){
   validateReport(next,next.month);data.inventoryMonths=data.inventoryMonths||{};data.inventoryMonths[next.month]=next;
 }
 function gilts(state){return [...state.nursery,...state.finishing].filter(r=>r.state==='occupied'&&r.kind==='育成母豚').reduce((sum,r)=>sum+(r.count??0),0);}
-root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
+root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,actualStock,plannedStock,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
 })(typeof globalThis!=='undefined'?globalThis:this);

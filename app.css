@@ -235,3 +235,21 @@ nav .tab-icon{max-width:24px}
 .inventory-weight-summary td:nth-child(2){font-weight:800;font-size:16px}
 .inventory-weight-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
 @media(max-width:360px){.inventory-weight-figure,.inventory-weight-list{padding-left:7px;padding-right:7px}.inventory-weight-chart{grid-template-columns:21px minmax(0,1fr);gap:3px}.inventory-weight-bars{gap:2px}.inventory-weight-tick{font-size:9px}}
+
+/* Paper-style shipping report, with compact vertical tables on phones. */
+.inventory-plan-report{display:grid;gap:20px;margin:12px 0}
+.inventory-plan-section{min-width:0;padding:14px;background:var(--surface,#fff);border:1px solid var(--border,#d9d5cb);border-radius:10px}
+.inventory-plan-section h3{margin:0 0 12px;font-size:18px}
+.inventory-plan-table{table-layout:fixed;font-size:14px}
+.inventory-plan-table th,.inventory-plan-table td{padding:7px 4px;white-space:normal;overflow-wrap:anywhere}
+.inventory-plan-table th:first-child{width:20%;text-align:center}
+.inventory-plan-table input{min-width:0;width:100%;box-sizing:border-box;font-size:18px;font-weight:700;padding:9px 3px;text-align:center;min-height:44px}
+.inventory-plan-table output{font-weight:700;font-size:17px}
+.inventory-plan-current{background:#fff3ce}
+.inventory-plan-table tfoot{background:var(--soft,#eee9de);font-weight:700}
+.inventory-weekly-table th:first-child{width:50%}
+.inventory-plan-tools{margin-top:12px}
+.inventory-plan-tools summary{cursor:pointer;font-weight:700}
+.inventory-plan-section textarea{width:100%;box-sizing:border-box;margin:0}
+@media(min-width:1000px){.inventory-plan-report{grid-template-columns:1fr 1fr}.inventory-plan-section:last-child{grid-column:1/-1}}
+@media(max-width:380px){.inventory-plan-section{padding:10px 7px}.inventory-plan-table{font-size:12px}.inventory-plan-table input{font-size:16px}.inventory-plan-table output{font-size:16px}}
