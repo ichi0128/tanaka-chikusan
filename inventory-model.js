@@ -18,6 +18,17 @@ function category(area,r,date,birth){
   if(days<50)return area==='farrowing'&&r.state==='family'?'授乳':'離乳';
   return '';
 }
+function yardIndividualRow(source={}){
+  return {area:'yard',roomKey:'yard',place:'運動場',state:'occupied',birthDate:'',sowId:'',csf:null,category:'',autoCategory:false,registeredWeight:null,kind:'肉豚',...clone(source),key:'yard:pig:'+root.TanakaModel.uid(),count:source.count===null?null:1,yardIndividual:1};
+}
+function individualYardRows(rows){
+  return rows.flatMap(row=>{
+    if(row.area!=='yard'||row.yardIndividual===1)return [clone(row)];
+    const n=row.count===null?1:row.count;
+    if(!Number.isSafeInteger(n)||n<0||n>200)fail('運動場の頭数を確認してください。');
+    return Array.from({length:n},()=>yardIndividualRow(row));
+  });
+}
 function snapshot(data,state,date,roomBirthDate){
   if(!validDate(date))fail('確認日を入力してください。');
   const make=(area,r)=>{
@@ -27,7 +38,7 @@ function snapshot(data,state,date,roomBirthDate){
       state:r.state,count:inactive?0:r.count??null,birthDate,sowId:r.mixed?'混成':r.sowId||'',csf:typeof r.csf==='boolean'?r.csf:null,
       category:category(area,r,date,birthDate),autoCategory:area==='farrowing'||area==='nursery',registeredWeight:r.weight??null,kind:r.kind==='育成母豚'?'育成母豚':'肉豚'};
   };
-  return [...state.rooms.map(r=>make('farrowing',r)),...state.nursery.map(r=>make('nursery',r)),...state.finishing.map(r=>make(r.key==='yard'?'yard':'finishing',r))];
+  return individualYardRows([...state.rooms.map(r=>make('farrowing',r)),...state.nursery.map(r=>make('nursery',r)),...state.finishing.map(r=>make(r.key==='yard'?'yard':'finishing',r))]);
 }
 function aggregate(rows){
   const totals=Object.fromEntries(CATEGORIES.map(k=>[k,0]));let gilts=0,unclassified=0,unknown=0;
@@ -52,9 +63,10 @@ function validateReport(r,month,history=false){
   const keys=new Set();
   for(const row of r.rows){
     if(!row||typeof row.key!=='string'||keys.has(row.key)||!['farrowing','nursery','finishing','yard'].includes(row.area)||typeof row.place!=='string'||typeof row.sowId!=='string'||!count(row.count)||!['肉豚','育成母豚'].includes(row.kind)||!(row.csf===null||typeof row.csf==='boolean')||!(row.birthDate===''||validDate(row.birthDate))||!(row.category===''||CATEGORIES.includes(row.category)))fail('頭数調べの明細を確認してください。');
+    if(row.area==='yard'&&row.yardIndividual===1&&row.count!==null&&row.count>1)fail('運動場は1頭につき1行で入力してください。');
     keys.add(row.key);
   }
-  if(r.status==='confirmed'){const s=aggregate(r.rows);if(s.unknown||s.unclassified)fail('未入力の頭数・要確認の体重区分を確認してから確定してください。');}
+  if(r.status==='confirmed'){const s=aggregate(r.rows.filter(row=>row.area!=='yard'));if(s.unknown||s.unclassified)fail('未入力の頭数・要確認の体重区分を確認してから確定してください。');}
   if(!history){if(!Array.isArray(r.revisions))fail('頭数調べの履歴形式を確認してください。');for(const entry of r.revisions){if(!entry||!validDate(entry.savedAt?.slice(0,10)))fail('履歴の日付を確認してください。');validateReport(entry.report,month,true);}}
 }
 function validate(data){
@@ -65,10 +77,10 @@ function validate(data){
 function saveReport(data,report,expected){
   const old=data.inventoryMonths?.[report.month];
   if(JSON.stringify(old??null)!==expected)fail('別の画面で月次記録が変わりました。開き直してください。');
-  const next=clone(report);next.updatedAt=new Date().toISOString();
+  const next=clone(report);next.rows=individualYardRows(next.rows);next.updatedAt=new Date().toISOString();
   next.revisions=old?[...(old.revisions||[]),{savedAt:next.updatedAt,report:(()=>{const p=clone(old);delete p.revisions;return p;})()}]:[];
   validateReport(next,next.month);data.inventoryMonths=data.inventoryMonths||{};data.inventoryMonths[next.month]=next;
 }
 function gilts(state){return [...state.nursery,...state.finishing].filter(r=>r.state==='occupied'&&r.kind==='育成母豚').reduce((sum,r)=>sum+(r.count??0),0);}
-root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,create,validate,validateReport,saveReport,gilts,clone};
+root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
 })(typeof globalThis!=='undefined'?globalThis:this);
