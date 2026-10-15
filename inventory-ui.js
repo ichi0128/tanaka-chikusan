@@ -7,17 +7,41 @@ function inventoryContext(){
   const month=inventoryMonth||inventoryLocalMonth();inventoryMonth=month;
   if(!inventoryDrafts.has(month)){
     const saved=db.inventoryMonths?.[month],report=saved?I.clone(saved):I.create(db,state,month,today(),roomBirthDate);
-    report.rows=inventoryEnsureFinishingRooms(I.individualYardRows(report.rows));
+    report.rows=saved?inventoryEnsureFinishingRooms(I.individualYardRows(report.rows)):[];
     I.preparePlan(report,db);
-    inventoryDrafts.set(month,{report,expected:JSON.stringify(saved??null),dirty:false});
+    inventoryDrafts.set(month,{report,expected:JSON.stringify(saved??null),dirty:false,hasSnapshot:!!saved,editing:month>=inventoryLocalMonth()});
   }
   return inventoryDrafts.get(month);
+}
+function inventoryMonthLabel(month){return Number(month.slice(0,4))+'年'+Number(month.slice(5,7))+'月';}
+function inventoryOffsetMonth(month,delta){
+  const [year,m]=month.split('-').map(Number),date=new Date(Date.UTC(year,m-1+delta,1));
+  const result=date.toISOString().slice(0,7);if(!I.validMonth(result))throw Error('対象月を確認してください。');return result;
+}
+function inventoryReadOnly(c=inventoryContext()){return c.report.month<inventoryLocalMonth()&&!c.editing;}
+function inventoryCanEdit(c=inventoryContext()){return c.hasSnapshot!==false&&!inventoryReadOnly(c);}
+function inventorySwitchMonth(month){
+  if(!I.validMonth(month))throw Error('対象月を選んでください。');
+  if(month===inventoryMonth)return;
+  const current=inventoryContext();
+  if(inventoryCanEdit(current)&&document.getElementById('inventory-form')){
+    const report=inventoryRead();report.status=current.report.status;
+    if(JSON.stringify(report)!==JSON.stringify(current.report)){current.report=report;current.dirty=true;}
+  }
+  const next=inventoryDrafts.get(month);
+  if(next&&!next.dirty)inventoryDrafts.delete(month);
+  else if(next)next.editing=month>=inventoryLocalMonth();
+  inventoryMonth=month;render();
+}
+function inventoryMonthToolbar(c){
+  const r=c.report,prev=inventoryOffsetMonth(r.month,-1),next=inventoryOffsetMonth(r.month,1),readonly=inventoryReadOnly(c),exists=c.hasSnapshot!==false;
+  return `<div class="inventory-month-navigation" aria-label="頭数調べの月切り替え"><button type="button" data-inventory="month-prev" aria-label="前月 ${inventoryMonthLabel(prev)}">〈 <span>${inventoryMonthLabel(prev)}</span></button><strong aria-live="polite">${inventoryMonthLabel(r.month)}</strong><button type="button" data-inventory="month-next" aria-label="次月 ${inventoryMonthLabel(next)}"><span>${inventoryMonthLabel(next)}</span> 〉</button></div><div class="inventory-snapshot-tools"><small id="inventory-snapshot-status">${exists?(c.dirty?'未保存の変更あり':r.status==='confirmed'?'確定済み':'下書き'):'未作成'}${readonly?' · 閲覧中':''}</small>${r.month===inventoryLocalMonth()?'<button type="button" class="btn secondary" data-inventory="refresh">現在の豚舎データから取り込む</button>':`<button type="button" class="btn secondary" data-inventory="month-today">今月を開く</button>`}${readonly&&exists?'<button type="button" class="btn secondary" data-inventory="edit">この月を編集する</button>':''}</div>`;
 }
 function inventoryLabel(k){return /^\d+$/.test(k)?k+'kg':k;}
 function inventoryNumber(name,value,label){return `<input type="number" min="0" step="1" inputmode="numeric" name="${name}" value="${value??''}" aria-label="${esc(label)}" placeholder="未入力">`;}
 function inventoryPage(){
-  const c=inventoryContext(),r=c.report,months=Object.keys(db.inventoryMonths||{}).sort().reverse();
-  return `<h2 class="inventory-title">頭数調べ</h2><form id="inventory-form"><div class="inventory-compact-header"><p><b>対象月：${Number(r.month.slice(0,4))}年${Number(r.month.slice(5,7))}月</b></p><details class="inventory-date-picker"><summary id="inventory-date-label">確認日：${esc(r.date.replaceAll('-','/'))}</summary><label for="inventory-date">確認日を変更</label><input id="inventory-date" name="date" aria-label="確認日（日齢判定の基準）" type="date" value="${r.date}" required></details></div><div id="inventory-steps" class="inventory-step-tabs" role="tablist" aria-label="月末作業の3段階">${[[1,'①確認・修正'],[2,'②体重別集計'],[3,'③出荷計画']].map(([step,label])=>`<button type="button" id="inventory-tab-${step}" role="tab" data-inventory="tab" data-step="${step}" aria-controls="inventory-panel-${step}" aria-selected="${inventoryStep===step}" tabindex="${inventoryStep===step?0:-1}">${label}</button>`).join('')}</div><section id="inventory-panel-1" role="tabpanel" aria-labelledby="inventory-tab-1" data-inventory-panel="1" ${inventoryStep===1?'':'hidden'}><h2 id="inventory-step1">① 確認・修正</h2>${inventoryCountGroups(r)}</section><section id="inventory-panel-2" role="tabpanel" aria-labelledby="inventory-tab-2" data-inventory-panel="2" ${inventoryStep===2?'':'hidden'}><h2 id="inventory-step2">② 体重別集計</h2><div id="inventory-totals">${inventoryTotals(r)}</div></section><section id="inventory-panel-3" role="tabpanel" aria-labelledby="inventory-tab-3" data-inventory-panel="3" ${inventoryStep===3?'':'hidden'}><h2 id="inventory-step3">③ 出荷計画</h2>${inventoryPlan(r)}</section><div class="card inventory-save"><p class="error" id="inventory-error" role="alert"></p><button type="button" class="btn secondary" data-inventory="save">下書きを保存</button><button type="button" class="btn" data-inventory="confirm">確認済みとして保存</button><p class="muted">修正して保存するたびに前の内容を履歴に残します。運動場は未入力でも確認済みとして保存できます。他の舎に未入力の頭数・体重区分がある場合は下書き保存できます。</p></div></form><details class="card inventory-options"><summary>過去の頭数調べを見る・その他の操作</summary><div class="card inventory-month"><label for="inventory-month">対象月</label><input id="inventory-month" type="month" value="${r.month}"><button class="btn secondary" data-inventory="open">この月を開く</button><label for="inventory-history-month">保存済みの月</label><select id="inventory-history-month"><option value="">選択してください</option>${months.map(m=>`<option value="${m}" ${m===r.month?'selected':''}>${m} · ${db.inventoryMonths[m].status==='confirmed'?'確定':'下書き'}</option>`).join('')}</select><p id="inventory-status" role="status">${r.month} · ${r.status==='confirmed'?'確定済み':'下書き'}${c.dirty?'（未保存の変更あり）':!db.inventoryMonths?.[r.month]?'（未保存）':''}</p><p class="muted">月次記録だけを修正します。各舎の日常記録の頭数・体重は変更しません。</p></div><div class="inventory-help"><button type="button" class="btn secondary" data-inventory="refresh">現在の飼育データを取り直す</button><p class="muted">自動取込は現在の状態です。過去月の状態は再現しません。確認日・誕生日の変更で日齢区分を再判定します。手動で選んだ区分は維持します。取り直すと明細の手修正が置き換わります。</p><p class="muted">50〜70日齢は20kg、育成舎の71日齢以上は30kg。50日齢未満は授乳／離乳。その他や日齢不明は体重区分を確認してください。母豚本人は数えず、子豚と肉豚を集計します。</p><p class="muted">育成母豚は別枠で、②と③の肉豚集計には含めません。</p></div></details>${inventoryRevisionList(r)}`;
+  const c=inventoryContext(),r=c.report,months=Object.keys(db.inventoryMonths||{}).sort().reverse(),readonly=inventoryReadOnly(c),exists=c.hasSnapshot!==false,empty='<p class="notice">この月の頭数調べは未作成です。今月を開き、「現在の豚舎データから取り込む」で作成してください。</p>';
+  return `<h2 class="inventory-title">頭数調べ</h2><form id="inventory-form">${inventoryMonthToolbar(c)}<div class="inventory-compact-header"><details class="inventory-date-picker"><summary id="inventory-date-label">確認日：${exists?esc(r.date.replaceAll('-','/')):'未設定'}</summary><label for="inventory-date">確認日を変更</label><input id="inventory-date" name="date" aria-label="確認日（日齢判定の基準）" type="date" value="${r.date}" required ${readonly||!exists?'disabled':''}></details></div><div id="inventory-steps" class="inventory-step-tabs" role="tablist" aria-label="月末作業の3段階">${[[1,'①確認・修正'],[2,'②体重別集計'],[3,'③出荷計画']].map(([step,label])=>`<button type="button" id="inventory-tab-${step}" role="tab" data-inventory="tab" data-step="${step}" aria-controls="inventory-panel-${step}" aria-selected="${inventoryStep===step}" tabindex="${inventoryStep===step?0:-1}">${label}</button>`).join('')}</div><fieldset class="inventory-edit-fields" ${readonly||!exists?'disabled':''}><section id="inventory-panel-1" role="tabpanel" aria-labelledby="inventory-tab-1" data-inventory-panel="1" ${inventoryStep===1?'':'hidden'}><h2 id="inventory-step1">① 確認・修正</h2>${exists?inventoryCountGroups(r):empty}</section><section id="inventory-panel-2" role="tabpanel" aria-labelledby="inventory-tab-2" data-inventory-panel="2" ${inventoryStep===2?'':'hidden'}><h2 id="inventory-step2">② 体重別集計</h2><div id="inventory-totals">${exists?inventoryTotals(r):empty}</div></section><section id="inventory-panel-3" role="tabpanel" aria-labelledby="inventory-tab-3" data-inventory-panel="3" ${inventoryStep===3?'':'hidden'}><h2 id="inventory-step3">③ 出荷計画</h2>${exists?inventoryPlan(r):empty}</section><div class="card inventory-save"><p class="error" id="inventory-error" role="alert"></p><button type="button" class="btn secondary" data-inventory="save">下書きを保存</button><button type="button" class="btn" data-inventory="confirm">確認済みとして保存</button><p class="muted">修正して保存するたびに前の内容を履歴に残します。運動場は未入力でも確認済みとして保存できます。他の舎に未入力の頭数・体重区分がある場合は下書き保存できます。</p></div></fieldset></form><details class="card inventory-options"><summary>過去の頭数調べを見る・その他の操作</summary><div class="card inventory-month"><label for="inventory-month">対象月</label><input id="inventory-month" type="month" value="${r.month}"><button class="btn secondary" data-inventory="open">この月を開く</button><label for="inventory-history-month">保存済みの月</label><select id="inventory-history-month"><option value="">選択してください</option>${months.map(m=>`<option value="${m}" ${m===r.month?'selected':''}>${m} · ${db.inventoryMonths[m].status==='confirmed'?'確定':'下書き'}</option>`).join('')}</select><p id="inventory-status" role="status">${r.month} · ${r.status==='confirmed'?'確定済み':'下書き'}${c.dirty?'（未保存の変更あり）':!db.inventoryMonths?.[r.month]?'（未保存）':''}</p><p class="muted">月次記録だけを修正します。各舎の日常記録の頭数・体重は変更しません。</p></div><div class="inventory-help"><p class="muted">自動取込は現在の状態です。過去月の状態は再現しません。確認日・誕生日の変更で日齢区分を再判定します。手動で選んだ区分は維持します。取り直すと明細の手修正が置き換わります。</p><p class="muted">50〜70日齢は20kg、育成舎の71日齢以上は30kg。50日齢未満は授乳／離乳。その他や日齢不明は体重区分を確認してください。母豚本人は数えず、子豚と肉豚を集計します。</p><p class="muted">育成母豚は別枠で、②と③の肉豚集計には含めません。</p></div></details>${inventoryRevisionList(r)}`;
 }
 
 function inventoryPlan(r,readonly=false){
@@ -75,7 +99,8 @@ function inventoryTotals(r){
 }
 function inventoryRevisionList(r){return `<details class="card inventory-revisions"><summary>この月の修正履歴（${r.revisions.length}件）</summary>${r.revisions.slice().reverse().map((x,i)=>`<button class="row row-action" data-inventory="revision" data-index="${r.revisions.length-1-i}">${esc(x.savedAt.replace('T',' ').slice(0,19))} 更新前 · ${x.report.status==='confirmed'?'確定':'下書き'} ›</button>`).join('')||'<p>保存後に修正すると、前の内容がここに残ります。</p>'}</details>`;}
 function inventoryRead(){
-  const c=inventoryContext(),r=I.clone(c.report),f=new FormData(document.getElementById('inventory-form'));
+  const c=inventoryContext();if(!inventoryCanEdit(c))throw Error('閲覧中の月です。「この月を編集する」から編集してください。');
+  const r=I.clone(c.report),f=new FormData(document.getElementById('inventory-form'));
   const number=name=>{const v=String(f.get(name)??'').trim();if(v==='')return null;if(!/^\d+$/.test(v)||!Number.isSafeInteger(Number(v)))throw Error('頭数は0以上の整数で入力してください。');return Number(v);};
   r.date=String(f.get('date')||'');if(!I.validDate(r.date))throw Error('確認日を入力してください。');
   r.rows.forEach((row,i)=>{row.count=number('count_'+i);row.birthDate=String(f.get('birth_'+i)||'');row.sowId=String(f.get('sow_'+i)||'').trim();const csf=f.get('csf_'+i);row.csf=csf===''?null:csf==='true';row.category=String(f.get('category_'+i)||'');});
@@ -94,6 +119,7 @@ function inventoryUpdate(target){
   const total=document.getElementById('inventory-weekly-total');if(total)total.textContent=I.weeklyTotal(c.report)+'頭';
   const stock=I.actualStock(c.report);document.querySelectorAll('[data-stock]').forEach(el=>el.textContent=stock[el.dataset.stock]);
   document.getElementById('inventory-status').textContent=c.report.month+' · 未保存の変更あり';
+  const snapshotStatus=document.getElementById('inventory-snapshot-status');if(snapshotStatus)snapshotStatus.textContent='未保存の変更あり';
   document.querySelectorAll('[data-inventory-subtotal]').forEach(el=>el.innerHTML=inventoryGroupSubtotal(c.report.rows.filter(row=>row.area===el.dataset.inventorySubtotal)));
   document.querySelectorAll('[data-inventory-finishing-total]').forEach(el=>el.textContent='合計 '+inventoryHeadcountText(c.report.rows.filter(row=>row.area==='finishing')));
   c.report.rows.forEach((row,i)=>{const label=document.getElementById('inventory-birth-label-'+i);if(label)label.textContent=inventoryBirthLabel(row.birthDate);});
@@ -101,13 +127,15 @@ function inventoryUpdate(target){
   document.getElementById('inventory-error').textContent='';
 }
 document.addEventListener('input',e=>{
-  if(page!=='inventory'||!e.target.closest('#inventory-form'))return;
+  if(page!=='inventory'||!e.target.closest('#inventory-form')||!inventoryCanEdit())return;
   try{inventoryUpdate(e.target);}catch(err){document.getElementById('inventory-error').textContent=err.message;}
 });
 document.addEventListener('change',e=>{
   if(page!=='inventory')return;
-  if(e.target.id==='inventory-history-month'&&e.target.value){inventoryMonth=e.target.value;render();return;}
-  if(e.target.closest('#inventory-form'))try{inventoryUpdate(e.target);}catch(err){document.getElementById('inventory-error').textContent=err.message;}
+  try{
+    if(e.target.id==='inventory-history-month'&&e.target.value){inventorySwitchMonth(e.target.value);return;}
+    if(e.target.closest('#inventory-form')&&inventoryCanEdit())inventoryUpdate(e.target);
+  }catch(err){document.getElementById('inventory-error').textContent=err.message;}
 });
 document.addEventListener('submit',e=>{if(e.target.id==='inventory-form')e.preventDefault();});
 document.addEventListener('click',e=>{
@@ -115,8 +143,12 @@ document.addEventListener('click',e=>{
   const action=b.dataset.inventory;
   if(action==='tab'){inventorySelectStep(Number(b.dataset.step));return;}
   try{
-    if(action==='open'){const month=document.getElementById('inventory-month').value;if(!I.validMonth(month))throw Error('対象月を選んでください。');inventoryMonth=month;render();return;}
+    if(action==='open'){const month=document.getElementById('inventory-month').value;inventorySwitchMonth(month);return;}
     const c=inventoryContext();
+    if(action==='month-prev'||action==='month-next'){inventorySwitchMonth(inventoryOffsetMonth(c.report.month,action==='month-prev'?-1:1));return;}
+    if(action==='month-today'){inventorySwitchMonth(inventoryLocalMonth());return;}
+    if(action==='edit'){if(c.hasSnapshot===false)throw Error('この月の保存記録はありません。');c.editing=true;render();return;}
+    if(action!=='revision'&&action!=='refresh'&&!inventoryCanEdit(c))throw Error('閲覧中の月です。「この月を編集する」から編集してください。');
     if(action==='yard-add'||action==='yard-remove'){
       const report=inventoryRead();
       if(action==='yard-add'){
@@ -135,8 +167,9 @@ document.addEventListener('click',e=>{
       input.value=String(Math.min(c.report.rows[Number(b.dataset.row)]?.area==='yard'?1:Infinity,Math.max(0,current+Number(b.dataset.delta))));inventoryUpdate();return;
     }
     if(action==='refresh'){
-      if(!window.confirm('現在の飼育データで①の明細を取り直します。①の手修正は置き換わります。保存済みの履歴は残ります。'))return;
-      const report=inventoryRead();report.rows=I.snapshot(db,state,report.date,roomBirthDate);I.syncPlan(report);report.status='draft';c.report=report;c.dirty=true;render();return;
+      if(c.report.month!==inventoryLocalMonth())throw Error('現在データの取り込みは今月を開いて行ってください。');
+      if((db.inventoryMonths?.[c.report.month]||c.hasSnapshot!==false||c.dirty)&&!window.confirm(inventoryMonthLabel(c.report.month)+'の①を現在の豚舎データで取り込み直します。①の修正内容と確認日は置き換わります。出荷計画の手入力と保存済み履歴は残ります。よろしいですか？'))return;
+      const report=c.hasSnapshot===false?I.clone(c.report):inventoryRead();report.date=today();report.rows=I.snapshot(db,state,report.date,roomBirthDate);I.syncPlan(report);report.status='draft';c.report=report;c.hasSnapshot=true;c.editing=true;c.dirty=true;render();toast('現在の豚舎データを取り込みました。確認後に保存してください');return;
     }
     if(action==='carry'){
       const previous=db.inventoryMonths?.[I.previousMonth(c.report.month)];if(!previous)throw Error('前月の保存済み記録がありません。先に前月を保存してください。');
