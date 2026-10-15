@@ -38,7 +38,11 @@ function snapshot(data,state,date,roomBirthDate){
       state:r.state,count:inactive?0:r.count??null,birthDate,sowId:r.mixed?'混成':r.sowId||'',csf:typeof r.csf==='boolean'?r.csf:null,
       category:category(area,r,date,birthDate),autoCategory:area==='farrowing'||area==='nursery',registeredWeight:r.weight??null,kind:r.kind==='育成母豚'?'育成母豚':'肉豚'};
   };
-  return individualYardRows([...state.rooms.map(r=>make('farrowing',r)),...state.nursery.map(r=>make('nursery',r)),...state.finishing.map(r=>make(r.key==='yard'?'yard':'finishing',r))]);
+  return individualYardRows([...state.rooms.map(r=>make('farrowing',r)),...state.nursery.map(r=>make('nursery',r)),...state.finishing.flatMap(r=>{
+    if(r.key!=='yard')return [make('finishing',r)];
+    if(!Array.isArray(r.individuals))return [make('yard',r)];
+    return r.individuals.map(pig=>({...make('yard',{...pig,key:'yard',state:'occupied'}),key:'yard:pig:'+pig.key,sourcePigKey:pig.key,yardIndividual:1}));
+  })]);
 }
 function aggregate(rows){
   const totals=Object.fromEntries(CATEGORIES.map(k=>[k,0]));let gilts=0,unclassified=0,unknown=0;
@@ -113,6 +117,6 @@ function saveReport(data,report,expected){
   next.revisions=old?[...(old.revisions||[]),{savedAt:next.updatedAt,report:(()=>{const p=clone(old);delete p.revisions;return p;})()}]:[];
   validateReport(next,next.month);data.inventoryMonths=data.inventoryMonths||{};data.inventoryMonths[next.month]=next;
 }
-function gilts(state){return [...state.nursery,...state.finishing].filter(r=>r.state==='occupied'&&r.kind==='育成母豚').reduce((sum,r)=>sum+(r.count??0),0);}
+function gilts(state){return [...state.nursery,...state.finishing.flatMap(r=>r.key==='yard'&&Array.isArray(r.individuals)?r.individuals.map(p=>({...p,state:'occupied'})):[r])].filter(r=>r.state==='occupied'&&r.kind==='育成母豚').reduce((sum,r)=>sum+(r.count??0),0);}
 root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,actualStock,plannedStock,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
 })(typeof globalThis!=='undefined'?globalThis:this);

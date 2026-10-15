@@ -272,3 +272,14 @@ nav .tab-icon{max-width:24px}
 .inventory-edit-fields:disabled input,.inventory-edit-fields:disabled select,.inventory-edit-fields:disabled textarea{opacity:1;color:var(--text);-webkit-text-fill-color:var(--text);background:var(--surface)}
 .inventory-edit-fields:disabled button{cursor:default}
 @media(max-width:380px){.inventory-month-navigation button{font-size:11px;padding:5px 2px}.inventory-month-navigation strong{font-size:14px}}
+
+.fin-yard-individuals{display:block;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.fin-yard-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
+.fin-yard-heading h3{margin:0}
+.fin-yard-heading .btn{width:auto;margin:0;font-size:13px;padding:9px}
+.fin-yard-table{table-layout:fixed;font-size:13px}
+.fin-yard-table th,.fin-yard-table td{padding:7px 3px;white-space:normal;overflow-wrap:anywhere}
+.fin-yard-table th:first-child{width:14%;text-align:center}
+.fin-yard-table b{font-size:20px}
+.fin-yard-table small{display:block}
+.fin-yard-table button{display:block;width:100%;min-height:36px;margin:3px 0;padding:4px 2px;border:1px solid var(--border);border-radius:7px;background:var(--soft);color:var(--text);font:inherit;font-size:12px;cursor:pointer}

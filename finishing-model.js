@@ -6,7 +6,52 @@
   function empty(key){if(key==='yard')return {key,state:'empty',birthDate:'',count:0};return {key,state:'empty',birthDate:'',count:0,sowId:'',mixed:false,csf:false,weight:30,kind:'肉豚',note:''};}
   function legacyGroup(r){return {birthDate:r.birthDate||'',count:r.count??null,sowId:r.sowId||'',mixed:!!r.mixed,csf:!!r.csf,weight:r.weight??30,kind:r.kind||'肉豚',note:r.groupNote??r.note??''};}
   function simple(r){return {key:'yard',state:r.count?'occupied':'empty',birthDate:r.count?(r.birthDate||''):'',count:r.count||0};}
-  function group(r){return r.key==='yard'?{birthDate:r.birthDate||'',count:r.count??0}:legacyGroup(r);}
+  function group(r){return r.key==='yard'?yardState(r):legacyGroup(r);}
+  function yardPig(source,key){
+    return {...M.clone(source),key,count:1,weight:source.weight??null,birthDate:source.birthDate||'',sowId:source.mixed?'混成':source.sowId||'',mixed:false,csf:typeof source.csf==='boolean'?source.csf:null,kind:source.kind==='育成母豚'?'育成母豚':'肉豚',note:source.note||''};
+  }
+  function yardState(source){
+    const individuals=Array.isArray(source.individuals)?M.clone(source.individuals):Array.from({length:source.count||0},(_,i)=>yardPig({birthDate:source.birthDate||'',weight:source.weight??null,sowId:source.sowId||'',mixed:!!source.mixed,csf:source.csf??null,kind:source.kind||'肉豚',note:source.note||''},'yard:legacy:'+(i+1)));
+    const dates=new Set(individuals.map(p=>p.birthDate||''));
+    return {key:'yard',state:individuals.length?'occupied':'empty',count:individuals.length,birthDate:dates.size===1?[...dates][0]:'',individuals};
+  }
+  function validIndividuals(r){
+    if(!Array.isArray(r.individuals)||r.count!==r.individuals.length||new Set(r.individuals.map(p=>p.key)).size!==r.individuals.length)throw Error('運動場の個体一覧と頭数を確認してください。');
+    for(const p of r.individuals){if(typeof p.key!=='string'||!p.key||p.count!==1||typeof p.sowId!=='string'||typeof p.birthDate!=='string'||!(p.weight===null||Number.isSafeInteger(p.weight)&&p.weight>=0&&p.weight%10===0)||!['肉豚','育成母豚'].includes(p.kind)||!(p.csf===null||typeof p.csf==='boolean')||typeof p.note!=='string')throw Error('運動場は1頭につき1行で入力してください。');validYard(p);}
+  }
+  function putIndividuals(room,next){const normalized=yardState(next);validIndividuals(normalized);Object.keys(room).forEach(k=>delete room[k]);Object.assign(room,normalized);}
+  // JSONB may reorder object keys; individual order and values still identify the same state.
+  function canonical(value){return Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;}
+  function sameIndividuals(a,b){return JSON.stringify(canonical(yardState(a)))===JSON.stringify(canonical(yardState(b)));}
+  function applyIndividuals(l,rooms,nursery){
+    const yard=rooms.find(r=>r.key==='yard'),before=yardState(yard);
+    if(l.type==='肉豚舎へ移動'){
+      const dest=rooms.find(r=>r.key===l.finishingKey),source=(l.sourceArea==='nursery'?nursery:l.sourceArea==='finishing'?rooms:[]).find(r=>r.key===l.sourceKey);
+      if(!source||!dest||source===dest||source.state!=='occupied')throw Error('移動元・移動先を確認してください。');
+      if(dest.key==='yard'){
+        if(source.key==='yard'||!same(source,l.sourceBefore,true)||!sameIndividuals(yard,l.yardBefore))throw Error('移動元または運動場が変わっています。');
+        const group=legacyGroup(source),total=group.count===null?l.sourceTotal:group.count;
+        if(!Number.isSafeInteger(total)||total<=0||!Number.isSafeInteger(l.count)||l.count<=0||l.count>total)throw Error('移動頭数を確認してください。');
+        const added=Array.from({length:l.count},(_,i)=>yardPig(group,l.key+':pig:'+(i+1)));
+        putIndividuals(yard,{individuals:[...before.individuals,...added]});
+        if(l.sourceArea==='finishing')put(source,{...group,count:total-l.count},true);
+        else if(total>l.count)source.count=total-l.count;
+        else Object.assign(source,{state:'empty',count:null,sowId:'',mixed:false,entered:'',birthDate:'',csf:false,weight:30,kind:'肉豚',groupNote:''});
+      }else{
+        if(source.key!=='yard'||dest.state!=='empty'||!sameIndividuals(yard,l.sourceBefore)||!Array.isArray(l.yardPigKeys)||l.yardPigKeys.length!==1||l.count!==1)throw Error('運動場の移動する個体を確認してください。');
+        const pig=before.individuals.find(p=>p.key===l.yardPigKeys[0]);if(!pig)throw Error('移動する個体が見つかりません。');
+        const group=legacyGroup({...pig,mixed:pig.sowId==='混成',sowId:pig.sowId==='混成'?'':pig.sowId});
+        put(dest,group,true);putIndividuals(yard,{individuals:before.individuals.filter(p=>p.key!==pig.key)});
+      }
+    }else{
+      if(l.finishingKey!=='yard'||!sameIndividuals(yard,l.finishingBefore))throw Error('運動場の個体情報が変わっています。');
+      if(l.type==='肉豚出荷'){
+        if(!Array.isArray(l.yardPigKeys)||new Set(l.yardPigKeys).size!==l.yardPigKeys.length||l.count!==l.yardPigKeys.length||l.count<=0||l.yardPigKeys.some(key=>!before.individuals.some(p=>p.key===key)))throw Error('出荷する個体を確認してください。');
+        putIndividuals(yard,{individuals:before.individuals.filter(p=>!l.yardPigKeys.includes(p.key))});
+      }else putIndividuals(yard,l.finishingAfter);
+    }
+    check(rooms);
+  }
   function validYard(g){if(!Number.isInteger(g.count)||g.count<0)throw Error('頭数は0以上の整数で入力してください。');if(g.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(g.birthDate)||!Number.isFinite(Date.parse(g.birthDate))||new Date(g.birthDate).toISOString().slice(0,10)!==g.birthDate))throw Error('誕生月日を確認してください。');}
   function validGroup(g){
     if(!Number.isInteger(g.count)||g.count<0)throw Error('頭数は0以上の整数で入力してください。');
@@ -17,12 +62,13 @@
   }
   function check(rooms){
     if(rooms.length!==25||new Set(rooms.map(r=>r.key)).size!==25)throw Error('肉豚舎は24部屋と運動場で管理します。');
-    for(const r of rooms){if(!(r.key==='yard'||/^f([1-9]|1\d|2[0-4])$/.test(r.key))||!['empty','occupied'].includes(r.state))throw Error('肉豚舎の部屋が不正です。');if(r.key==='yard'){validYard(r);if((r.state==='empty')!==(r.count===0))throw Error('運動場の頭数と在室状態を確認してください。');continue;}validGroup(group(r));if(r.state==='empty'&&(r.count!==0||r.sowId||r.birthDate||r.note||r.mixed)||r.state==='occupied'&&r.count<=0)throw Error('肉豚舎の在室状態と頭数を確認してください。');}
+    for(const r of rooms){if(!(r.key==='yard'||/^f([1-9]|1\d|2[0-4])$/.test(r.key))||!['empty','occupied'].includes(r.state))throw Error('肉豚舎の部屋が不正です。');if(r.key==='yard'){validYard(r);if(r.individuals!==undefined)validIndividuals(r);if((r.state==='empty')!==(r.count===0))throw Error('運動場の頭数と在室状態を確認してください。');continue;}validGroup(group(r));if(r.state==='empty'&&(r.count!==0||r.sowId||r.birthDate||r.note||r.mixed)||r.state==='occupied'&&r.count<=0)throw Error('肉豚舎の在室状態と頭数を確認してください。');}
   }
   function baseline(data){const rooms=M.clone(data.finishingBaseline||Array.from({length:24},(_,i)=>empty('f'+(i+1))));if(!rooms.some(r=>r.key==='yard'))rooms.push(empty('yard'));check(rooms);return rooms;}
   function same(a,b,simpleYard){if(simpleYard&&a.key==='yard')return a.count===b.count&&(a.birthDate||'')===(b.birthDate||'');return JSON.stringify(legacyGroup(a))===JSON.stringify(legacyGroup(b));}
   function put(r,g,simpleYard){if(simpleYard&&r.key==='yard'){validYard(g);const next=simple(g);for(const key of Object.keys(r))delete r[key];Object.assign(r,next);return;}g=legacyGroup(g);validGroup(g);Object.assign(r,g,{state:g.count?'occupied':'empty'});if(!g.count){for(const key of Object.keys(r))if(key!=='key')delete r[key];Object.assign(r,empty(r.key));}}
   function apply(l,rooms,nursery){
+    if(l.yardIndividuals===1){applyIndividuals(l,rooms,nursery);return;}
     const dest=rooms.find(r=>r.key===l.finishingKey);if(!dest)throw Error('肉豚舎の部屋が見つかりません。');
     if(l.type==='肉豚舎へ移動'){
       if(dest.state!=='empty')throw Error('移動先の部屋は空室ではありません。');
@@ -44,7 +90,7 @@
     }
     check(rooms);
   }
-  root.TanakaFinishing={TYPES,empty,group,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?simple(r):r)};
+  root.TanakaFinishing={TYPES,empty,group,yardState,yardPig,validIndividuals,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?yardState(r):r)};
 })(typeof globalThis!=='undefined'?globalThis:this);
 
 // Shipment history adjustments never change the replayed room ledger.
