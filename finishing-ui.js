@@ -4,7 +4,7 @@ let finishingMoveMode=false,finishingPreferred='';
 function finishingPlace(key){return key==='yard'?'運動場':'肉豚舎 '+key.slice(1)+'番';}
 function finishingTotal(){return state.finishing.filter(r=>r.state==='occupied'&&(r.key==='yard'||r.kind==='肉豚')).reduce((n,r)=>n+r.count,0);}
 function finishing(){
-  const occupiedRooms=state.finishing.filter(r=>r.key!=='yard'&&r.state==='occupied'),used=state.finishing.filter(r=>r.state==='occupied'),heads=used.reduce((n,r)=>n+r.count,0),gilts=used.filter(r=>r.kind==='育成母豚');
+  const occupiedRooms=state.finishing.filter(r=>r.key!=='yard'&&r.state==='occupied'),used=state.finishing.filter(r=>r.state==='occupied'),heads=finishingTotal(),gilts=used.filter(r=>r.kind==='育成母豚');
   const left=[null,2,3,5,7,9,11,13,15,17,19,21,23],right=[1,null,4,6,8,10,12,14,16,18,20,22,24];
   const card=(number,col,row)=>{
     if(number===null){if(col!==1||row!==1)return '';number='yard';}

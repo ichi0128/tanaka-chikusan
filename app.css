@@ -54,3 +54,33 @@ nav button{width:16.6667%;flex:1;min-width:0;font-size:11px;padding:6px 2px}.fin
 .birth-counts>span{display:none}
 .birth-counts>div{min-width:0}
 @media(max-width:380px){.home-summary{font-size:14px}.headcount-controls{grid-template-columns:54px minmax(0,1fr) 54px}}
+
+/* Monthly inventory and shipping reports. */
+nav button{min-width:0;font-size:11px;padding-left:2px;padding-right:2px}
+nav .tab-icon{max-width:24px}
+.inventory-month{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.inventory-scroll{overflow-x:auto;max-width:100%;margin:12px 0;-webkit-overflow-scrolling:touch}
+.inventory-table{width:100%;border-collapse:collapse;background:var(--surface,#fff);font-size:14px}
+.inventory-table caption{text-align:left;font-weight:700;margin-bottom:8px;min-width:240px}
+.inventory-table th,.inventory-table td{border:1px solid var(--border,#d9d5cb);padding:9px;text-align:center;vertical-align:middle;white-space:nowrap}
+.inventory-table thead th{background:var(--soft,#eee9de)}
+.inventory-table th:first-child{text-align:left}
+.inventory-table input,.inventory-table select{min-width:80px;width:100%;margin:0;padding:10px 6px}
+.inventory-table input[type=date]{min-width:145px}
+.inventory-rows th:first-child{min-width:130px}
+.inventory-rows small{display:block;white-space:normal;font-weight:400;font-size:11px;color:var(--muted)}
+.inventory-counter{display:flex;align-items:center;gap:4px}
+.inventory-counter input{width:75px;min-width:65px;font-size:20px;font-weight:800;text-align:center}
+.inventory-counter button{min-width:44px;min-height:44px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-weight:700}
+.inventory-table input[name^=sow_]{min-width:100px}
+.inventory-summary{table-layout:fixed}
+.inventory-summary th:first-child{width:23%}
+.inventory-summary td:nth-child(2){width:25%}
+.inventory-summary td{white-space:normal}
+.inventory-bar{height:20px;background:var(--soft,#eee9de);border-radius:4px;overflow:hidden}
+.inventory-bar span{height:100%;display:block;background:var(--accent,#3d4932);min-width:0}
+.inventory-save{margin-top:18px}
+.inventory-revisions{margin-top:18px}
+.inventory-revisions summary{font-weight:700;cursor:pointer}
+.inventory-revisions .row{font-size:13px}
+@media(max-width:420px){nav button{font-size:10px}nav .tab-icon{width:22px;height:22px}.inventory-table{font-size:13px}.inventory-summary th,.inventory-summary td{padding:8px 5px}}

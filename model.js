@@ -34,6 +34,7 @@
     const keys=data.logs.map(l=>l.key);if(keys.some(k=>typeof k!=='string'||!k)||new Set(keys).size!==keys.length)throw Error('記録の識別番号が不正です。');
     data.logs.forEach(l=>{if(!l.legacy && (!TYPES.includes(l.type)||!/^\d{4}-\d{2}-\d{2}$/.test(l.date)||!Number.isFinite(Date.parse(l.date))||new Date(l.date).toISOString().slice(0,10)!==l.date))throw Error('記録の種類または日付が不正です。');});
     replay(data);
+    if(root.TanakaInventory)root.TanakaInventory.validate(data);
   }
   function checkRooms(rooms,sows){
     if(new Set(rooms.map(r=>r.key)).size!==10||rooms.some(r=>typeof r.key!=='string'||!/^r([1-9]|10)$/.test(r.key)))throw Error('分娩舎の管理枠が不正または重複しています。');

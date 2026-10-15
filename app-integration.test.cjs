@@ -2,13 +2,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 function boot(){
   const map=new Map(),elements=new Map(),listeners={};
-  const element=id=>{if(!elements.has(id))elements.set(id,{id,innerHTML:'',textContent:'',dataset:{},classList:{add(){},remove(){}},setAttribute(){},close(){this.open=false;},showModal(){this.open=true;},insertAdjacentHTML(){},querySelector(){return null;}});return elements.get(id);};
+  const element=id=>{if(!elements.has(id))elements.set(id,{id,innerHTML:'',textContent:'',dataset:{},classList:{add(){},remove(){}},setAttribute(){},close(){this.open=false;},showModal(){this.open=true;},insertAdjacentHTML(){},querySelector(){return null;},querySelectorAll(){return [];}});return elements.get(id);};
   const storage={getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k),key:i=>[...map.keys()][i]??null,get length(){return map.size;}};
   const document={getElementById:element,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(name,fn)=>{(listeners[name]??=[]).push(fn);},documentElement:{dataset:{}},visibilityState:'visible'};
   const client={auth:{getSession:async()=>({data:{session:null}}),onAuthStateChange:()=>({data:{subscription:{}}})}};
   const context=vm.createContext({console,document,localStorage:storage,navigator:{onLine:true},location:{protocol:'http:'},setTimeout:()=>1,clearTimeout(){},setInterval(){},addEventListener(){},scrollTo(){},supabase:{createClient:()=>client}});
   vm.runInContext('window=globalThis;',context);
-  const scripts=['model.js','finishing-model.js','birth-validation.js','schedules.js','finishing-ui.js','cloud-config.js','cloud-store.js','app.js','cloud-ui.js'];
+  const scripts=['model.js','finishing-model.js','birth-validation.js','schedules.js','finishing-ui.js','cloud-config.js','cloud-store.js','inventory-model.js','inventory-ui.js','app.js','cloud-ui.js'];
   for(const name of scripts)vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,name),'utf8'),context,{filename:name});
   return {context,storage,elements,listeners};
 }
@@ -115,4 +115,20 @@ test('logout returns header to local mode',async()=>{
   const b=boot();await new Promise(resolve=>setImmediate(resolve));
   vm.runInContext("cloudStore.user={id:'owner'};cloudStore.row={user_id:'owner',data:M.clone(db),revision:1};cloudStore.emit('ready','一致');cloudStore.user=null;cloudStore.row=null;cloudStore.emit('signedout','ログアウト');",b.context);
   assert.equal(b.elements.get('network').textContent,'端末保存');
+});
+
+test('monthly inventory saves and restores with full JSON and cloud data, without changing daily records',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));
+  const before=JSON.parse(b.storage.getItem('tanaka-db'));
+  vm.runInContext("go('inventory');let report=I.clone(inventoryContext().report);report.monthly[9].planned=20;report.monthly[9].actual=18;save(data=>I.saveReport(data,report,'null'));",b.context);
+  const saved=JSON.parse(b.storage.getItem('tanaka-db')),daily=JSON.parse(JSON.stringify(saved));delete daily.inventoryMonths;assert.deepEqual(daily,before);
+  vm.runInContext('let monthlyExport;download=text=>{monthlyExport=text;};',b.context);
+  for(const listener of b.listeners.click)listener({target:{closest:()=>({dataset:{action:'export'}})}});
+  assert.deepEqual(JSON.parse(vm.runInContext('monthlyExport',b.context)),saved);
+  vm.runInContext('cloudStore.replaceLocal(JSON.parse(JSON.stringify(db)));',b.context);
+  assert.deepEqual(JSON.parse(b.storage.getItem('tanaka-db')).inventoryMonths,saved.inventoryMonths);
+  vm.runInContext('let monthlyImport;form=(title,content,label,action)=>{monthlyImport=action;};importData();',b.context);
+  await b.elements.get('file').onchange({target:{files:[{text:async()=>JSON.stringify(saved)}]}});
+  vm.runInContext('monthlyImport();',b.context);
+  assert.deepEqual(JSON.parse(b.storage.getItem('tanaka-db')),saved);
 });
