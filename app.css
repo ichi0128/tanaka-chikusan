@@ -40,3 +40,17 @@ nav button{width:16.6667%;flex:1;min-width:0;font-size:11px;padding:6px 2px}.fin
 .fin-card.fin-yard .fin-primary{flex:1;justify-content:center;min-height:148px;margin:4px 0 10px}
 .fin-card.fin-yard .fin-primary .fin-count{font-size:clamp(42px,52cqw,124px);font-weight:850;line-height:.95;letter-spacing:-2px;margin:0}
 .fin-card.fin-yard .fin-birth{font-size:13px;line-height:1.5}
+
+/* Compact home links and headcount editing. */
+.home-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.home-summaries{display:grid;gap:10px;margin-top:16px}
+.home-summary{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;font:inherit;font-weight:700;padding:16px 14px;margin:0}
+.home-summary span:first-child{min-width:0}
+.headcount-controls{display:grid;grid-template-columns:64px minmax(0,1fr) 64px;align-items:center;gap:8px;margin-bottom:12px}
+.headcount-controls input{width:100%;min-width:0;text-align:center;font-size:26px;font-weight:800;margin:0}
+.headcount-controls button{min-height:48px;border:1px solid currentColor;border-radius:10px;background:transparent;color:inherit;font:inherit;font-weight:800}
+.headcount-controls button:disabled{opacity:.35}
+.birth-counts{grid-template-columns:minmax(0,1fr)}
+.birth-counts>span{display:none}
+.birth-counts>div{min-width:0}
+@media(max-width:380px){.home-summary{font-size:14px}.headcount-controls{grid-template-columns:54px minmax(0,1fr) 54px}}
