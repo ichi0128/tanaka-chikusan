@@ -128,3 +128,33 @@ nav .tab-icon{max-width:24px}
 .inventory-row-details label{font-size:12px;margin-top:8px}
 .inventory-row-details select{font-size:14px;min-height:36px;padding:5px}
 @media(max-width:360px){.inventory-key-fields{gap:8px}.inventory-key-fields select{font-size:22px}.inventory-key-fields .inventory-counter input{font-size:28px}.inventory-support-fields{gap:8px}}
+
+/* Ruled notebook rows for farrowing, nursery and yard; compact finishing cards. */
+.inventory-area-group{margin:18px 0 24px;min-width:0}
+.inventory-area-group>h3{padding:0 0 7px;border-bottom:2px solid var(--accent);margin-bottom:0}
+.inventory-notebook{background:var(--surface);padding:0 6px}
+.inventory-notebook-head,.inventory-notebook-row{display:grid;grid-template-columns:minmax(88px,1.2fr) minmax(72px,1fr) minmax(48px,.8fr) minmax(45px,.7fr);gap:6px;align-items:center}
+.inventory-notebook-head{font-size:11px;color:var(--muted);padding:7px 0 4px}
+.inventory-notebook-row{min-height:55px;padding:6px 0;border-bottom:1px solid var(--border)}
+.inventory-notebook-row input,.inventory-notebook-row select{min-width:0;width:100%;min-height:36px;padding:3px 1px;margin:0;border:0;border-radius:3px;background:transparent;font-size:13px}
+.inventory-notebook-row>.inventory-counter{gap:1px}
+.inventory-notebook-row .inventory-counter input{width:100%;min-width:0;height:40px;font-size:25px;font-weight:800;text-align:center;padding:0}
+.inventory-notebook-row .inventory-counter button{min-width:24px;width:24px;min-height:36px;border:0;font-size:16px;padding:0}
+.inventory-notebook-row>select{font-size:21px;font-weight:800;padding-right:0}
+.inventory-notebook-birth{position:relative;min-width:0;font-size:13px}
+.inventory-notebook-birth summary{list-style:none;cursor:pointer;padding:8px 0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.inventory-notebook-birth summary::-webkit-details-marker{display:none}
+.inventory-notebook-birth[open]{z-index:2}
+.inventory-notebook-birth label{font-size:11px;margin:2px 0}
+.inventory-notebook-birth[open] input{position:absolute;right:0;top:100%;width:165px;border:1px solid var(--border);background:var(--surface);padding:6px;box-shadow:0 4px 12px #0002}
+.inventory-group-subtotal{display:flex;justify-content:flex-end;align-items:baseline;gap:6px;flex-wrap:wrap;padding:10px 0 6px;font-size:17px;border-bottom:2px solid var(--border)}
+.inventory-group-subtotal small{font-size:11px;font-weight:400;color:var(--muted)}
+.inventory-notebook-info{font-size:11px;color:var(--muted);margin:6px 0}
+.inventory-notebook-info summary{cursor:pointer}
+.inventory-notebook-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)}
+.inventory-notebook-meta label{font-size:11px;margin:0}
+.inventory-notebook-meta select{width:75px;min-height:32px;font-size:12px;padding:3px}
+.inventory-finishing-group .inventory-count-list{gap:6px}
+.inventory-finishing-group .inventory-count-card{padding:8px}
+.inventory-finishing-group .inventory-key-fields .inventory-counter input,.inventory-finishing-group .inventory-key-fields select{height:44px}
+.inventory-finishing-group .inventory-support-fields{margin-top:6px}
