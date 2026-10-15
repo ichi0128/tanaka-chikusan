@@ -74,6 +74,8 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||fatal)return;
   const a=b.dataset.action,key=b.dataset.id;if(!a?.startsWith('fin-'))return;
   try{
+    if(a==='fin-shipment-add')shipmentAdd();
+    if(a==='fin-shipment-delete')shipmentDelete(b.dataset.source,key);
     if(a==='fin-mode'){finishingMoveMode=!finishingMoveMode;finishingPreferred='';render();}
     if(a==='fin-empty')finishingEmpty(key);
     if(a==='fin-detail'&&!finishingMoveMode)finishingDetail(key);
@@ -116,5 +118,15 @@ document.addEventListener('click',e=>{
 
 function shipmentHistory(){
   const month=today().slice(0,7),summary=F.shipmentSummary(db,month),monthText=key=>Number(key.slice(0,4))+'年'+Number(key.slice(5,7))+'月';
-  return `<button class="back" data-action="page" data-id="finishing">‹ 肉豚舎</button><h2>出荷履歴</h2><div class="card"><b>${monthText(month)}の出荷合計　${summary.currentTotal}頭</b></div>${summary.months.map(m=>`<section aria-label="${monthText(m.month)}の出荷実績"><div class="subhead"><h2>${monthText(m.month)}</h2><span class="badge">合計 ${m.total}頭</span></div><div class="card">${m.days.map(day=>`<details><summary class="row"><span><b>${esc(day.date.replaceAll('-','/'))}</b><small class="muted">　内訳 ${day.records.length}件</small></span><strong>${day.total}頭</strong></summary>${day.records.map(r=>`<button class="row row-action" data-action="log" data-id="${esc(r.key)}"><div><b>${r.finishingKey?esc(finishingPlace(r.finishingKey)):'出荷元未登録'}</b>${r.note?`<p class="muted history-note">${esc(r.note)}</p>`:''}</div><span>${r.count}頭　›</span></button>`).join('')}</details>`).join('')}</div></section>`).join('')||'<div class="card empty">出荷の記録はまだありません。</div>'}`;
+  return `<button class="back" data-action="page" data-id="finishing">‹ 肉豚舎</button><h2>出荷履歴</h2><button class="btn" data-action="fin-shipment-add">出荷実績を追加</button><p class="muted">履歴の追加・削除では、現在の肉豚舎頭数は変わりません。訂正は削除して再追加してください。</p><div class="card"><b>${monthText(month)}の出荷合計　${summary.currentTotal}頭</b></div>${summary.months.map(m=>`<section aria-label="${monthText(m.month)}の出荷実績"><div class="subhead"><h2>${monthText(m.month)}</h2><span class="badge">合計 ${m.total}頭</span></div><div class="card">${m.days.map(day=>`<details><summary class="row"><span><b>${esc(day.date.replaceAll('-','/'))}</b><small class="muted">　内訳 ${day.records.length}件</small></span><strong>${day.total}頭</strong></summary>${day.records.map(r=>`<div class="row"><div><b>${r.finishingKey?esc(finishingPlace(r.finishingKey)):'追加した出荷実績'}</b><p>${esc(r.date.replaceAll('-','/'))} · ${r.count}頭</p>${r.note?`<p class="muted history-note">${esc(r.note)}</p>`:''}</div><button type="button" class="btn secondary" style="width:auto;flex-shrink:0" data-action="fin-shipment-delete" data-source="${r.source}" data-id="${esc(r.key)}" aria-label="${esc(r.date)} ${r.count}頭の出荷履歴を削除">削除</button></div>`).join('')}</details>`).join('')}</div></section>`).join('')||'<div class="card empty">出荷の記録はまだありません。</div>'}`;
+}
+
+function shipmentAdd(){
+  form('出荷実績を追加',`${field('date','出荷日',today(),'date',true)}${field('count','出荷頭数','','number',true)}<p class="muted">現在の肉豚舎頭数は変更しません。</p>`,'追加する',f=>save(d=>F.addShipment(d,{key:M.uid(),date:f.get('date'),count:Number(f.get('count'))})));
+  document.getElementById('count').min='1';document.getElementById('count').step='1';
+}
+function shipmentDelete(source,key){
+  const record=F.shipmentSummary(db,'').records.find(r=>r.source===source&&r.key===key);
+  if(!record){toast('出荷履歴が見つかりません');return;}
+  form('出荷履歴を削除',`<p>${esc(record.date.replaceAll('-','/'))} · <b>${record.count}頭</b>の出荷実績を削除しますか？</p><p class="muted">出荷一覧と合計から削除します。現在の肉豚舎頭数は変更しません。</p>`,'削除する',()=>save(d=>F.deleteShipment(d,source,key)));
 }

@@ -47,9 +47,35 @@
   root.TanakaFinishing={TYPES,empty,group,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?simple(r):r)};
 })(typeof globalThis!=='undefined'?globalThis:this);
 
-// Read-only shipment projection, shared by Home and shipment history.
+// Shipment history adjustments never change the replayed room ledger.
+TanakaFinishing.validShipment=function(record){
+  if(typeof record.key!=='string'||!record.key||typeof record.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(record.date)||!Number.isFinite(Date.parse(record.date))||new Date(record.date).toISOString().slice(0,10)!==record.date)throw Error('出荷日を確認してください。');
+  if(!Number.isSafeInteger(record.count)||record.count<=0)throw Error('出荷頭数は1以上の整数で入力してください。');
+};
+TanakaFinishing.validateShipmentHistory=function(data){
+  const h=data.shipmentHistory;if(h===undefined)return;
+  if(!h||!Array.isArray(h.added)||!Array.isArray(h.deletedLogKeys))throw Error('出荷履歴の保存形式を確認してください。');
+  h.added.forEach(TanakaFinishing.validShipment);
+  if(new Set(h.added.map(r=>r.key)).size!==h.added.length||h.deletedLogKeys.some(k=>typeof k!=='string'||!k)||new Set(h.deletedLogKeys).size!==h.deletedLogKeys.length)throw Error('出荷履歴の識別番号を確認してください。');
+};
+TanakaFinishing.addShipment=function(data,record){
+  TanakaFinishing.validateShipmentHistory(data);TanakaFinishing.validShipment(record);
+  const h=data.shipmentHistory||(data.shipmentHistory={added:[],deletedLogKeys:[]});
+  if(h.added.some(r=>r.key===record.key))throw Error('同じ出荷実績が既に登録されています。');
+  h.added.push({key:record.key,date:record.date,count:record.count});
+};
+TanakaFinishing.deleteShipment=function(data,source,key){
+  TanakaFinishing.validateShipmentHistory(data);
+  const record=TanakaFinishing.shipmentSummary(data,'').records.find(r=>r.source===source&&r.key===key);
+  if(!record)throw Error('出荷履歴が変更されています。画面を開き直してください。');
+  const h=data.shipmentHistory||(data.shipmentHistory={added:[],deletedLogKeys:[]});
+  if(source==='manual')h.added=h.added.filter(r=>r.key!==key);
+  else h.deletedLogKeys.push(key);
+};
+// Shared by Home and shipment history; manual additions and exclusions are display totals only.
 TanakaFinishing.shipmentSummary=function(data,month){
-  const records=(data.logs||[]).filter(l=>l.type==='肉豚出荷'&&Number.isInteger(l.count)&&l.count>0&&typeof l.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(l.date)&&Number.isFinite(Date.parse(l.date))&&new Date(l.date).toISOString().slice(0,10)===l.date).map(l=>({key:l.key,date:l.date,count:l.count,finishingKey:l.finishingKey||'',note:l.note||''})).sort((a,b)=>b.date.localeCompare(a.date));
+  const h=data.shipmentHistory||{added:[],deletedLogKeys:[]},excluded=new Set(h.deletedLogKeys);
+  const records=[...(data.logs||[]).filter(l=>l.type==='肉豚出荷'&&!excluded.has(l.key)&&Number.isInteger(l.count)&&l.count>0&&typeof l.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(l.date)&&Number.isFinite(Date.parse(l.date))&&new Date(l.date).toISOString().slice(0,10)===l.date).map(l=>({key:l.key,source:'log',date:l.date,count:l.count,finishingKey:l.finishingKey||'',note:l.note||''})),...h.added.map(r=>({...r,source:'manual',finishingKey:'',note:''}))].sort((a,b)=>b.date.localeCompare(a.date));
   const months=new Map();
   for(const record of records){
     const key=record.date.slice(0,7);

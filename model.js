@@ -33,6 +33,7 @@
     const ids=data.sows.map(s=>s.id);if(ids.some(id=>typeof id!=='string'||!/^\d+$/.test(id))||new Set(ids).size!==ids.length)throw Error('母豚番号は重複のない数字で入力してください。');
     const keys=data.logs.map(l=>l.key);if(keys.some(k=>typeof k!=='string'||!k)||new Set(keys).size!==keys.length)throw Error('記録の識別番号が不正です。');
     data.logs.forEach(l=>{if(!l.legacy && (!TYPES.includes(l.type)||!/^\d{4}-\d{2}-\d{2}$/.test(l.date)||!Number.isFinite(Date.parse(l.date))||new Date(l.date).toISOString().slice(0,10)!==l.date))throw Error('記録の種類または日付が不正です。');});
+    if(root.TanakaFinishing)root.TanakaFinishing.validateShipmentHistory(data);
     replay(data);
     if(root.TanakaInventory)root.TanakaInventory.validate(data);
   }
