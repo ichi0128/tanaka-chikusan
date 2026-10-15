@@ -253,5 +253,11 @@ nav .tab-icon{max-width:24px}
 .inventory-plan-tools{margin-top:12px}
 .inventory-plan-tools summary{cursor:pointer;font-weight:700}
 .inventory-plan-section textarea{width:100%;box-sizing:border-box;margin:0}
-@media(min-width:1000px){.inventory-plan-report{grid-template-columns:1fr 1fr}.inventory-plan-section:last-child{grid-column:1/-1}}
+ .inventory-plan-workflow{display:grid;gap:20px;align-content:start;min-width:0}
+@media(min-width:768px){
+  main:has(#inventory-panel-3:not([hidden])){max-width:1440px}
+  #inventory-panel-3 .inventory-plan-report{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}
+  #inventory-panel-3 .inventory-plan-workflow{gap:12px}
+  #inventory-panel-3 .inventory-plan-section{padding:12px 9px}
+}
 @media(max-width:380px){.inventory-plan-section{padding:10px 7px}.inventory-plan-table{font-size:12px}.inventory-plan-table input{font-size:16px}.inventory-plan-table output{font-size:16px}}
