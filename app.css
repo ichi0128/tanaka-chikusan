@@ -102,3 +102,29 @@ nav .tab-icon{max-width:24px}
 .inventory-title{margin:8px 0 4px;font-size:18px}
 #inventory-form [role=tabpanel]>h2{margin:8px 0 6px;font-size:16px}
 #inventory-panel-1>.inventory-scroll{margin-top:6px}
+
+/* Inventory-only simplified count view; all source records remain unchanged. */
+.inventory-date-picker{position:relative;font-size:13px;line-height:1.5}
+.inventory-date-picker>summary{cursor:pointer;list-style:none;padding:4px 0;color:var(--text);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.inventory-date-picker>summary::-webkit-details-marker{display:none}
+.inventory-date-picker[open]{padding-bottom:4px}
+.inventory-date-picker label{font-size:12px;margin:4px 0}
+.inventory-date-picker input{width:160px;min-height:36px;font-size:14px;padding:6px;margin:0}
+.inventory-count-list{display:grid;gap:10px;margin-top:8px}
+.inventory-count-card{min-width:0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.inventory-key-fields{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:12px;align-items:end}
+.inventory-key-fields>div,.inventory-support-fields>div{min-width:0}
+.inventory-key-fields label{margin:0 0 4px;font-size:13px}
+.inventory-key-fields .inventory-counter{gap:3px}
+.inventory-key-fields .inventory-counter input{min-width:0;width:100%;height:56px;padding:3px;font-size:32px;font-weight:800}
+.inventory-key-fields .inventory-counter button{min-width:32px;min-height:44px;padding:0;font-size:13px}
+.inventory-key-fields select{min-width:0;height:56px;padding:5px;font-size:25px;font-weight:800;margin:0}
+.inventory-support-fields{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px;margin-top:10px}
+.inventory-support-fields label{margin:0 0 3px;font-size:11px;color:var(--muted)}
+.inventory-support-fields input{min-width:0;max-width:100%;width:100%;min-height:36px;padding:5px;font-size:13px;margin:0}
+.inventory-row-details{margin-top:8px;font-size:12px;color:var(--muted)}
+.inventory-row-details summary{cursor:pointer}
+.inventory-row-details p{margin:8px 0}
+.inventory-row-details label{font-size:12px;margin-top:8px}
+.inventory-row-details select{font-size:14px;min-height:36px;padding:5px}
+@media(max-width:360px){.inventory-key-fields{gap:8px}.inventory-key-fields select{font-size:22px}.inventory-key-fields .inventory-counter input{font-size:28px}.inventory-support-fields{gap:8px}}
