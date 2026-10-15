@@ -296,3 +296,13 @@ nav .tab-icon{max-width:24px}
 .yard-quick-actions summary{cursor:pointer;padding:5px 0}
 .yard-quick-actions .btn{font-size:13px;min-height:40px;padding:8px}
 .inventory-yard-simple .yard-quick-card{background:var(--surface)}
+
+.inventory-aggregate-total{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:14px 16px;margin:0 0 12px;border:1px solid var(--border);border-radius:12px;background:var(--soft);color:var(--text)}
+.inventory-aggregate-total span{font-size:14px;font-weight:700}
+.inventory-aggregate-total strong{font-size:32px;font-weight:850;line-height:1.2}
+.inventory-stock-totals th,.inventory-stock-totals td{border-top:2px solid var(--accent);vertical-align:top}
+.inventory-stock-totals output{display:block;color:var(--text)}
+.inventory-stock-totals b{display:block;font-size:18px;font-weight:850;line-height:1.35}
+.inventory-stock-totals small{display:block;font-size:10px;font-weight:400;color:var(--muted);margin-top:4px}
+.inventory-stock-totals .inventory-stock-total-actual,.inventory-stock-totals .inventory-stock-total-plan{background:var(--soft)}
+.inventory-stock-totals .inventory-stock-total-actual b,.inventory-stock-totals .inventory-stock-total-plan b{font-size:22px}
