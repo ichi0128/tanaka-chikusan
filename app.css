@@ -306,3 +306,12 @@ nav .tab-icon{max-width:24px}
 .inventory-stock-totals small{display:block;font-size:10px;font-weight:400;color:var(--muted);margin-top:4px}
 .inventory-stock-totals .inventory-stock-total-actual,.inventory-stock-totals .inventory-stock-total-plan{background:var(--soft)}
 .inventory-stock-totals .inventory-stock-total-actual b,.inventory-stock-totals .inventory-stock-total-plan b{font-size:22px}
+
+.inventory-monthly-totals{display:grid;gap:8px;margin:12px 0}
+.inventory-monthly-totals>div{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--soft);color:var(--text)}
+.inventory-monthly-totals span,.inventory-monthly-totals small{display:block;font-size:12px}
+.inventory-monthly-totals strong{display:block;font-size:27px;font-weight:850;line-height:1.3}
+.inventory-monthly-totals small{color:var(--muted);margin-top:3px}
+.inventory-month-previous-label{display:block;font-size:10px;color:var(--muted)}
+.inventory-plan-table .inventory-month-previous-actual input{border:2px solid var(--accent);background:var(--soft);color:var(--text)}
+.inventory-shipment-reference-total{font-size:24px;font-weight:800}
