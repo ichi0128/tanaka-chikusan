@@ -7,6 +7,10 @@
   function legacyGroup(r){return {birthDate:r.birthDate||'',count:r.count??null,sowId:r.sowId||'',mixed:!!r.mixed,csf:!!r.csf,weight:r.weight??30,kind:r.kind||'肉豚',note:r.groupNote??r.note??''};}
   function simple(r){return {key:'yard',state:r.count?'occupied':'empty',birthDate:r.count?(r.birthDate||''):'',count:r.count||0};}
   function group(r){return r.key==='yard'?yardState(r):legacyGroup(r);}
+  function yardBirthMonth(pig){
+    if(pig.birthMonth!==undefined)return pig.birthMonth;
+    return /^\d{4}-\d{2}-\d{2}$/.test(pig.birthDate||'')?Number(pig.birthDate.slice(5,7)):null;
+  }
   function yardPig(source,key){
     return {...M.clone(source),key,count:1,weight:source.weight??null,birthDate:source.birthDate||'',sowId:source.mixed?'混成':source.sowId||'',mixed:false,csf:typeof source.csf==='boolean'?source.csf:null,kind:source.kind==='育成母豚'?'育成母豚':'肉豚',note:source.note||''};
   }
@@ -17,7 +21,7 @@
   }
   function validIndividuals(r){
     if(!Array.isArray(r.individuals)||r.count!==r.individuals.length||new Set(r.individuals.map(p=>p.key)).size!==r.individuals.length)throw Error('運動場の個体一覧と頭数を確認してください。');
-    for(const p of r.individuals){if(typeof p.key!=='string'||!p.key||p.count!==1||typeof p.sowId!=='string'||typeof p.birthDate!=='string'||!(p.weight===null||Number.isSafeInteger(p.weight)&&p.weight>=0&&p.weight%10===0)||!['肉豚','育成母豚'].includes(p.kind)||!(p.csf===null||typeof p.csf==='boolean')||typeof p.note!=='string')throw Error('運動場は1頭につき1行で入力してください。');validYard(p);}
+    for(const p of r.individuals){if(p.birthMonth!==undefined&&p.birthMonth!==null&&(!Number.isInteger(p.birthMonth)||p.birthMonth<1||p.birthMonth>12))throw Error('誕生月は1〜12月から選択してください。');if(typeof p.key!=='string'||!p.key||p.count!==1||typeof p.sowId!=='string'||typeof p.birthDate!=='string'||!(p.weight===null||Number.isSafeInteger(p.weight)&&p.weight>=0&&p.weight%10===0)||!['肉豚','育成母豚'].includes(p.kind)||!(p.csf===null||typeof p.csf==='boolean')||typeof p.note!=='string')throw Error('運動場は1頭につき1行で入力してください。');validYard(p);}
   }
   function putIndividuals(room,next){const normalized=yardState(next);validIndividuals(normalized);Object.keys(room).forEach(k=>delete room[k]);Object.assign(room,normalized);}
   // JSONB may reorder object keys; individual order and values still identify the same state.
@@ -90,7 +94,7 @@
     }
     check(rooms);
   }
-  root.TanakaFinishing={TYPES,empty,group,yardState,yardPig,validIndividuals,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?yardState(r):r)};
+  root.TanakaFinishing={TYPES,empty,group,yardState,yardPig,yardBirthMonth,validIndividuals,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?yardState(r):r)};
 })(typeof globalThis!=='undefined'?globalThis:this);
 
 // Shipment history adjustments never change the replayed room ledger.

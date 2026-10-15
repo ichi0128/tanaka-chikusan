@@ -21,27 +21,54 @@ function finishing(){
   };
   return `<div class="subhead"><h2>肉豚舎</h2><span class="badge">${occupiedRooms.length} / 24室 · ${heads}頭（運動場含む）</span></div>${gilts.length?`<p class="fin-gilt-summary">育成母豚：${gilts.map(r=>(r.key==='yard'?'運動場':finishingRoomLabel(r.key)+'番')+' '+r.count+'頭').join(' ／ ')}</p>`:''}<button class="btn secondary" data-action="page" data-id="shipments">出荷履歴</button><button class="btn secondary" data-action="fin-mode">${finishingMoveMode?'移動先選択を終了':'移動先を選ぶ'}</button><p class="muted">${finishingMoveMode?'移動先の空室をタップしてください。使用中の部屋は選択できません。':'使用中の部屋は詳細を表示。空室は移動するグループを選べます。'}</p><section class="fin-yard-separate fin-yard-individuals" aria-label="運動場">${finishingYardList()}</section><div class="fin-east">東 ↑</div><div class="fin-side-headings"><b>左側</b><span>廊下</span><b>右側</b></div><div class="fin-map-wrap"><span class="fin-north">北</span><div class="fin-map fin-map-paired"><div class="fin-corridor" aria-hidden="true"></div>${Array.from({length:12},(_,i)=>`<div class="fin-corridor-number" style="grid-column:2;grid-row:${i+1}" aria-label="左右${i+1}番の廊下">${i+1}</div>`).join('')}${left.map((n,i)=>card(n,1,i+1)).join('')}${right.map((n,i)=>card(n,3,i+1)).join('')}</div><span class="fin-south">南</span></div><div class="fin-west">↓ 西</div>`;
 }
+// Shared native selectors for the live yard and its detached monthly snapshot.
+function yardQuickFields(weight,birthMonth,attrs,label='運動場'){
+  const weights=[...new Set([...Array.from({length:13},(_,i)=>(i+3)*10),...(weight!==null&&weight!==undefined?[weight]:[])])].sort((a,b)=>a-b);
+  return `<div class="yard-quick-fields"><label><span>体重</span><select ${attrs.weight} aria-label="${esc(label)}の体重"><option value="">未入力</option>${weights.map(n=>`<option value="${n}" ${n===weight?'selected':''}>${n}kg</option>`).join('')}</select></label><span class="yard-quick-divider" aria-hidden="true">/</span><label><span>誕生月</span><select ${attrs.month} aria-label="${esc(label)}の誕生月"><option value="">未入力</option>${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===birthMonth?'selected':''}>${i+1}月</option>`).join('')}</select></label></div>`;
+}
 function finishingYardList(){
   const yard=F.yardState(state.finishing.find(r=>r.key==='yard'));
-  return `<div class="fin-yard-heading"><h3>運動場 <span class="badge">${yard.count?yard.count+'頭':'空き'}</span></h3><button type="button" class="btn secondary" data-action="fin-empty" data-id="yard">豚を移動して追加</button></div>${yard.count?`<div class="inventory-scroll"><table class="inventory-table fin-yard-table"><thead><tr><th scope="col">頭数</th><th scope="col">体重(kg)</th><th scope="col">誕生日</th><th scope="col">母豚番号</th><th scope="col">操作</th></tr></thead><tbody>${yard.individuals.map(p=>`<tr><td><b>1頭</b></td><td><b>${p.weight??'—'}</b></td><td>${p.birthDate?esc(monthDayText(p.birthDate)):'—'}</td><td>${esc(p.sowId||'—')}${p.kind==='育成母豚'?'<small>育成母豚</small>':''}</td><td><button type="button" data-action="fin-pig-detail" data-id="yard" data-pig="${esc(p.key)}">詳細</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">空き</p>'}<button type="button" class="btn secondary" data-action="fin-register" data-id="yard">個体を直接追加</button>`;
+  return `<div class="fin-yard-heading"><h3>運動場 <span class="badge">${yard.count?yard.count+'頭':'空き'}</span></h3><button type="button" class="btn secondary" data-action="fin-empty" data-id="yard">豚を移動して追加</button></div>${yard.count?`<div class="yard-quick-grid">${yard.individuals.map((p,i)=>`<article class="yard-quick-card" data-yard-pig="${esc(p.key)}"><small>1頭${p.kind==='育成母豚'?' · 育成母豚':''}</small>${yardQuickFields(p.weight,F.yardBirthMonth(p),{weight:`data-yard-field="weight" data-pig="${esc(p.key)}"`,month:`data-yard-field="birthMonth" data-pig="${esc(p.key)}"`},'運動場 '+(i+1)+'頭目')}<details class="yard-quick-actions"><summary>移動・出荷など</summary><button type="button" class="btn secondary" data-action="fin-from" data-id="yard" data-pig="${esc(p.key)}">この個体を移動</button><button type="button" class="btn secondary" data-action="fin-ship" data-id="yard" data-pig="${esc(p.key)}">出荷</button><button type="button" class="btn secondary" data-action="fin-yard-remove" data-pig="${esc(p.key)}">この個体を削除</button></details></article>`).join('')}</div>`:'<p class="empty">空き</p>'}<button type="button" class="btn secondary" data-action="fin-yard-add">1頭分を追加</button><p class="muted">枠内の体重・誕生月をタッチして選択すると保存します。</p>`;
 }
+function finishingYardWrite(before,individuals){
+  const after=F.yardState({individuals});F.validIndividuals(after);
+  save(d=>d.logs.push({...makeLog('肉豚舎更新',''),finishingKey:'yard',finishingBefore:before,finishingAfter:after,yardIndividuals:1}));
+}
+function finishingYardAdd(){
+  const before=F.group(state.finishing.find(r=>r.key==='yard'));
+  finishingYardWrite(before,[...before.individuals,F.yardPig({weight:null,birthMonth:null,birthDate:'',sowId:''},M.uid())]);
+  if(dlg.open)dlg.close();toast('運動場に1頭分を追加しました');
+}
+function finishingYardRemove(pigKey){
+  const before=F.group(state.finishing.find(r=>r.key==='yard'));
+  if(!before.individuals.some(p=>p.key===pigKey))throw Error('運動場の個体が見つかりません。');
+  if(!window.confirm('この個体を運動場から削除しますか？'))return;
+  finishingYardWrite(before,before.individuals.filter(p=>p.key!==pigKey));
+}
+function finishingYardQuickChange(select){
+  const before=F.group(state.finishing.find(r=>r.key==='yard')),pig=before.individuals.find(p=>p.key===select.dataset.pig),field=select.dataset.yardField;
+  if(!pig||!['weight','birthMonth'].includes(field))throw Error('運動場の個体が変わりました。画面を開き直してください。');
+  const value=select.value===''?null:Number(select.value);
+  if(value!==null&&!Number.isSafeInteger(value))throw Error('選択した値を確認してください。');
+  if(pig[field]===value)return;
+  finishingYardWrite(before,before.individuals.map(p=>p.key===pig.key?{...p,[field]:value}:p));
+  toast('運動場を保存しました');
+}
+document.addEventListener('change',e=>{
+  if(!e.target.matches?.('[data-yard-field]'))return;
+  try{finishingYardQuickChange(e.target);}catch(err){render();toast(err.message);}
+});
 function finishingYardDetail(pigKey){
   const pig=F.yardState(state.finishing.find(r=>r.key==='yard')).individuals.find(p=>p.key===pigKey);if(!pig)throw Error('運動場の個体が見つかりません。');
   modal.innerHTML=`<h2>運動場 · 1頭</h2><p>体重：${pig.weight===null?'未入力':pig.weight+'kg'}<br>誕生日：${esc(pig.birthDate||'未入力')}<br>母豚番号：${esc(pig.sowId||'未入力')}</p><button class="btn" data-action="fin-edit" data-id="yard" data-pig="${esc(pig.key)}">この個体を編集</button><button class="btn secondary" data-action="fin-from" data-id="yard" data-pig="${esc(pig.key)}">この個体を別の空室へ移動</button><button class="btn secondary" data-action="fin-ship" data-id="yard" data-pig="${esc(pig.key)}">出荷</button><button class="btn secondary" data-action="close">閉じる</button>`;if(!dlg.open)dlg.showModal();
 }
 function finishingYardEdit(pigKey){
-  const yard=state.finishing.find(r=>r.key==='yard'),before=F.group(yard),old=pigKey?before.individuals.find(p=>p.key===pigKey):null;
-  if(pigKey&&!old)throw Error('運動場の個体が見つかりません。');
-  const pig=old||F.yardPig({weight:null,birthDate:'',sowId:''},M.uid());
-  form(old?'運動場 · 個体を編集':'運動場 · 1頭を追加',`${field('count','頭数（0でこの個体を削除）',1,'number',true)}${field('weight','体重の目安（kg・10kg単位、不明なら空欄）',pig.weight??'','number')}${field('birthDate','誕生日（不明なら空欄）',pig.birthDate,'date')}${field('sowId','母豚番号（不明なら空欄）',pig.sowId)}`,'保存する',f=>{
-    const count=Number(f.get('count')),weight=String(f.get('weight')||'').trim();
-    if(![0,1].includes(count)||!old&&count!==1)throw Error('1頭につき1行で登録してください。');
-    if(count===0&&!window.confirm('この個体を運動場から削除しますか？'))throw Error('削除を取り消しました。');
-    const next={...pig,count:1,weight:weight===''?null:Number(weight),birthDate:String(f.get('birthDate')||''),sowId:String(f.get('sowId')||'').trim()};
-    const individuals=old?before.individuals.flatMap(p=>p.key===pig.key?(count?[next]:[]):[p]):[...before.individuals,next],after=F.yardState({individuals});F.validIndividuals(after);
-    save(d=>d.logs.push({...makeLog('肉豚舎更新',next.sowId),finishingKey:'yard',finishingBefore:before,finishingAfter:after,yardIndividuals:1}));
+  if(!pigKey)return finishingYardAdd();
+  const before=F.group(state.finishing.find(r=>r.key==='yard')),pig=before.individuals.find(p=>p.key===pigKey);if(!pig)throw Error('運動場の個体が見つかりません。');
+  form('運動場 · 1頭',yardQuickFields(pig.weight,F.yardBirthMonth(pig),{weight:'name="weight"',month:'name="birthMonth"'}),'保存する',f=>{
+    const weight=String(f.get('weight')||''),month=String(f.get('birthMonth')||'');
+    finishingYardWrite(before,before.individuals.map(p=>p.key===pig.key?{...p,weight:weight===''?null:Number(weight),birthMonth:month===''?null:Number(month)}:p));
   });
-  document.getElementById('count').min=old?'0':'1';document.getElementById('count').max='1';document.getElementById('weight').min='0';document.getElementById('weight').step='10';
 }
 function finishingSources(){
   return [...state.nursery.filter(r=>r.state==='occupied').map(r=>({area:'nursery',r})),...state.finishing.filter(r=>r.state==='occupied').flatMap(r=>r.key==='yard'?F.yardState(r).individuals.map(p=>({area:'finishing',r:{...p,key:'yard',pigKey:p.key,state:'occupied'}})):[{area:'finishing',r}])];
@@ -115,6 +142,8 @@ document.addEventListener('click',e=>{
     if(a==='fin-mode'){finishingMoveMode=!finishingMoveMode;finishingPreferred='';render();}
     if(a==='fin-empty')finishingEmpty(key);
     if(a==='fin-detail'&&!finishingMoveMode)finishingDetail(key);
+    if(a==='fin-yard-add')finishingYardAdd();
+    if(a==='fin-yard-remove')finishingYardRemove(b.dataset.pig);
     if(a==='fin-pig-detail')finishingYardDetail(b.dataset.pig);
     if(a==='fin-source')finishingTransfer(key,b.dataset.area,b.dataset.source,b.dataset.pig||finishingPreferredPig);
     if(a==='fin-register'||a==='fin-edit')finishingEdit(key,b.dataset.pig);

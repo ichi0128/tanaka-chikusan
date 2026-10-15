@@ -283,3 +283,16 @@ nav .tab-icon{max-width:24px}
 .fin-yard-table b{font-size:20px}
 .fin-yard-table small{display:block}
 .fin-yard-table button{display:block;width:100%;min-height:36px;margin:3px 0;padding:4px 2px;border:1px solid var(--border);border-radius:7px;background:var(--soft);color:var(--text);font:inherit;font-size:12px;cursor:pointer}
+
+.yard-quick-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px;margin:12px 0}
+.yard-quick-card{min-width:0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text)}
+.yard-quick-card>small{display:block;color:var(--muted);margin-bottom:7px}
+.yard-quick-fields{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:end}
+.yard-quick-fields label{display:block;min-width:0;margin:0}
+.yard-quick-fields label>span{display:block;font-size:13px;margin-bottom:5px}
+.yard-quick-fields select{min-width:0;width:100%;margin:0;min-height:48px;padding:8px 5px;font-size:22px;font-weight:750;background:var(--soft);color:var(--text)}
+.yard-quick-divider{padding-bottom:13px;color:var(--muted)}
+.yard-quick-actions{margin-top:9px;font-size:12px;color:var(--muted)}
+.yard-quick-actions summary{cursor:pointer;padding:5px 0}
+.yard-quick-actions .btn{font-size:13px;min-height:40px;padding:8px}
+.inventory-yard-simple .yard-quick-card{background:var(--surface)}

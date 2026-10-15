@@ -35,7 +35,7 @@ function snapshot(data,state,date,roomBirthDate){
     const birthDate=area==='farrowing'?roomBirthDate(r):r.birthDate||'';
     const inactive=r.state==='empty'||r.state==='waiting';
     return {key:area+':'+r.key,area,roomKey:r.key,place:area==='farrowing'?'分娩舎 '+(r.label||r.key.slice(1))+'室':area==='nursery'?'育成舎 管理枠'+r.key.slice(1):area==='yard'?'運動場':'肉豚舎 '+r.key.slice(1)+'番',
-      state:r.state,count:inactive?0:r.count??null,birthDate,sowId:r.mixed?'混成':r.sowId||'',csf:typeof r.csf==='boolean'?r.csf:null,
+      state:r.state,count:inactive?0:r.count??null,birthDate,...(area==='yard'?{birthMonth:r.birthMonth!==undefined?r.birthMonth:validDate(birthDate)?Number(birthDate.slice(5,7)):null}:{}),sowId:r.mixed?'混成':r.sowId||'',csf:typeof r.csf==='boolean'?r.csf:null,
       category:category(area,r,date,birthDate),autoCategory:area==='farrowing'||area==='nursery',registeredWeight:r.weight??null,kind:r.kind==='育成母豚'?'育成母豚':'肉豚'};
   };
   return individualYardRows([...state.rooms.map(r=>make('farrowing',r)),...state.nursery.map(r=>make('nursery',r)),...state.finishing.flatMap(r=>{
@@ -99,6 +99,7 @@ function validateReport(r,month,history=false){
   const keys=new Set();
   for(const row of r.rows){
     if(!row||typeof row.key!=='string'||keys.has(row.key)||!['farrowing','nursery','finishing','yard'].includes(row.area)||typeof row.place!=='string'||typeof row.sowId!=='string'||!count(row.count)||!['肉豚','育成母豚'].includes(row.kind)||!(row.csf===null||typeof row.csf==='boolean')||!(row.birthDate===''||validDate(row.birthDate))||!(row.category===''||CATEGORIES.includes(row.category)))fail('頭数調べの明細を確認してください。');
+    if(row.area==='yard'&&row.birthMonth!==undefined&&row.birthMonth!==null&&(!Number.isInteger(row.birthMonth)||row.birthMonth<1||row.birthMonth>12))fail('運動場の誕生月は1〜12月から選択してください。');
     if(row.area==='yard'&&row.yardIndividual===1&&row.count!==null&&row.count>1)fail('運動場は1頭につき1行で入力してください。');
     keys.add(row.key);
   }
