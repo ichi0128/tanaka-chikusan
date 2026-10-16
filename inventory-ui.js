@@ -2,6 +2,20 @@
 const I=TanakaInventory;
 const INVENTORY_WEIGHT_DISPLAY_ORDER=Object.freeze(['授乳','離乳','20','30','40','50','60','70','80','90','100']);
 let inventoryMonth='',inventoryDrafts=new Map(),inventoryStep=1;
+let inventoryPlanRepairQueued=false;
+function inventoryQueuePlanRepair(){
+  if(inventoryPlanRepairQueued||!I.needsOctoberPlanRepair(db.inventoryMonths?.['2026-10'])||[...inventoryDrafts.values()].some(c=>c.dirty))return;
+  const expected=JSON.stringify(db.inventoryMonths['2026-10']);inventoryPlanRepairQueued=true;
+  queueMicrotask(()=>{
+    try{
+      if([...inventoryDrafts.values()].some(c=>c.dirty))return;
+      if(JSON.stringify(db.inventoryMonths?.['2026-10'])!==expected)return;
+      save(data=>I.repairOctoberPlan(data,expected));
+      toast('2026年10月の当月計画を実数で初期化しました。変更前は履歴に保存しています。');
+    }catch(err){toast('当月計画の修復を保存できませんでした：'+err.message);}
+    finally{inventoryPlanRepairQueued=false;}
+  });
+}
 function inventoryLocalMonth(){return today().slice(0,7);}
 function inventoryContext(){
   const month=inventoryMonth||inventoryLocalMonth();inventoryMonth=month;
@@ -169,8 +183,8 @@ function inventoryRead(){
   r.status='draft';I.validateReport(r,r.month);return r;
 }
 function inventoryUpdate(target){
-  const c=inventoryContext();c.report=inventoryRead();c.dirty=true;
-  if(target?.name?.startsWith('stock_plan_')){const k=target.name.slice(11);if(!c.report.stockPlanEdited.includes(k))c.report.stockPlanEdited.push(k);}
+  const c=inventoryContext(),previousPlan=c.report.plannedStock;c.report=inventoryRead();c.dirty=true;
+  if(target?.name?.startsWith('stock_plan_')){const k=target.name.slice(11);if(c.report.plannedStock[k]!==previousPlan[k]&&!c.report.stockPlanEdited.includes(k))c.report.stockPlanEdited.push(k);}
   if(target?.name?.startsWith('category_'))c.report.rows[Number(target.name.slice(9))].autoCategory=false;
   if(target?.name==='date'||target?.name?.startsWith('birth_'))c.report.rows.forEach((row,i)=>{if(row.autoCategory){row.category=I.category(row.area,row,c.report.date,row.birthDate);document.querySelector('[name="category_'+i+'"]').value=row.category;}});
   document.getElementById('inventory-totals').innerHTML=inventoryTotals(c.report);

@@ -70,6 +70,21 @@ function resetPlan(report){
   report.plannedStock=actualStock(report);report.stockPlanEdited=[];
   syncPlan(report);return report;
 }
+function needsOctoberPlanRepair(report){
+  // Repair only the reported October test plan, never arbitrary saved plans.
+  if(report?.month!=='2026-10'||report.stockPlanRepair==='october-test-v1')return false;
+  const test={'110':0,'100':0,'90':11,'80':13,'70':13,'60':19,'50':15,'40':42,'30':27,'20':7,'10':0,'離乳':20,'授乳':32};
+  return STOCK.every(k=>report.plannedStock?.[k]===test[k])&&
+    Array.isArray(report.stockPlanEdited)&&report.stockPlanEdited.length===STOCK.length&&
+    STOCK.every(k=>report.stockPlanEdited.includes(k));
+}
+function repairOctoberPlan(data,expected){
+  const old=data.inventoryMonths?.['2026-10'];
+  if(!needsOctoberPlanRepair(old))return false;
+  const report=clone(old);resetPlan(report);report.stockPlanRepair='october-test-v1';
+  // saveReport archives the exact prior report and checks concurrent changes.
+  saveReport(data,report,expected);return true;
+}
 function preparePlan(report,data){
   if(!report.plannedStock)resetPlan(report);
   else{
@@ -131,5 +146,5 @@ function saveReport(data,report,expected){
   validateReport(next,next.month);data.inventoryMonths=data.inventoryMonths||{};data.inventoryMonths[next.month]=next;
 }
 function gilts(state){return [...state.nursery,...state.finishing.flatMap(r=>r.key==='yard'&&Array.isArray(r.individuals)?r.individuals.map(p=>({...p,state:'occupied'})):[r])].filter(r=>r.state==='occupied'&&r.kind==='育成母豚').reduce((sum,r)=>sum+(r.count??0),0);}
-root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,actualStock,plannedStock,resetPlan,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
+root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,actualStock,plannedStock,resetPlan,needsOctoberPlanRepair,repairOctoberPlan,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
 })(typeof globalThis!=='undefined'?globalThis:this);

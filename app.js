@@ -59,6 +59,7 @@ function render(){
   if(fatal){app.innerHTML=`<h2>保存データを読み込めません</h2><div class="notice">${esc(fatal)}<br>保存データは削除していません。</div><button class="btn" data-action="raw-export">元データを保存</button><button class="btn secondary" data-action="recovery-export">以前の保存データを取り出す</button>`;return;}
   app.innerHTML=({home,sows:sowList,detail,rooms,nursery,finishing,shipments:shipmentHistory,records,edit,schedules,updates,inventory:inventoryPage}[page]||home)()+`<footer>田中畜産 · 更新版 2026.10.13<br>確認できていない情報は未入力で表示</footer>`;
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.page===(page==='detail'?'sows':page==='shipments'?'finishing':page)?'page':'false'));
+  inventoryQueuePlanRepair();
 }
 function go(p,id){page=p;selected=id||'';render();window.scrollTo(0,0);}
 function syncGlobalHomeButtonLayer(){
