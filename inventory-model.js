@@ -64,16 +64,28 @@ function yearActual(data,year){
     return null;
   });
 }
+function resetPlan(report){
+  // A new plan is a detached copy of this month's verified rows only.
+  // Legacy 110kg/10kg fields and previous months are never initial values.
+  report.plannedStock=actualStock(report);report.stockPlanEdited=[];
+  syncPlan(report);return report;
+}
 function preparePlan(report,data){
-  if(!report.plannedStock){report.plannedStock=currentStock(report);report.stockPlanEdited=STOCK.slice();}
-  if(!report.stockPlanEdited)report.stockPlanEdited=STOCK.slice();
+  if(!report.plannedStock)resetPlan(report);
+  else{
+    // Older saved plans may lack edit flags. Preserve them conservatively.
+    if(!Array.isArray(report.stockPlanEdited))report.stockPlanEdited=STOCK.slice();
+    syncPlan(report);
+  }
   if(!report.previousYearActual)report.previousYearActual=yearActual(data,report.month.slice(0,4));
   return report;
 }
 function syncPlan(report){
-  const actual=actualStock(report);
-  for(const k of STOCK)if(!report.stockPlanEdited.includes(k))report.plannedStock[k]=actual[k];
-  // Retain legacy fields for older backups/readers, without using them as actual inventory.
+  // Until the first manual edit, follow the verified actuals. Once edited,
+  // retain the complete plan, including untouched categories, zero and blanks.
+  const edited=Array.isArray(report.stockPlanEdited)?report.stockPlanEdited.length>0:!!report.plannedStock;
+  if(!report.plannedStock||!edited)report.plannedStock=actualStock(report);
+  // Keep legacy backup fields compatible without using them as initial values.
   report.shipping110=report.plannedStock['110']??0;report.stock10=report.plannedStock['10']??0;
 }
 function weeklyTotal(report){return report.weekly.reduce((sum,n)=>sum+(n??0),0);}
@@ -86,7 +98,7 @@ function create(data,state,month,date,roomBirthDate){
     monthly:Array.from({length:12},(_,i)=>{const key=year+'-'+String(i+1).padStart(2,'0'),old=prev?.monthly.find(x=>x.month===key);return old?clone(old):{month:key,planned:key>month?20:null,actual:null};}),
     previousYearActual:yearActual(data,year),stockPlanEdited:[],
     weekly:[null,null,null,null,null],remarks:'',revisions:[]};
-  report.plannedStock=actualStock(report);return report;
+  resetPlan(report);return report;
 }
 function validateReport(r,month,history=false){
   if(!r||r.month!==month||!validMonth(month)||!validDate(r.date)||!['draft','confirmed'].includes(r.status)||!Array.isArray(r.rows)||r.rows.length>200)fail('頭数調べの月次記録を確認してください。');
@@ -119,5 +131,5 @@ function saveReport(data,report,expected){
   validateReport(next,next.month);data.inventoryMonths=data.inventoryMonths||{};data.inventoryMonths[next.month]=next;
 }
 function gilts(state){return [...state.nursery,...state.finishing.flatMap(r=>r.key==='yard'&&Array.isArray(r.individuals)?r.individuals.map(p=>({...p,state:'occupied'})):[r])].filter(r=>r.state==='occupied'&&r.kind==='育成母豚').reduce((sum,r)=>sum+(r.count??0),0);}
-root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,actualStock,plannedStock,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
+root.TanakaInventory={CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,aggregate,currentStock,actualStock,plannedStock,resetPlan,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
 })(typeof globalThis!=='undefined'?globalThis:this);
