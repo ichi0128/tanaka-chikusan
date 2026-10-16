@@ -5,6 +5,10 @@ let inventoryMonth='',inventoryDrafts=new Map(),inventoryStep=1;
 function inventoryLocalMonth(){return today().slice(0,7);}
 function inventoryContext(){
   const month=inventoryMonth||inventoryLocalMonth();inventoryMonth=month;
+  // Reopen clean views from the saved month after cloud/JSON/other-tab replacement.
+  // Keep unsaved edits intact; the existing expected-record guard prevents overwrites.
+  const cached=inventoryDrafts.get(month),savedValue=JSON.stringify(db.inventoryMonths?.[month]??null);
+  if(cached&&!cached.dirty&&cached.expected!==savedValue)inventoryDrafts.delete(month);
   if(!inventoryDrafts.has(month)){
     const saved=db.inventoryMonths?.[month],report=saved?I.clone(saved):I.create(db,state,month,today(),roomBirthDate);
     report.rows=saved?inventoryEnsureFinishingRooms(I.individualYardRows(report.rows)):[];
@@ -12,6 +16,14 @@ function inventoryContext(){
     inventoryDrafts.set(month,{report,expected:JSON.stringify(saved??null),dirty:false,hasSnapshot:!!saved,editing:month>=inventoryLocalMonth()});
   }
   return inventoryDrafts.get(month);
+}
+function inventoryStoreSnapshot(c,report){
+  // save() renders before returning. Keep this working copy pinned until it has
+  // the new persisted revision; a failed write leaves the previous snapshot intact.
+  const wasDirty=c.dirty;c.dirty=true;
+  try{save(data=>I.saveReport(data,report,c.expected));}catch(err){c.dirty=wasDirty;throw err;}
+  c.report=I.clone(db.inventoryMonths[report.month]);c.expected=JSON.stringify(c.report);
+  c.hasSnapshot=true;c.dirty=false;
 }
 function inventoryMonthLabel(month){return Number(month.slice(0,4))+'年'+Number(month.slice(5,7))+'月';}
 function inventoryOffsetMonth(month,delta){
@@ -220,8 +232,8 @@ document.addEventListener('click',e=>{
     }
     if(action==='refresh'){
       if(c.report.month!==inventoryLocalMonth())throw Error('現在データの取り込みは今月を開いて行ってください。');
-      if((db.inventoryMonths?.[c.report.month]||c.hasSnapshot!==false||c.dirty)&&!window.confirm(inventoryMonthLabel(c.report.month)+'の①を現在の豚舎データで取り込み直します。①の修正内容と確認日は置き換わります。出荷計画の手入力と保存済み履歴は残ります。よろしいですか？'))return;
-      const report=c.hasSnapshot===false?I.clone(c.report):inventoryRead();report.date=today();report.rows=I.snapshot(db,state,report.date,roomBirthDate);I.syncPlan(report);report.status='draft';c.report=report;c.hasSnapshot=true;c.editing=true;c.dirty=true;render();toast('現在の豚舎データを取り込みました。確認後に保存してください');return;
+      if((db.inventoryMonths?.[c.report.month]||c.hasSnapshot!==false||c.dirty)&&!window.confirm(inventoryMonthLabel(c.report.month)+'の①を現在の豚舎データで取り込み直します。①の修正内容と確認日は置き換わります。出荷計画の手入力と保存済み履歴は残ります。取り込み直した内容を下書きとして保存します。よろしいですか？'))return;
+      const report=c.hasSnapshot===false?I.clone(c.report):inventoryRead();report.date=today();report.rows=I.snapshot(db,state,report.date,roomBirthDate);I.syncPlan(report);report.status='draft';inventoryStoreSnapshot(c,report);c.editing=true;render();toast('現在の豚舎データを取り込み、今月の下書きに保存しました');return;
     }
     if(action==='carry'){
       const previous=db.inventoryMonths?.[I.previousMonth(c.report.month)];if(!previous)throw Error('前月の保存済み記録がありません。先に前月を保存してください。');
@@ -232,8 +244,7 @@ document.addEventListener('click',e=>{
     }
     if(action==='save'||action==='confirm'){
       const report=inventoryRead();I.syncPlan(report);report.status=action==='confirm'?'confirmed':'draft';I.validateReport(report,report.month);
-      save(data=>I.saveReport(data,report,c.expected));
-      c.report=I.clone(db.inventoryMonths[report.month]);c.expected=JSON.stringify(c.report);c.dirty=false;render();toast(action==='confirm'?'頭数調べを確定しました':'下書きを保存しました');return;
+      inventoryStoreSnapshot(c,report);render();toast(action==='confirm'?'頭数調べを確定しました':'下書きを保存しました');return;
     }
     if(action==='revision'){
       const entry=c.report.revisions[Number(b.dataset.index)];if(!entry)return;const r=entry.report,stock=I.currentStock(r);
