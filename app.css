@@ -340,3 +340,5 @@ main{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
 #toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 dialog{position:fixed;inset:0 0 calc(88px + env(safe-area-inset-bottom,0px));margin:auto;max-height:min(80dvh,calc(100dvh - 120px - env(safe-area-inset-bottom,0px)))}
 @media(max-width:360px){.home-app-grid{column-gap:6px;row-gap:20px}.home-app-label{font-size:12px}.home-app-count{font-size:17px}}
+
+.inventory-print-controls{border:1px solid var(--border);border-radius:12px;padding:12px;margin:12px 0}.inventory-print-controls[hidden]{display:none}.inventory-print-controls h3{margin:0 0 8px}.inventory-print-controls>small{display:block;margin-top:8px;color:var(--muted)}.inventory-print-controls details{margin-top:10px}.inventory-print-options{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
