@@ -153,7 +153,7 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.page){if(!fatal)go(b.dataset.page);return;}
   const a=b.dataset.action,id=b.dataset.id;
-  if(a==='global-home'){if(dlg.open)dlg.close();go('home');document.querySelector('.home-app')?.focus({preventScroll:true});return;}
+  if(a==='global-home'){try{if(typeof navigator.vibrate==='function')navigator.vibrate(15);}catch{}if(dlg.open)dlg.close();go('home');document.querySelector('.home-app')?.focus({preventScroll:true});return;}
   if(a==='headcount-step'){stepHeadcount(id,Number(b.dataset.delta));return;}
   if(a==='piglet-check'){try{save(d=>M.setPigletCheck(d,id,b.dataset.care));}catch(err){toast(err.message);}return;}
   if(a==='theme'&&THEMES[id]){try{localStorage.setItem('tanaka-theme',id);theme=id;applyTheme();render();}catch(e){toast('色の設定を保存できませんでした');}return;}
