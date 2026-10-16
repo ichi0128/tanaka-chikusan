@@ -315,3 +315,27 @@ nav .tab-icon{max-width:24px}
 .inventory-month-previous-label{display:block;font-size:10px;color:var(--muted)}
 .inventory-plan-table .inventory-month-previous-actual input{border:2px solid var(--accent);background:var(--soft);color:var(--text)}
 .inventory-shipment-reference-total{font-size:24px;font-weight:800}
+
+/* A seven-app home screen and a single, persistent Home control. */
+nav[hidden]{display:none}
+main{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.home-app-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));column-gap:10px;row-gap:24px;max-width:600px;margin:20px auto 28px}
+.home-app{grid-column:span 2;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;min-height:108px;padding:4px 0;border:0;border-radius:12px;background:none;color:var(--text);font:inherit;text-align:center;cursor:pointer;touch-action:manipulation}
+.home-app:nth-child(5){grid-column:2/span 2}.home-app:nth-child(6){grid-column:4/span 2}.home-app:nth-child(7){grid-column:6/span 2}
+.home-app-icon{display:grid;place-items:center;width:min(100%,72px);aspect-ratio:1;border-radius:21%;background:linear-gradient(145deg,#678a5d,#456b44);color:#fff;box-shadow:0 3px 8px #0002,inset 0 1px 0 #ffffff36}
+.home-app-icon .tab-icon{display:block;width:48%;height:48%;margin:0}
+.home-app[data-id=rooms] .home-app-icon{background:linear-gradient(145deg,#b88657,#91623c)}
+.home-app[data-id=nursery] .home-app-icon{background:linear-gradient(145deg,#64938c,#42766c)}
+.home-app[data-id=finishing] .home-app-icon{background:linear-gradient(145deg,#a06d65,#835047)}
+.home-app[data-id=inventory] .home-app-icon{background:linear-gradient(145deg,#6784a7,#466389)}
+.home-app[data-id=records] .home-app-icon{background:linear-gradient(145deg,#a78a50,#81672e)}
+.home-app[data-id=edit] .home-app-icon{background:linear-gradient(145deg,#78828d,#596471)}
+.home-app-label{font-size:13px;font-weight:650;line-height:1.35;white-space:nowrap}
+.home-app-count{font-size:19px;font-weight:800;line-height:1.2;white-space:nowrap}
+.global-home-dock{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:center;align-items:flex-end;height:calc(82px + env(safe-area-inset-bottom,0px));padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--bg) 70%,transparent);pointer-events:none}
+.global-home-button{display:grid;place-items:center;width:56px;height:56px;min-width:56px;min-height:56px;padding:0;border:2px solid var(--border);border-radius:50%;background:var(--surface);color:var(--muted);box-shadow:0 2px 8px #0002;cursor:pointer;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.global-home-button span{width:17px;height:17px;border:2px solid currentColor;border-radius:5px}
+.global-home-button:active{background:var(--soft)}
+#toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+dialog{position:fixed;inset:0 0 calc(88px + env(safe-area-inset-bottom,0px));margin:auto;max-height:min(80dvh,calc(100dvh - 120px - env(safe-area-inset-bottom,0px)))}
+@media(max-width:360px){.home-app-grid{column-gap:6px;row-gap:20px}.home-app-label{font-size:12px}.home-app-count{font-size:17px}}
