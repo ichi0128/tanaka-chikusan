@@ -355,3 +355,5 @@ dialog{position:fixed;inset:0 0 calc(88px + env(safe-area-inset-bottom,0px));mar
 
 /* Vaccination controls stay available behind one compact disclosure. */
 details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{cursor:pointer;min-height:44px;padding:11px 0;font-size:14px;font-weight:700}details.piglet-care>summary:focus-visible{outline:3px solid #78956f;outline-offset:3px;border-radius:6px}.piglet-care-content{padding-top:6px}
+
+.home-app-vacancy{display:block;margin-top:2cqw;font-size:clamp(10px,9cqw,15px);font-weight:600;line-height:1.15;white-space:nowrap}
