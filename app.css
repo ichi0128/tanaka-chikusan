@@ -351,3 +351,6 @@ dialog{position:fixed;inset:0 0 calc(88px + env(safe-area-inset-bottom,0px));mar
 .reminder-setting{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}.reminder-setting:last-child{border-bottom:0}.reminder-setting>div:first-child{min-width:0;overflow-wrap:anywhere}.reminder-setting p{margin:6px 0}.reminder-setting-actions{display:flex;gap:6px;align-items:start;flex-shrink:0}.reminder-setting-actions button{min-height:44px}
 
 .reminder-complete{flex-shrink:0;white-space:nowrap;min-height:44px}.reminder-setting .badge{margin-left:8px}
+
+/* Vaccination controls stay available behind one compact disclosure. */
+details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{cursor:pointer;min-height:44px;padding:11px 0;font-size:14px;font-weight:700}details.piglet-care>summary:focus-visible{outline:3px solid #78956f;outline-offset:3px;border-radius:6px}.piglet-care-content{padding-top:6px}

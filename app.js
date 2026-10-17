@@ -1,6 +1,7 @@
 'use strict';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
+let openPigletCare=new Set();
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 const THEMES={warm:'生成り・茶色',indigo:'白・藍色',green:'薄緑・深緑',dark:'ダーク'};
@@ -58,6 +59,7 @@ function recordWorkspace(){return `<h2>記録の編集・過去記録</h2><p cla
 function records(){return recordWorkspace();}
 function edit(){return `<h2 style="margin-top:0">設定</h2>${typeof cloudSettings==='function'?cloudSettings():''}${recurringRemindersSettings()}<h2>画面の色</h2><div class="card theme-picker" role="group" aria-label="画面の色">${Object.entries(THEMES).map(([key,label])=>`<button class="theme-choice" data-action="theme" data-id="${key}" aria-pressed="${theme===key}"><span class="theme-swatch swatch-${key}" aria-hidden="true"></span>${label}${theme===key?' ✓':''}</button>`).join('')}</div>${recordWorkspace()}`;}
 function render(){
+  openPigletCare=page==='rooms'?new Set([...document.querySelectorAll('details.piglet-care[open]')].map(el=>el.dataset.careRoom)):new Set();
   if(fatal){app.innerHTML=`<h2>保存データを読み込めません</h2><div class="notice">${esc(fatal)}<br>保存データは削除していません。</div><button class="btn" data-action="raw-export">元データを保存</button><button class="btn secondary" data-action="recovery-export">以前の保存データを取り出す</button>`;return;}
   app.innerHTML=({home,sows:sowList,detail,rooms,nursery,finishing,shipments:shipmentHistory,records,edit,schedules,updates,inventory:inventoryPage}[page]||home)()+`<footer>田中畜産 · 更新版 2026.10.13<br>確認できていない情報は未入力で表示</footer>`;
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.page===(page==='detail'?'sows':page==='shipments'?'finishing':page)?'page':'false'));
@@ -304,7 +306,7 @@ function feedBoxCard(r){
 function pigletCareCard(room){
   const checks=M.pigletCare(db,room);if(!checks.length)return '';
   const complete=checks.every(x=>x.done);
-  return `<div class="piglet-care"><h3>投薬・ワクチン <span class="badge ${complete?'green':'orange'}">${complete?'全て完了':checks.filter(x=>!x.done).length+'件 未'}</span></h3>${checks.map(x=>`<div class="care-row"><div><b>${esc(x.label)}</b><small>${x.days}日齢 · ${x.date?esc(monthDayText(x.date))+'予定':'出産日未入力'}${!x.done&&x.date&&x.date<today()?' · 予定日超過':''}</small></div><button class="care-toggle ${x.done?'done':''}" data-action="piglet-check" data-id="${room.key}" data-care="${x.id}" aria-pressed="${x.done}" aria-label="${esc(room.mixed?'混成':room.sowId)} ${esc(x.label)} ${x.done?'済、未に戻す':'未、済にする'}">${x.done?'✓ 済':'未'}</button></div>`).join('')}${checks.some(x=>!x.date)?'<p class="muted">出産日を編集すると予定日が表示されます。</p>':''}${room.mixed?'<p class="muted">混成は枠全体をチェック。予定日は一番若い子の出産日から計算します。</p>':''}</div>`;
+  return `<details class="piglet-care" data-care-room="${esc(room.key)}" ${openPigletCare.has(room.key)?'open':''}><summary>接種記録を表示</summary><div class="piglet-care-content"><h3>投薬・ワクチン <span class="badge ${complete?'green':'orange'}">${complete?'全て完了':checks.filter(x=>!x.done).length+'件 未'}</span></h3>${checks.map(x=>`<div class="care-row"><div><b>${esc(x.label)}</b><small>${x.days}日齢 · ${x.date?esc(monthDayText(x.date))+'予定':'出産日未入力'}${!x.done&&x.date&&x.date<today()?' · 予定日超過':''}</small></div><button class="care-toggle ${x.done?'done':''}" data-action="piglet-check" data-id="${room.key}" data-care="${x.id}" aria-pressed="${x.done}" aria-label="${esc(room.mixed?'混成':room.sowId)} ${esc(x.label)} ${x.done?'済、未に戻す':'未、済にする'}">${x.done?'✓ 済':'未'}</button></div>`).join('')}${checks.some(x=>!x.date)?'<p class="muted">出産日を編集すると予定日が表示されます。</p>':''}${room.mixed?'<p class="muted">混成は枠全体をチェック。予定日は一番若い子の出産日から計算します。</p>':''}</div></details>`;
 }
 function maternalTree(){
   const branch=node=>`<li>${node.sow?`<button class="lineage-node ${node.sow.active?'active':'retired'}" data-action="detail" data-id="${esc(node.id)}"><b>${esc(node.id)}</b><small>${node.sow.active?'現役':'廃用'} ›</small></button>`:`<span class="lineage-node ancestor"><b>${esc(node.id)}</b><small>${/^祖/.test(node.id)?'導入元':'未登録・状態未確認'}</small></span>`}${node.cycle?'<span class="muted">母親番号のつながりを確認してください</span>':''}${node.children.length?`<ul>${node.children.map(branch).join('')}</ul>`:''}</li>`;
