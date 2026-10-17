@@ -345,3 +345,5 @@ dialog{position:fixed;inset:0 0 calc(88px + env(safe-area-inset-bottom,0px));mar
 .inventory-print-controls{border:1px solid var(--border);border-radius:12px;padding:12px;margin:12px 0}.inventory-print-controls[hidden]{display:none}.inventory-print-controls h3{margin:0 0 8px}.inventory-print-controls>small{display:block;margin-top:8px;color:var(--muted)}.inventory-print-controls details{margin-top:10px}.inventory-print-options{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 
 .inventory-notebook-row>select.sow-number-select{font-size:13px;font-weight:400}.inventory-finishing-room select.sow-number-select{font-size:14px;font-weight:400}
+
+.sow-parity-navigation{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0}.sow-parity-navigation button{width:48px;min-height:48px;border-radius:50%;font-size:30px;border:1px solid var(--border);background:var(--surface);color:inherit}.sow-parity-navigation button:disabled{opacity:.3}.sow-parity-navigation div{text-align:center}.sow-parity-navigation strong{font-size:22px}.sow-parity-navigation small{display:block;margin-top:4px}.sow-parity-birth{margin-top:8px}
