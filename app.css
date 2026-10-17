@@ -319,7 +319,7 @@ nav .tab-icon{max-width:24px}
 /* A seven-app home screen and a single, persistent Home control. */
 nav[hidden]{display:none}
 main{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
-.home-app-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));column-gap:12px;row-gap:16px;max-width:520px;margin:20px auto 28px}
+.home-app-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));column-gap:12px;row-gap:16px;max-width:520px;margin:20px auto 16px}
 .home-app{grid-column:span 3;display:flex;align-items:stretch;align-self:start;aspect-ratio:1;container-type:inline-size;min-width:0;min-height:0;padding:0;border:0;border-radius:19px;background:none;color:var(--text);font:inherit;text-align:center;cursor:pointer;touch-action:manipulation}
 .home-app:nth-child(5){grid-column:1/span 2}.home-app:nth-child(6){grid-column:3/span 2}.home-app:nth-child(7){grid-column:5/span 2}
 .home-app:nth-child(-n+4),.home-app:nth-child(-n+4) .home-app-icon{border-radius:24px}.home-app:nth-child(-n+4) .tab-icon{width:clamp(36px,34cqw,72px);height:clamp(36px,34cqw,72px)}.home-app:nth-child(-n+4) .home-app-label{font-size:clamp(14px,12cqw,22px)}.home-app:nth-child(-n+4) .home-app-hint{font-size:clamp(10px,9cqw,15px)}.home-app:nth-child(-n+4) .home-app-count{font-size:clamp(24px,21cqw,40px)}.home-app:nth-child(-n+4) .home-app-count-long{font-size:clamp(16px,14cqw,30px)}
