@@ -61,6 +61,12 @@ function sowCard(data,id){
   c.reheatCount=(birth?0:Number(c.reheatCount)||0)+logs.filter(l=>l.type==='種付け'&&l.remating&&(!birth||l.date>birth.date)).length;
   return c;
 }
+// Farm-wide preparation notices. Computed from the local calendar; no sow logs.
+M.farmReminders=function(day){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(day||''))return [];
+  const month=day.slice(5,7);if(!['02','09'].includes(month)||Number(day.slice(8))<15)return [];
+  return [{id:'',date:day.slice(0,4)+'-'+month+'-15',label:'そろそろ日本脳炎ワクチンを注文',note:(month==='02'?'3月':'10月')+'の全母豚への接種準備',type:'farm-reminder',farm:true}];
+};
 M.sowCard=sowCard;
 for(const t of ['再発情確認','バイコックス 実施','レシュピシュア 実施','フォステラ 実施'])if(!M.TYPES.includes(t))M.TYPES.push(t);M.addDays=addDays;M.schedules=schedules;
 const migrate=M.migrate;
