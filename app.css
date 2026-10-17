@@ -365,3 +365,11 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 .gilt-unassigned-number small{display:block;font-size:12px;font-weight:500;white-space:normal;overflow-wrap:anywhere}.lineage-node.pending{background:#fff2db;color:#694c19;border-color:#c6a260}
 
 .inventory-farm-total{display:grid;gap:8px;padding:14px 12px;margin:10px 0 16px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.inventory-farm-total strong{font-size:22px}.inventory-farm-total small{line-height:1.6;color:var(--muted)}
+
+/* Tighten room cards vertically, keeping every font size and horizontal dimension. */
+.fin-map-paired .fin-card:not(.fin-yard){min-height:250px;padding-top:8px;padding-bottom:8px;gap:3px}
+.fin-map-paired .fin-card:not(.fin-yard) .fin-primary{min-height:116px;margin-top:0;margin-bottom:6px}
+.fin-map-paired .fin-primary .fin-count small,.fin-map-paired .fin-primary .fin-weight small{margin-top:3px}
+.fin-map-paired .fin-card:not(.fin-yard) .fin-birth,.fin-map-paired .fin-card:not(.fin-yard)>span:not(.fin-number):not(.fin-kind),.fin-map-paired .fin-card:not(.fin-yard) .fin-vaccine{line-height:1.5}
+.fin-map-paired .fin-card .fin-kind{padding-top:1px;padding-bottom:1px}
+.fin-map-paired .fin-card .fin-vaccine{padding-top:2px;padding-bottom:2px}
