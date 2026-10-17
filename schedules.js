@@ -4,7 +4,7 @@
     if(!day){const d=new Date();day=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
     const state=replay(data),out=[];
     for(const sow of Object.values(state.sows)){
-      if(!sow.active)continue;
+      if(!sow.active||sow.numberPending)continue;
       const logs=data.logs.filter(l=>!l.legacy&&l.id===sow.id);
       const last=type=>logs.filter(l=>l.type===type).sort((a,b)=>a.date.localeCompare(b.date)||data.logs.indexOf(a)-data.logs.indexOf(b)).at(-1);
       const mating=last('種付け'),birth=last('分娩');

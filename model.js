@@ -30,7 +30,7 @@
   }
   function validate(data){
     if(data.version!==3||!Array.isArray(data.sows)||!Array.isArray(data.logs)||!Array.isArray(data.baseline)||data.baseline.length!==10)throw Error('データの形式が正しくありません。');
-    const ids=data.sows.map(s=>s.id);if(ids.some(id=>typeof id!=='string'||!/^\d+$/.test(id))||new Set(ids).size!==ids.length)throw Error('母豚番号は重複のない数字で入力してください。');
+    const ids=data.sows.map(s=>s.id);if(data.sows.some(s=>typeof s.id!=='string'||!(s.numberPending===true?/^gilt-[a-zA-Z0-9-]+$/.test(s.id):/^\d+$/.test(s.id)))||new Set(ids).size!==ids.length)throw Error('母豚番号は重複のない数字で入力してください。');
     const keys=data.logs.map(l=>l.key);if(keys.some(k=>typeof k!=='string'||!k)||new Set(keys).size!==keys.length)throw Error('記録の識別番号が不正です。');
     data.logs.forEach(l=>{if(!l.legacy && (!TYPES.includes(l.type)||!/^\d{4}-\d{2}-\d{2}$/.test(l.date)||!Number.isFinite(Date.parse(l.date))||new Date(l.date).toISOString().slice(0,10)!==l.date))throw Error('記録の種類または日付が不正です。');});
     if(root.TanakaFinishing)root.TanakaFinishing.validateShipmentHistory(data);
@@ -63,6 +63,7 @@
       if(l.legacy)continue;
       if(fin?.TYPES.includes(l.type)){fin.apply(l,finishing,nursery);checkRooms(rooms,sows);checkNursery(nursery);continue;}
       const sow=sows[l.id],room=rooms.find(r=>r.key===l.roomKey);
+      if(sow?.numberPending&&['種付け','分娩','離乳','分娩舎へ移動'].includes(l.type))throw Error('先に正式な母豚番号を登録してください。');
       if(['分娩舎へ移動','移動取り消し'].includes(l.type)){
         if(!sow||!sow.active||!room)throw Error('移動対象の母豚・管理枠を確認してください。');
         if(l.type==='分娩舎へ移動'){if(room.state!=='empty'||rooms.some(r=>['family','waiting'].includes(r.state)&&r.sowId===l.id))throw Error('母豚は既に入室しているか、空き枠がありません。');Object.assign(room,{state:'waiting',sowId:l.id,mixed:false,count:null,birthDate:'',entryKey:l.key});}

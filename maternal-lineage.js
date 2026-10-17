@@ -56,7 +56,12 @@ const commit=M.commit;M.commit=function(data,fn){
   if(g){
     const before=clone(g.relationships),oldSows=new Map(data.sows.map(s=>[s.id,s])),oldKeys=new Set(data.logs.map(l=>l.key));
     for(const l of next.logs)if(!oldKeys.has(l.key)&&l.profileBefore?.id&&l.profileAfter?.id&&l.profileBefore.id!==l.profileAfter.id){rename(g,l.profileBefore.id,l.profileAfter.id);oldSows.set(l.profileAfter.id,oldSows.get(l.profileBefore.id));}
-    for(const s of next.sows){const old=oldSows.get(s.id);if((!old&&(!g.relationships.some(r=>r.sowId===s.id)||clean(s.cardBaseline?.mother)))||(old&&clean(old.cardBaseline?.mother)!==clean(s.cardBaseline?.mother))){const i=g.relationships.findIndex(r=>r.sowId===s.id),r={sowId:s.id,motherId:clean(s.cardBaseline?.mother)};if(i<0)g.relationships.push(r);else g.relationships[i]=r;}}
+    for(const s of next.sows){
+      const old=oldSows.get(s.id),oldMother=clean(old?.parityCards?.current.card.mother??old?.cardBaseline?.mother),newMother=clean(s.parityCards?.current.card.mother??s.cardBaseline?.mother);
+      if((!old&&(!g.relationships.some(r=>r.sowId===s.id)||newMother))||(old&&oldMother!==newMother)){
+        const i=g.relationships.findIndex(r=>r.sowId===s.id),r={sowId:s.id,motherId:newMother};if(i<0)g.relationships.push(r);else g.relationships[i]=r;
+      }
+    }
     g.relationships=parents(g.relationships);validateRows(g.relationships);record(g,before);
   }
   M.validate(next);return next;
