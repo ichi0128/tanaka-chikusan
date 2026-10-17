@@ -357,3 +357,6 @@ dialog{position:fixed;inset:0 0 calc(88px + env(safe-area-inset-bottom,0px));mar
 details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{cursor:pointer;min-height:44px;padding:11px 0;font-size:14px;font-weight:700}details.piglet-care>summary:focus-visible{outline:3px solid #78956f;outline-offset:3px;border-radius:6px}.piglet-care-content{padding-top:6px}
 
 .home-app-vacancy{display:block;margin-top:2cqw;font-size:clamp(10px,9cqw,15px);font-weight:600;line-height:1.15;white-space:nowrap}
+
+/* Maternal family tree: active sows stand out, historical nodes remain visible. */
+.lineage-node.active{background:#e5f1e3;color:#234d2a;border-color:#78a47c;font-weight:700}.lineage-node.retired,.lineage-node.ancestor{background:var(--surface);color:var(--muted)}.lineage-node.lineage-selected{outline:3px solid #c69038;outline-offset:3px}.maternal-settings-list{overflow-x:auto;margin-top:12px}.maternal-settings-list table{width:100%;border-collapse:collapse;font-size:14px}.maternal-settings-list th,.maternal-settings-list td{padding:9px 5px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}#maternal-settings>summary{cursor:pointer;font-weight:700}

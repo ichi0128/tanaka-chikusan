@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "relationships": [
+    {
+      "sowId": "142",
+      "motherId": ""
+    },
+    {
+      "sowId": "111",
+      "motherId": ""
+    },
+    {
+      "sowId": "222",
+      "motherId": ""
+    },
+    {
+      "sowId": "60",
+      "motherId": ""
+    },
+    {
+      "sowId": "A58",
+      "motherId": ""
+    },
+    {
+      "sowId": "伊佐68",
+      "motherId": ""
+    },
+    {
+      "sowId": "212",
+      "motherId": ""
+    },
+    {
+      "sowId": "18",
+      "motherId": "142"
+    },
+    {
+      "sowId": "46",
+      "motherId": "142"
+    },
+    {
+      "sowId": "51",
+      "motherId": "142"
+    },
+    {
+      "sowId": "149",
+      "motherId": "46"
+    },
+    {
+      "sowId": "150",
+      "motherId": "46"
+    },
+    {
+      "sowId": "53",
+      "motherId": "111"
+    },
+    {
+      "sowId": "47",
+      "motherId": "53"
+    },
+    {
+      "sowId": "67",
+      "motherId": "53"
+    },
+    {
+      "sowId": "19",
+      "motherId": "222"
+    },
+    {
+      "sowId": "16",
+      "motherId": "222"
+    },
+    {
+      "sowId": "49",
+      "motherId": "222"
+    },
+    {
+      "sowId": "132",
+      "motherId": "19"
+    },
+    {
+      "sowId": "98",
+      "motherId": "19"
+    },
+    {
+      "sowId": "38",
+      "motherId": "19"
+    },
+    {
+      "sowId": "88",
+      "motherId": "19"
+    },
+    {
+      "sowId": "612",
+      "motherId": "60"
+    },
+    {
+      "sowId": "512",
+      "motherId": "60"
+    },
+    {
+      "sowId": "912",
+      "motherId": "60"
+    },
+    {
+      "sowId": "812",
+      "motherId": "60"
+    },
+    {
+      "sowId": "101",
+      "motherId": "A58"
+    },
+    {
+      "sowId": "106",
+      "motherId": "A58"
+    },
+    {
+      "sowId": "66",
+      "motherId": "伊佐68"
+    },
+    {
+      "sowId": "11",
+      "motherId": "伊佐68"
+    },
+    {
+      "sowId": "21",
+      "motherId": "212"
+    }
+  ]
+}
