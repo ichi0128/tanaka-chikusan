@@ -7,7 +7,7 @@ function queueRemindersInitialization(){
 }
 function recurringRemindersSettings(){
   const items=TanakaReminders.list(db).slice().sort((a,b)=>a.month-b.month||a.day-b.day||a.id.localeCompare(b.id));
-  return `<section aria-labelledby="recurring-reminders-title"><h2 id="recurring-reminders-title">定期お知らせ</h2><p class="muted">毎年、指定日からその月の末日までホームと「直近の予定」に表示します。2月29日はうるう年のみ表示します。</p><button type="button" class="btn secondary" data-reminder="add">お知らせを追加</button><div class="card">${items.map(x=>`<div class="reminder-setting"><div><b>${x.month}月${x.day}日</b><p class="history-note">${esc(x.message)}</p></div><div class="reminder-setting-actions"><button type="button" class="sowlink" data-reminder="edit" data-id="${esc(x.id)}">編集</button><button type="button" class="sowlink" data-reminder="delete" data-id="${esc(x.id)}">削除</button></div></div>`).join('')||'<p class="muted">定期お知らせはありません。</p>'}</div></section>`;
+  return `<section aria-labelledby="recurring-reminders-title"><h2 id="recurring-reminders-title">定期お知らせ</h2><p class="muted">毎年、指定日からその月の末日までホームと「直近の予定」に表示します。「実施済」にするとその年の分だけ非表示になります。2月29日はうるう年のみ表示します。</p><button type="button" class="btn secondary" data-reminder="add">お知らせを追加</button><div class="card">${items.map(x=>`<div class="reminder-setting"><div><b>${x.month}月${x.day}日</b>${TanakaReminders.isComplete(db,x.id,Number(today().slice(0,4)))?'<span class="badge green">今年は実施済</span>':''}<p class="history-note">${esc(x.message)}</p></div><div class="reminder-setting-actions"><button type="button" class="sowlink" data-reminder="edit" data-id="${esc(x.id)}">編集</button><button type="button" class="sowlink" data-reminder="delete" data-id="${esc(x.id)}">削除</button></div></div>`).join('')||'<p class="muted">定期お知らせはありません。</p>'}</div></section>`;
 }
 function reminderForm(id){
   const old=id?TanakaReminders.list(db).find(x=>x.id===id):null;if(id&&!old)throw Error('お知らせが見つかりません。');
@@ -42,4 +42,11 @@ window.addEventListener('load',()=>{
     scheduled=token;c.localChanged();
   };
   cloudStore.onChange=function(...args){previous?.apply(this,args);syncInitial();};syncInitial();
+});
+
+function reminderCompleteButton(item){return `<button type="button" class="sowlink reminder-complete" data-reminder-complete="${esc(item.reminderId)}" data-occurrence="${esc(item.date)}" aria-label="${esc(item.label)}を実施済にする">実施済</button>`;}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-reminder-complete]');if(!b||!['home','schedules'].includes(page))return;
+  try{save(d=>TanakaReminders.complete(d,b.dataset.reminderComplete,b.dataset.occurrence));toast('今年の分を実施済にしました。翌年はまた表示します。');}
+  catch(err){toast('実施済にできませんでした：'+err.message);}
 });
