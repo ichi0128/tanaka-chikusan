@@ -4,7 +4,8 @@
   const TYPES=['肉豚舎へ移動','肉豚舎更新','肉豚出荷'];
   TYPES.forEach(t=>{if(!M.TYPES.includes(t))M.TYPES.push(t);});
   function empty(key){if(key==='yard')return {key,state:'empty',birthDate:'',count:0};return {key,state:'empty',birthDate:'',count:0,sowId:'',mixed:false,csf:false,weight:30,kind:'肉豚',note:''};}
-  function legacyGroup(r){return {birthDate:r.birthDate||'',count:r.count??null,sowId:r.sowId||'',mixed:!!r.mixed,csf:!!r.csf,weight:r.weight??30,kind:r.kind||'肉豚',note:r.groupNote??r.note??''};}
+  function roomKind(kind){return kind==='育成母豚'?'育成母豚候補':kind||'肉豚';}
+  function legacyGroup(r){return {birthDate:r.birthDate||'',count:r.count??null,sowId:r.sowId||'',mixed:!!r.mixed,csf:!!r.csf,weight:r.weight??30,kind:roomKind(r.kind),note:r.groupNote??r.note??''};}
   function simple(r){return {key:'yard',state:r.count?'occupied':'empty',birthDate:r.count?(r.birthDate||''):'',count:r.count||0};}
   function group(r){return r.key==='yard'?yardState(r):legacyGroup(r);}
   function yardBirthMonth(pig){
@@ -12,7 +13,7 @@
     return /^\d{4}-\d{2}-\d{2}$/.test(pig.birthDate||'')?Number(pig.birthDate.slice(5,7)):null;
   }
   function yardPig(source,key){
-    return {...M.clone(source),key,count:1,weight:source.weight??null,birthDate:source.birthDate||'',sowId:source.mixed?'混成':source.sowId||'',mixed:false,csf:typeof source.csf==='boolean'?source.csf:null,kind:source.kind==='育成母豚'?'育成母豚':'肉豚',note:source.note||''};
+    return {...M.clone(source),key,count:1,weight:source.weight??null,birthDate:source.birthDate||'',sowId:source.mixed?'混成':source.sowId||'',mixed:false,csf:typeof source.csf==='boolean'?source.csf:null,kind:['育成母豚','育成母豚候補'].includes(source.kind)?'育成母豚':'肉豚',note:source.note||''};
   }
   function yardState(source){
     const individuals=Array.isArray(source.individuals)?M.clone(source.individuals):Array.from({length:source.count||0},(_,i)=>yardPig({birthDate:source.birthDate||'',weight:source.weight??null,sowId:source.sowId||'',mixed:!!source.mixed,csf:source.csf??null,kind:source.kind||'肉豚',note:source.note||''},'yard:legacy:'+(i+1)));
@@ -59,7 +60,7 @@
   function validYard(g){if(!Number.isInteger(g.count)||g.count<0)throw Error('頭数は0以上の整数で入力してください。');if(g.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(g.birthDate)||!Number.isFinite(Date.parse(g.birthDate))||new Date(g.birthDate).toISOString().slice(0,10)!==g.birthDate))throw Error('誕生月日を確認してください。');}
   function validGroup(g){
     if(!Number.isInteger(g.count)||g.count<0)throw Error('頭数は0以上の整数で入力してください。');
-    if(typeof g.sowId!=='string'||typeof g.note!=='string'||typeof g.csf!=='boolean'||typeof g.mixed!=='boolean'||!['肉豚','育成母豚'].includes(g.kind))throw Error('肉豚舎の情報を確認してください。');
+    if(typeof g.sowId!=='string'||typeof g.note!=='string'||typeof g.csf!=='boolean'||typeof g.mixed!=='boolean'||!['肉豚','育成母豚','育成母豚候補'].includes(g.kind))throw Error('肉豚舎の情報を確認してください。');
     if(!Number.isInteger(g.weight)||g.weight<30||g.weight%10!==0)throw Error('重量は30kg以上・10kg単位で入力してください。');
     if(g.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(g.birthDate)||!Number.isFinite(Date.parse(g.birthDate))||new Date(g.birthDate).toISOString().slice(0,10)!==g.birthDate))throw Error('誕生月日を確認してください。');
     if(g.mixed&&g.sowId)throw Error('混成の母豚番号は空欄にしてください。');
@@ -94,7 +95,7 @@
     }
     check(rooms);
   }
-  root.TanakaFinishing={TYPES,empty,group,yardState,yardPig,yardBirthMonth,validIndividuals,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?yardState(r):r)};
+  root.TanakaFinishing={TYPES,empty,roomKind,group,yardState,yardPig,yardBirthMonth,validIndividuals,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?yardState(r):{...r,kind:roomKind(r.kind)})};
 })(typeof globalThis!=='undefined'?globalThis:this);
 
 // Shipment history adjustments never change the replayed room ledger.

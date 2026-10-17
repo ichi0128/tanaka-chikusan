@@ -3,6 +3,8 @@
 'use strict';
 const M=root.TanakaModel,clone=M.clone;
 const pending=s=>s?.numberPending===true;
+function linkedSow(pig,state){return Object.values(state.sows).find(s=>s.giltRegistration?.yardPigKey===(pig.pigKey||pig.key))||null;}
+function yardKind(pig,state){const s=linkedSow(pig,state);return s?(pending(s)?'育成母豚':'母豚'):['育成母豚','育成母豚候補'].includes(pig.kind)?'育成母豚':'肉豚';}
 function validate(data){
   const keys=new Set(),yard=new Set();
   for(const s of data.sows){
@@ -44,5 +46,5 @@ function assign(data,id,number,date){
   return number;
 }
 const previous=M.validate;M.validate=function(data){previous(data);validate(data);};
-root.TanakaGilts={pending,create,update,assign,validate};
+root.TanakaGilts={pending,linkedSow,yardKind,create,update,assign,validate};
 })(typeof globalThis!=='undefined'?globalThis:this);

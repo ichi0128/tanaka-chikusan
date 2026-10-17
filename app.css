@@ -363,3 +363,5 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 
 .gilt-unassigned-number{font-size:clamp(15px,4vw,24px)!important;white-space:nowrap}.gilt-detail-name{font-size:26px;font-weight:800}.yard-quick-card>.btn{font-size:12px;padding:8px;min-height:42px}
 .gilt-unassigned-number small{display:block;font-size:12px;font-weight:500;white-space:normal;overflow-wrap:anywhere}.lineage-node.pending{background:#fff2db;color:#694c19;border-color:#c6a260}
+
+.inventory-farm-total{display:grid;gap:8px;padding:14px 12px;margin:10px 0 16px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.inventory-farm-total strong{font-size:22px}.inventory-farm-total small{line-height:1.6;color:var(--muted)}
