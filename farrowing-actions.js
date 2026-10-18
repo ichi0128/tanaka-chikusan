@@ -37,7 +37,8 @@ function simulate(f,def,n,risks,baseMetrics){
   const improved=days.filter((d,i)=>f.days[i].count>=9&&d.count<f.days[i].count),effects=risks.flatMap(r=>{const count=improved.filter(d=>d.date>=r.start&&d.date<=r.end).length;if(!count)return [];const peak=maxIn(days,r.start,r.end);return [{start:r.start,end:r.end,before:r.peak,after:peak.count,peakDate:peak.date,improvedDays:count}];});
   const uncertainty=f.missing.length>0||f.unmodelled.length>0||f.periods.some(p=>p.uncertain)||f.rows.some(r=>r.parityUnknown);
   const worsens=after.peak>baseMetrics.peak||after.over>baseMetrics.over||after.full>baseMetrics.full;
-  const effective=n!==0&&effects.length>0&&!worsens&&!heatWorse&&!currentWorse;
+  const benefit=after.peak<baseMetrics.peak||after.over<baseMetrics.over||after.full<baseMetrics.full||after.caution<baseMetrics.caution;
+  const effective=n!==0&&effects.length>0&&benefit&&!worsens&&!heatWorse&&!currentWorse;
   const priority=def.kind==='wean'&&n!==21?0:def.kind==='move'?1:def.kind==='entry'?2:3;
   return {offset:n,date,kind:def.kind,label:n===0?'予定どおり':n===21?'1周期見送り（約21日）':def.kind==='move'?(n<0?Math.abs(n)+'日前へ':n+'日後へ'):'＋'+n+'日',priority,effective,recommendable:effective&&cycle.count<=9&&!uncertainty,uncertainty,worsens,currentWorse,heatWorse,effects,cyclePeak:cycle.count,peakDate:cycle.date,baseCyclePeak:baseCycle.count,annual:after,baseAnnual:baseMetrics,mating:next?.mating||'',estrus:def.kind==='wean'?F.add(date,4):def.kind==='breed'?def.date:'',birth:next?.birth||'',due:next?.due||'',heat:next?F.heat(next.birth):null,currentExtraDays:def.kind==='wean'?n===21?0:n:0,currentRoomExtraDays:oldStay?F.distance(oldStay.exit,newStay.exit):0,currentPeak:maxIn(days,f.day,currentEnd).count,overlaps:F.overlapsAt(f,cycle.date,projected),recommendedFor:[]};
 }

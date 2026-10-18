@@ -18,6 +18,8 @@ f=fixture();f.day='2026-09-01';plan=F.planActions(recalc(f));a.ok(!plan.actions.
 f=fixture();f.periods=f.periods.filter(p=>p.id==='1');a.equal(F.planActions(recalc(f)).actions.length,0);
 // Piglet moves: only tentative moves, only with a currently empty receiving room; never rewrite an actual move.
 f=fixture();f.periods=f.periods.filter(p=>p.id!=='1');f.childStays=[{id:'piglets:r1',key:'piglets:r1',entry:f.day,exit:'2026-11-06',moveDate:'2026-11-06',moveBasis:'estimate',basis:'record'}];for(const p of f.periods){p.entry='2026-11-05';p.exit='2026-11-06';p.moveDate=p.exit;}plan=F.planActions(recalc(f));act=plan.actions.find(x=>x.kind==='move');a.ok(act);a.equal(act.recommended.offset,-2);a.match(act.conditional,/受入/);a.equal(act.recommended.cyclePeak,9);f.nursery=[];a.ok(!F.planActions(recalc(f)).actions.some(x=>x.kind==='move'));f.nursery=[{state:'empty'}];f.childStays[0].moveBasis='record';a.ok(!F.planActions(recalc(f)).actions.some(x=>x.kind==='move'));
+// Merely moving the same nine-room peak to different dates is not an improvement.
+f=fixture();f.periods=f.periods.filter(p=>p.id==='1');for(let i=0;i<8;i++)f.periods.push({...F.period('steady'+i,'2026-01-01',false),key:'steady'+i,entry:'2026-10-18',exit:'2027-10-18',moveDate:'2027-10-18',basis:'record'});a.ok(!F.planActions(recalc(f)).actions.some(x=>x.kind==='wean'));
 // Unknown information suppresses a definite recommendation but preserves demonstrable conditional improvements.
 f=fixture();f.rows[0].parityUnknown=true;act=F.planActions(f).actions.find(x=>x.kind==='wean');a.ok(act);a.equal(act.recommended,null);a.ok(act.options.some(o=>o.effective));
 
