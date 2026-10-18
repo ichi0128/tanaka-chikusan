@@ -422,3 +422,30 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 :root[data-theme=dark] .ff-target-card .ff-tone-caution{color:#ffe09a}
 :root[data-theme=dark] .ff-target-card .ff-tone-full{color:#ffb4aa}
 :root[data-theme=dark] .ff-target-card .ff-tone-over{color:#dfb8ff}
+
+/* Matching annual date coordinates, with a compact per-sow overview. */
+.ff-section{--ff-axis-gutter:72px}
+.ff-timeline-scroll{margin:12px 0;border:0;border-radius:0;max-height:none}
+.ff-timeline-scroll:not(.is-expanded){overflow:visible}
+.ff-timeline-scroll .ff-timeline-row,.ff-timeline-scroll:not(.is-expanded) .ff-timeline-row{grid-template-columns:var(--ff-axis-gutter) minmax(0,1fr)}
+.ff-timeline-scroll:not(.is-expanded) .ff-track{min-height:26px}
+.ff-timeline-scroll:not(.is-expanded) .ff-sow-name{min-width:0;padding:4px 5px;font-size:11px;line-height:1.2}
+.ff-timeline-scroll:not(.is-expanded) .ff-period{top:5px;height:16px;padding:0 2px}
+.ff-timeline-scroll:not(.is-expanded) .ff-missing{top:5px;left:4px;font-size:10px}
+.ff-timeline-scroll .ff-month-heading .ff-track{min-height:28px}
+.ff-timeline-scroll .ff-month-label{top:6px;padding-left:0;font-size:10px}
+.ff-timeline-scroll.is-expanded{overflow:auto;max-height:610px}
+.ff-timeline-scroll.is-expanded .ff-track{min-height:44px}
+.ff-timeline-scroll.is-expanded .ff-sow-name{padding:8px 5px;font-size:12px;line-height:1.3}
+.ff-timeline-scroll.is-expanded .ff-period{top:8px;height:28px}
+.ff-plot{margin-left:var(--ff-axis-gutter);margin-right:0}
+.ff-plot .ff-y-label,.ff-plot .ff-axis-unit{left:-25px}
+.ff-chart-dates{margin-left:var(--ff-axis-gutter);margin-right:0}
+.ff-source-room{color:var(--muted);font-size:11px}
+@media(max-width:480px){.ff-section{--ff-axis-gutter:64px}.ff-timeline-scroll:not(.is-expanded) .ff-sow-name{font-size:10.5px;padding-left:3px;padding-right:3px}}
+
+.ff-timeline-scroll .ff-month-label{transform:translateX(-50%)}
+.ff-timeline-scroll .ff-month-label.ff-axis-start,.ff-chart-dates span:first-child{transform:none}
+
+@media(max-width:619px){.ff-chart-dates span:not(.ff-quarter){display:none}}
+@media(min-width:620px){.ff-timeline-scroll:not(.is-expanded) .ff-month-label:not(.ff-quarter){display:block}}
