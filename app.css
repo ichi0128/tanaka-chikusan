@@ -381,3 +381,6 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 
 .ff-timeline{min-width:0;width:100%}.ff-timeline-scroll.is-expanded .ff-timeline{min-width:1120px}.ff-timeline-scroll:not(.is-expanded) .ff-month-label:not(.ff-quarter){display:none}.ff-timeline-scroll:not(.is-expanded) .ff-period{font-size:0}.ff-timeline-scroll:not(.is-expanded) .ff-timeline-row{grid-template-columns:90px minmax(0,1fr)}.ff-timeline-scroll:not(.is-expanded) .ff-sow-name{font-size:11px}.ff-zoom-button{font-size:13px;margin:10px 0}
 .ff-month-label{white-space:nowrap}.ff-month-label:last-child{transform:translateX(-60%)}
+
+/* Daily decisions: primary verdict first, details only when needed. */
+.ff-wean-cue{box-sizing:border-box}.ff-wean-cue strong{display:block;font-size:23px}.ff-wean-cue span{display:block;font-size:14px;font-weight:500;margin-top:3px}.ff-wean-cue.good{cursor:default}.ff-decision-conclusion{font-size:22px;font-weight:800;line-height:1.5;margin:12px 0}.ff-options{grid-column:1/-1;width:100%;min-width:0}.ff-options>summary{cursor:pointer;padding:14px 4px;font-weight:700}.ff-comparisons>.ff-decision-conclusion,.ff-comparisons>p{grid-column:1/-1}.ff-home-weaning .btn{margin-top:12px}.ff-home-weaning .card>b{overflow-wrap:anywhere}

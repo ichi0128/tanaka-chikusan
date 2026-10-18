@@ -75,11 +75,21 @@ function build(data,day){
     const unmodelled=date===day?occupied.filter(r=>!known.has(r.sowId)||r.state==='piglets'):[];
     days.push({date,count:overlaps.length+unmodelled.length,overlaps,unmodelled,heat:heat(date)});
   }
-  return {day,end,rows,periods,days,warnings,childRooms,unmodelled:occupied.filter(r=>r.state==='piglets'||!periods.some(p=>p.current&&p.id===r.sowId)),missing:rows.filter(r=>r.missing),peak:Math.max(0,...days.map(d=>d.count))};
+  return {day,end,rooms:state.rooms,rows,periods,days,warnings,childRooms,unmodelled:occupied.filter(r=>r.state==='piglets'||!periods.some(p=>p.current&&p.id===r.sowId)),missing:rows.filter(r=>r.missing),peak:Math.max(0,...days.map(d=>d.count))};
 }
 function riskSegments(f){const out=[];for(const d of f.days){if(d.count<9)continue;const type=level(d.count),previous=out.at(-1);if(previous&&previous.level===type&&add(previous.end,1)===d.date){previous.end=d.date;if(d.count>previous.peak){previous.peak=d.count;previous.peakDate=d.date;}}else out.push({start:d.date,end:d.date,level:type,peak:d.count,peakDate:d.date});}return out;}
 function overlapsAt(f,date,periods=f.periods){return periods.filter(p=>p.entry<=date&&p.exit>=date);}
 function peakBetween(periods,start,end){let count=0,date=start;for(let d=start;d<=end;d=add(d,1)){const n=periods.filter(p=>p.entry<=d&&p.exit>=d).length;if(n>count){count=n;date=d;}}return {count,date};}
+// Near-term capacity starts with physical rooms. Unknown releases remain occupied.
+function nearCapacity(f,date,{id='',wean='',enter=false}={}){
+  const rooms=f.rooms||[],occupied=rooms.filter(r=>r.state!=='empty'),resident=new Set(occupied.filter(r=>r.state!=='piglets').map(r=>r.sowId));
+  let count=occupied.filter(r=>{const p=f.periods.find(p=>p.current&&p.id===r.sowId);const exit=r.sowId===id&&wean?wean:p?.exit;return r.state==='piglets'||!exit||exit>=date;}).length;
+  const incoming=f.periods.filter(p=>!(resident.has(p.id)&&p.current)&&p.entry>=f.day&&p.entry<=date&&p.exit>=date&&p.id!==id);
+  count+=incoming.length;
+  if(enter&&!resident.has(id))count++;
+  return {count,incoming};
+}
+const verdict=level=>({good:'問題なし',warn:'注意',bad:'危険'})[level];
 function compare(f,id,mating,options={}){
   const target=f.rows.find(x=>x.id===id);if(!target||!valid(mating)||mating<f.day||mating>f.end)throw Error('予測対象の母豚と種付け日を確認してください。');
   const current=f.periods.find(p=>p.id===id&&((p.current&&p.actualBirth)||(p.basis==='record'&&p.mating&&p.mating<=f.day&&p.exit>=f.day))),first=target.first&&!current;
@@ -91,11 +101,22 @@ function compare(f,id,mating,options={}){
   const overlapping=other.filter(p=>p.entry<=proposed.exit&&p.exit>=proposed.entry),ids=new Set();
   const neighbours=overlapping.filter(p=>{if(ids.has(p.id))return false;ids.add(p.id);return true;});
   const uncertain=f.missing.length>0||f.rows.some(r=>r.parityUnknown)||f.unmodelled.length>0||f.periods.some(p=>p.uncertain),bad=peak.count>=10||heatState.avoid,warn=peak.count===9||heatState.caution||uncertain;
+  const holdDays=[];if(current&&options.wean)for(let date=add(f.day,1);date<=options.wean;date=add(date,1)){const held=nearCapacity(f,date,{id,wean:options.wean}),released=nearCapacity(f,date,{id,wean:f.day});holdDays.push({date,...held,added:held.count>released.count});}
+  const hold=holdDays.filter(d=>d.added).sort((a,b)=>b.count-a.count)[0],holdPeak=hold?.count||0,holdLevel=holdPeak>10?'bad':holdPeak>=9?'warn':'good';
   const currentEnd=options.wean||current?.exit,unavailable=!!current&&mating<add(currentEnd,4),age=current&&options.wean?distance(current.birth,options.wean):null;
-  return {mating,...proposed,peak:peak.count,peakDate:peak.date,heat:heatState,neighbours,level:bad?'bad':warn||unavailable||age!==null&&age<30?'warn':'good',uncertain,unavailable,earlyWean:age!==null&&age<30,age,currentExit:currentEnd||'',currentDelta:current&&options.wean?distance(current.exit,options.wean):0,currentPeak:currentEnd?Math.max(peakBetween(all,f.day,currentEnd>=f.day?currentEnd:f.day).count,overlapsAt(f,f.day,all).length+f.unmodelled.length):null};
+  return {mating,...proposed,peak:peak.count,peakDate:peak.date,heat:heatState,neighbours,level:bad||holdLevel==='bad'?'bad':warn||holdLevel==='warn'||unavailable||age!==null&&age<30?'warn':'good',holdPeak,holdDate:hold?.date||'',holdLevel,holdNeighbours:hold?.incoming||[],uncertain,unavailable,earlyWean:age!==null&&age<30,age,currentExit:currentEnd||'',currentDelta:current&&options.wean?distance(current.exit,options.wean):0,currentPeak:currentEnd?Math.max(peakBetween(all,f.day,currentEnd>=f.day?currentEnd:f.day).count,overlapsAt(f,f.day,all).length+f.unmodelled.length):null};
 }
 function weanOptions(f,id,date){if(!valid(date)||date<f.day||date>add(f.day,30))throw Error('離乳の比較日は今日から30日以内で選んでください。');const current=f.periods.find(p=>p.id===id&&p.current&&p.actualBirth);if(!current)throw Error('実際の分娩日と現在の授乳を確認できる母豚で比較してください。');return [0,1,2,3,4,5,21].map(n=>{const wean=add(date,n===21?0:n),mating=add(wean,n===21?25:4);return {...compare(f,id,mating,{wean}),wean,offset:n,label:n===21?(date===f.day?'今日':'基準日に')+'離乳・1周期見送り':n===0?(date===f.day?'今日離乳':'基準日に離乳'):n+'日遅らせる'};});}
-function weanJudgement(f,id){const options=weanOptions(f,id,f.day),base=options[0];if(base.level==='good')return {level:'good',text:'〇 今日離乳して問題なし',options};if(base.level==='warn'||options.some(x=>x.level==='good'))return {level:'warn',text:'△ 離乳日の調整を検討',options};return {level:'bad',text:'× 注意：次回分娩が混雑・真夏に重なる',options};}
+function weanConclusion(options){const base=options[0],small=options.slice(1,6).find(x=>x.level==='good'),skip=options.find(x=>x.offset===21);return base.level==='good'?'予定どおり離乳してよさそう':small?'数日調整で解決可能':skip?.level==='good'?'1周期見送りを検討':'数日では解決しない';}
+function weanJudgement(f,id){const options=weanOptions(f,id,f.day),base=options[0];return {level:base.level,text:verdict(base.level),message:base.level==='good'?'予定どおり離乳してよさそう':'日程調整を検討',conclusion:weanConclusion(options),options};}
+function breedingSchedules(f){return f.rows.flatMap(r=>{const p=f.periods.find(p=>p.id===r.id&&p.basis==='estimate'&&p.mating>=f.day&&p.mating<=f.end);return p?[{id:r.id,date:p.mating,label:'種付け予定（予測）',type:'種付け',forecastBreeding:true}]:[];});}
+function entryJudgement(f,id,date){
+  date=date<f.day?f.day:date;const target=f.rows.find(r=>r.id===id),p=f.periods.find(p=>p.id===id&&p.exit>=date),resident=(f.rooms||[]).some(r=>r.state!=='empty'&&r.sowId===id);
+  const days=[];for(let d=date;d<=add(date,7);d=add(d,1))days.push({date:d,...nearCapacity(f,d,{id,enter:!resident&&(!p||d<=p.exit)})});
+  const peak=days.reduce((a,b)=>b.count>a.count?b:a),unknown=f.unmodelled.length>0||f.missing.length>0,lev=peak.count>10?'bad':peak.count>=9||unknown||!target||!p?'warn':'good';
+  return {level:lev,text:verdict(lev),message:resident?'現在入室済み':lev==='bad'?'空室不足の見込み':lev==='good'?'入室可能':'入退室予定・空室を確認',date,peak:peak.count,peakDate:peak.date,empty:(f.rooms||[]).filter(r=>r.state==='empty').length,neighbours:peak.incoming,uncertain:unknown||!p,resident};
+}
+function decision(f,x){if(x.type==='離乳')return weanJudgement(f,x.id);if(x.type==='種付け'){const c=compare(f,x.id,x.date<f.day?f.day:x.date);return {...c,text:verdict(c.level),message:c.level==='good'?'収容・暑熱予測上は問題なし':'次の発情を1周期見送る案も確認'};}if(x.type==='分娩舎へ移動')return entryJudgement(f,x.id,x.date);return null;}
 function weanSchedules(f){return f.periods.filter(p=>p.current&&p.actualBirth&&!p.actualWean).map(p=>({id:p.id,date:add(p.birth,30),label:'離乳予定',type:'離乳',forecastWean:true,roomKey:f.rows.find(r=>r.id===p.id)?.roomKey||''}));}
-root.TanakaForecast={valid,add,months,distance,heat,level,status,period,build,riskSegments,overlapsAt,compare,weanOptions,weanJudgement,weanSchedules};
+root.TanakaForecast={valid,add,months,distance,heat,level,status,period,build,riskSegments,overlapsAt,compare,weanOptions,weanJudgement,weanSchedules,weanConclusion,breedingSchedules,entryJudgement,decision,nearCapacity,verdict};
 })(typeof globalThis!=='undefined'?globalThis:this);
