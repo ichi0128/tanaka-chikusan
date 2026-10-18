@@ -384,3 +384,5 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 
 /* Daily decisions: primary verdict first, details only when needed. */
 .ff-wean-cue{box-sizing:border-box}.ff-wean-cue strong{display:block;font-size:23px}.ff-wean-cue span{display:block;font-size:14px;font-weight:500;margin-top:3px}.ff-wean-cue.good{cursor:default}.ff-decision-conclusion{font-size:22px;font-weight:800;line-height:1.5;margin:12px 0}.ff-options{grid-column:1/-1;width:100%;min-width:0}.ff-options>summary{cursor:pointer;padding:14px 4px;font-weight:700}.ff-comparisons>.ff-decision-conclusion,.ff-comparisons>p{grid-column:1/-1}.ff-home-weaning .btn{margin-top:12px}.ff-home-weaning .card>b{overflow-wrap:anywhere}
+
+.ff-advice{grid-column:1/-1;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;min-width:0}.ff-advice p{line-height:1.7}.ff-home-advice{font-weight:800!important;margin-top:8px!important}
