@@ -91,7 +91,7 @@ function build(data,day){
     const overlaps=occupancies.filter(p=>p.entry<=date&&p.exit>=date),unknown=date===day?unmodelled:[];
     days.push({date,count:overlaps.length+unknown.length,overlaps,unmodelled:unknown,heat:heat(date)});
   }
-  return {day,end,rooms:state.rooms,rows,periods,occupancies,childStays,days,warnings,childRooms,unmodelled,missing:rows.filter(r=>r.missing),peak:Math.max(0,...days.map(d=>d.count))};
+  return {day,end,rooms:state.rooms,nursery:state.nursery,rows,periods,occupancies,childStays,days,warnings,childRooms,unmodelled,missing:rows.filter(r=>r.missing),peak:Math.max(0,...days.map(d=>d.count))};
 }
 function riskSegments(f){const out=[];for(const d of f.days){if(d.count<9)continue;const type=level(d.count),previous=out.at(-1);if(previous&&previous.level===type&&add(previous.end,1)===d.date){previous.end=d.date;if(d.count>previous.peak){previous.peak=d.count;previous.peakDate=d.date;}}else out.push({start:d.date,end:d.date,level:type,peak:d.count,peakDate:d.date});}return out;}
 function overlapsAt(f,date,periods=f.occupancies||f.periods){return periods.filter(p=>p.entry<=date&&p.exit>=date);}

@@ -1,0 +1,32 @@
+const fs=require('fs'),vm=require('vm'),a=require('assert/strict'),path=require('path'),c=vm.createContext({});
+for(const file of ['model.js','finishing-model.js','schedules.js','inventory-model.js','sow-parity.js','gilt-model.js','farrowing-forecast.js','farrowing-actions.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),c);
+const F=c.TanakaForecast,clone=x=>JSON.parse(JSON.stringify(x));
+function fixture(){
+ const day='2026-10-18',end='2027-10-18',current={...F.period('1','2026-05-23',false),key:'1:current',birth:'2026-09-21',exit:'2026-10-21',moveDate:'2026-11-20',current:true,actualBirth:true,basis:'record',moveBasis:'estimate'};
+ const next={...F.period('1','2026-10-25',false),key:'1:next'},later={...F.period('1',F.add(next.exit,4),false),key:'1:later'};
+ const periods=[current,next,later];for(let i=0;i<9;i++){const end=F.add(next.entry,1);periods.push({...F.period('other'+i,'2026-11-01',false),key:'other'+i,entry:F.add(next.entry,-4),exit:end,moveDate:end,basis:'record'});}
+ return recalc({day,end,periods,childStays:[],unmodelled:[],missing:[],rows:[{id:'1',label:'母豚1',roomKey:'r1',parityUnknown:false}],rooms:[],nursery:[{state:'empty'}]});
+}
+function recalc(f){f.occupancies=F.occupanciesFor(f);f.days=[];for(let date=f.day;date<=f.end;date=F.add(date,1))f.days.push({date,count:F.overlapsAt(f,date).length,unmodelled:[]});return f;}
+let f=fixture(),before=JSON.stringify(f),plan=F.planActions(f),act=plan.actions.find(x=>x.kind==='wean');a.ok(act);a.equal(act.date,'2026-10-21');a.equal(act.base.cyclePeak,10);a.equal(act.recommended.offset,2);a.equal(act.recommended.cyclePeak,1);a.equal(act.options.length,7);a.equal(act.options[0].date,'2026-10-21');a.equal(act.options.find(o=>o.offset===21).date,'2026-10-21');a.equal(act.options.find(o=>o.offset===21).mating,'2026-11-15');a.equal(act.options.find(o=>o.offset===2).mating,'2026-10-27');a.equal(act.options.find(o=>o.offset===2).currentExtraDays,2);a.equal(act.options.find(o=>o.offset===2).currentRoomExtraDays,0);a.ok(F.actionsForDate(plan,act.base.peakDate).some(x=>x.key===act.key));a.equal(F.actionsForDate(plan,'2026-10-18').length,0);a.equal(JSON.stringify(f),before);a.deepEqual(clone(F.planActions(clone(f))),clone(plan));
+// All later forecast cycles must shift as well: a +1 day collision in a later cycle blocks that option.
+f=fixture();let later=f.periods.find(p=>p.key==='1:later'),edge=F.add(F.roomStay(later).exit,1);for(let i=0;i<10;i++)f.periods.push({...F.period('later-block'+i,'2027-01-01',false),key:'later-block'+i,entry:edge,exit:edge,moveDate:edge,basis:'record'});plan=F.planActions(recalc(f));act=plan.actions.find(x=>x.kind==='wean');a.equal(act,undefined);
+// A delayed wean must not be recommended when it blocks current incoming mothers.
+f=fixture();f.periods[0].moveDate='2026-10-21';f.periods[0].moveBasis='record';for(let i=0;i<9;i++)f.periods.push({...F.period('hold'+i,'2026-01-01',false),key:'hold'+i,entry:'2026-10-22',exit:'2026-10-26',moveDate:'2026-10-26',basis:'record'});plan=F.planActions(recalc(f));act=plan.actions.find(x=>x.kind==='wean');if(act)for(const o of act.options.filter(o=>o.offset>0&&o.offset<21)){a.equal(o.currentWorse,true);a.equal(o.effective,false);}
+// Plans outside 30 days and changes with no actual capacity benefit are absent.
+f=fixture();f.day='2026-09-01';plan=F.planActions(recalc(f));a.ok(!plan.actions.some(x=>x.kind==='wean'));
+f=fixture();f.periods=f.periods.filter(p=>p.id==='1');a.equal(F.planActions(recalc(f)).actions.length,0);
+// Piglet moves: only tentative moves, only with a currently empty receiving room; never rewrite an actual move.
+f=fixture();f.periods=f.periods.filter(p=>p.id!=='1');f.childStays=[{id:'piglets:r1',key:'piglets:r1',entry:f.day,exit:'2026-11-06',moveDate:'2026-11-06',moveBasis:'estimate',basis:'record'}];for(const p of f.periods){p.entry='2026-11-05';p.exit='2026-11-06';p.moveDate=p.exit;}plan=F.planActions(recalc(f));act=plan.actions.find(x=>x.kind==='move');a.ok(act);a.equal(act.recommended.offset,-2);a.match(act.conditional,/受入/);a.equal(act.recommended.cyclePeak,9);f.nursery=[];a.ok(!F.planActions(recalc(f)).actions.some(x=>x.kind==='move'));f.nursery=[{state:'empty'}];f.childStays[0].moveBasis='record';a.ok(!F.planActions(recalc(f)).actions.some(x=>x.kind==='move'));
+// Unknown information suppresses a definite recommendation but preserves demonstrable conditional improvements.
+f=fixture();f.rows[0].parityUnknown=true;act=F.planActions(f).actions.find(x=>x.kind==='wean');a.ok(act);a.equal(act.recommended,null);a.ok(act.options.some(o=>o.effective));
+
+// A candidate is within 30 days; its adjusted date may fall after that window.
+f=fixture();f.day='2026-09-21';act=F.planActions(recalc(f)).actions.find(x=>x.kind==='wean');a.ok(act);a.equal(act.options.length,7);a.ok(act.options.some(o=>o.date>'2026-10-21'));
+// Breeding proposals compare the next heat only, and preserve already recorded pregnancies.
+f=fixture();f.periods=f.periods.filter(p=>!p.current&&p.key!=='1:later');f.day='2026-10-01';act=F.planActions(recalc(f)).actions.find(x=>x.kind==='breed');a.ok(act);a.deepEqual(clone(act.options.map(o=>o.offset)),[0,21]);a.equal(act.options[1].mating,'2026-11-15');
+// An otherwise helpful skip is excluded when a later cycle newly enters August.
+f=fixture();f.periods=f.periods.filter(p=>!p.current);f.day='2026-10-01';a.ok(!F.planActions(recalc(f)).actions.some(x=>x.kind==='breed'));
+// Delaying entry may help, but never suggest entry after the due date or re-plan an actual current resident.
+f=fixture();f.periods[0].current=false;f.periods[0].actualBirth=false;f.periods[0].entry='2026-10-20';f.periods[0].due='2026-10-24';f.periods[0].exit='2026-11-01';f.periods[0].moveDate='2026-11-10';f.periods=f.periods.filter(p=>p.key==='1:current'||p.id.startsWith('other'));for(const p of f.periods.filter(p=>p.id!=='1')){p.entry='2026-10-20';p.exit='2026-10-21';p.moveDate=p.exit;}act=F.planActions(recalc(f)).actions.find(x=>x.kind==='entry');a.ok(act);a.ok(act.options.every(o=>o.date<='2026-10-24'));a.match(act.conditional,/現場で確認/);f.periods[0].current=true;a.ok(!F.planActions(recalc(f)).actions.some(x=>x.kind==='entry'&&x.id==='1'));
+console.log('PASS action planning: scheduled baseline, minimal <=9 recommendation, all later cycles, current room hold, 30-day/effect filter, tentative piglet moves/receiving space, uncertainty, risk links, deterministic read-only data.');
