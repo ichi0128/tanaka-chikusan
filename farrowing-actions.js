@@ -1,58 +1,107 @@
-/* Read-only counterfactuals: preserve all other sows and propagate later forecast cycles. */
+/* Read-only, target-specific correction planning. The one-year forecast is never changed. */
 (function(root){
 'use strict';
 const F=root.TanakaForecast;
-const within=(f,date)=>F.valid(date)&&date>=f.day&&date<=F.add(f.day,30);
-const maxIn=(days,start,end)=>days.filter(d=>d.date>=start&&d.date<=end).reduce((best,d)=>d.count>best.count?{count:d.count,date:d.date}:best,{count:0,date:start});
-function metrics(days){return {peak:Math.max(0,...days.map(d=>d.count)),over:days.filter(d=>d.count>=11).length,full:days.filter(d=>d.count>=10).length,caution:days.filter(d=>d.count>=9).length};}
-function future(f,id,date){return f.periods.filter(p=>p.id===id&&p.basis==='estimate'&&p.mating>=date).sort((a,b)=>a.mating.localeCompare(b.mating))[0];}
-function definitions(f){
-  const out=[],weans=F.weanSchedules(f).filter(x=>within(f,x.date)),weanIds=new Set(weans.map(x=>x.id));
-  for(const x of weans){const p=f.periods.find(p=>p.id===x.id&&p.current&&p.actualBirth),next=future(f,x.id,x.date);if(p&&next)out.push({...x,key:'wean:'+x.id,kind:'wean',periodKey:p.key,nextKey:next.key,specs:[0,1,2,3,4,5,21]});}
-  for(const x of F.breedingSchedules(f).filter(x=>within(f,x.date)&&!weanIds.has(x.id))){const p=future(f,x.id,x.date);if(p)out.push({...x,key:'breed:'+x.id,kind:'breed',nextKey:p.key,specs:[0,21]});}
-  const emptyNursery=(f.nursery||[]).filter(n=>n.state==='empty').length;
-  const moving=[...(f.childStays||[]).map(p=>({...p,child:true})),...f.periods.filter(p=>p.current&&p.actualBirth).map(p=>({...p,roomKey:f.rows.find(r=>r.id===p.id)?.roomKey}))];
-  for(const p of moving)if(p.moveBasis==='estimate'&&within(f,p.moveDate)&&emptyNursery>0)out.push({key:'move:'+p.key,id:p.id,date:p.moveDate,type:'子豚引っ越し',kind:'move',periodKey:p.key,child:!!p.child,roomKey:p.roomKey,conditional:'育成舎の受入可能状態・移動可能な状態を現場で確認（現在空き'+emptyNursery+'室）',specs:[0,-1,-2,-3,-4,-5,1,2,3,4,5]});
-  for(const p of f.periods.filter(p=>p.basis==='record'&&!p.current&&within(f,p.entry))){const limit=Math.min(5,F.distance(p.entry,p.due));if(limit>0)out.push({key:'entry:'+p.key,id:p.id,date:p.entry,type:'分娩舎へ移入',kind:'entry',periodKey:p.key,conditional:'分娩予定日以前の比較です。分娩の兆候・実際の入室可能日を現場で確認',specs:Array.from({length:limit+1},(_,i)=>i)});}
+const forward=(f,date)=>F.valid(date)&&date>=f.day;
+const span=(p)=>p.pigletsOnly?p:F.roomStay(p);
+const intersects=(p,a,b)=>p.entry<=b&&p.exit>=a;
+const maximum=(days,a,b)=>days.filter(d=>d.date>=a&&d.date<=b).reduce((best,d)=>d.count>best.count?{count:d.count,date:d.date}:best,{count:0,date:a});
+const graphStartAt=(f,dates)=>{const d=dates.sort()[0];return d<f.day?f.day:d;};
+const firstFuture=(f,id)=>f.periods.filter(p=>p.id===id&&p.basis==='estimate'&&p.mating>=f.day).sort((a,b)=>a.mating.localeCompare(b.mating))[0];
+const fixedCycles=f=>f.periods.filter(p=>p.basis==='record');
+function daysFor(f,occupancies,start,end){const out=[];for(let date=start;date<=end;date=F.add(date,1)){const overlaps=occupancies.filter(p=>intersects(p,date,date));out.push({date,count:overlaps.length+(f.unmodelled||[]).length,overlaps});}return out;}
+function definitions(f,scope,settings){
+  const out=[],pending=new Set(),records=scope.periods.filter(p=>p.basis==='record');
+  for(const p of records){const next=scope.periods.find(q=>q.id===p.id&&q.basis==='estimate');if(!next||p.actualWean||!forward(f,p.exit))continue;
+    const specs=[0,...Array.from({length:10},(_,i)=>i+1),21];
+    if(settings.weanEarlier)specs.splice(1,0,...Array.from({length:10},(_,i)=>-i-1).filter(n=>F.add(p.exit,n)>=F.add(p.birth,30)));
+    out.push({key:'wean:'+p.key,id:p.id,kind:'wean',type:'離乳',label:'離乳予定',date:p.exit,periodKey:p.key,nextKey:next.key,specs,source:p.actualBirth?'実分娩日からの離乳予定':'登録済み繁殖サイクルからの仮離乳予定'});pending.add(p.id);
+  }
+  for(const p of scope.periods.filter(p=>p.basis==='estimate'&&forward(f,p.mating)&&!pending.has(p.id)))out.push({key:'breed:'+p.key,id:p.id,kind:'breed',type:'種付け',label:'種付け予定',date:p.mating,nextKey:p.key,specs:[0,21],source:'次の発情・種付け予測'});
+  for(const p of [...scope.periods,...scope.children])if(p.moveBasis!=='record'&&forward(f,p.moveDate||F.add(p.birth,60))){
+    const child=!!p.pigletsOnly,empty=(f.nursery||[]).filter(r=>r.state==='empty').length;
+    out.push({key:'move:'+p.key,id:p.id,kind:'move',type:'子豚引っ越し',label:'子豚引っ越し予定',date:p.moveDate||F.add(p.birth,60),periodKey:p.key,child,specs:[0,...Array.from({length:10},(_,i)=>-i-1),...(settings.moveLater?Array.from({length:10},(_,i)=>i+1):[])],conditional:'採用前に子豚の状態と移動先の受入を確認してください。現在の育成舎の空き '+empty+'室は将来の空きを保証しません。',source:p.actualBirth?'実分娩日＋60日の仮予定':'分娩予測日＋60日の仮予定'});
+  }
   return out;
 }
-function shifted(p,n){const next=F.period(p.id,F.add(p.mating,n),p.first,'直近予定の調整による周期予測（未保存）');return {...p,...next,key:p.key,moveDate:F.add(next.birth,60),moveBasis:'estimate',moveSource:'分娩予測日＋60日で仮計算'};}
-function heatTotals(periods,id,f){const p=periods.filter(p=>p.id===id&&p.birth>=f.day&&p.birth<=f.end);return {avoid:p.filter(p=>F.heat(p.birth).avoid).length,caution:p.filter(p=>F.heat(p.birth).caution).length};}
-function simulate(f,def,n,risks,baseMetrics){
-  let periods=f.periods.map(p=>({...p})),childStays=(f.childStays||[]).map(p=>({...p}));
-  const original=def.child?(f.childStays||[]).find(p=>p.key===def.periodKey):f.periods.find(p=>p.key===def.periodKey),anchor=periods.find(p=>p.key===def.nextKey);
-  const date=F.add(def.date,def.kind==='wean'&&n===21?0:n);if(!F.valid(date)||date<f.day||date>f.end)return null;
-  const shift=def.kind==='wean'?(n===21?21:n):def.kind==='breed'?n:0;
-  if(shift&&anchor)periods=periods.map(p=>p.id===def.id&&p.basis==='estimate'&&p.mating>=anchor.mating?shifted(p,shift):p);
-  const changed=def.child?childStays.find(p=>p.key===def.periodKey):periods.find(p=>p.key===def.periodKey);
+function shifted(p,n){const q=F.period(p.id,F.add(p.mating,n),p.first,'比較する次回サイクル（未保存の予測）');return {...p,...q,key:p.key,moveDate:F.add(q.birth,60),moveBasis:'estimate',moveSource:'比較案の分娩予測日＋60日'};}
+function label(def,n){if(!n)return '予定どおり';if(n===21)return '1周期見送り（約21日）';return def.kind==='move'?Math.abs(n)+'日'+(n<0?'前倒し':'後ろへ'):(n>0?'＋':'')+n+'日離乳';}
+function compareOrder(x,y){return (Math.abs(x.offset)===21?1:0)-(Math.abs(y.offset)===21?1:0)||Math.abs(x.offset)-Math.abs(y.offset)||Math.max(0,x.currentRoomExtraDays)-Math.max(0,y.currentRoomExtraDays)||(x.kind==='move'?0:1)-(y.kind==='move'?0:1)||(x.offset>0?1:0)-(y.offset>0?1:0)||Number(x.heatWorse)-Number(y.heatWorse)||x.actionKey.localeCompare(y.actionKey,'ja',{numeric:true});}
+function simulate(f,scope,target,def,n){
+  const periods=scope.periods.map(p=>({...p})),children=scope.children.map(p=>({...p}));
+  const date=F.add(def.date,def.kind==='wean'&&n===21?0:n);if(!forward(f,date))return null;
+  const original=(def.child?scope.children:scope.periods).find(p=>p.key===def.periodKey),anchor=scope.periods.find(p=>p.key===def.nextKey);
+  const index=periods.findIndex(p=>p.key===def.nextKey),shift=def.kind==='wean'||def.kind==='breed'?n:0;if(index>=0&&shift)periods[index]=shifted(anchor,shift);
+  const changed=(def.child?children:periods).find(p=>p.key===def.periodKey);
   if(def.kind==='wean')changed.exit=date;
-  if(def.kind==='move'){changed.moveDate=date;changed.moveSource='引っ越し日を調整する比較案（未保存）';if(def.child)changed.exit=date;}
-  if(def.kind==='entry')changed.entry=date;
-  const projected=F.occupanciesFor({...f,childStays},periods),days=f.days.map(d=>({date:d.date,count:F.overlapsAt(f,d.date,projected).length+d.unmodelled.length})),after=metrics(days);
-  const next=periods.find(p=>p.key===def.nextKey),oldNext=f.periods.find(p=>p.key===def.nextKey),oldStay=original?(def.child?original:F.roomStay(original)):null,newStay=changed?(def.child?changed:F.roomStay(changed)):null;
-  const start=next?.entry||f.day,end=next?F.roomStay(next).exit:[oldStay.exit,newStay.exit].sort().at(-1),baseStart=oldNext?.entry||f.day,baseEnd=oldNext?F.roomStay(oldNext).exit:oldStay.exit;
-  const cycle=maxIn(days,start,end),baseCycle=maxIn(f.days,baseStart,baseEnd),currentEnd=[F.add(f.day,30),...(oldStay?[oldStay.exit,newStay.exit]:[])].sort().at(-1);
-  const currentWorse=days.some((d,i)=>d.date<=currentEnd&&d.count>f.days[i].count&&d.count>=9);
-  const beforeHeat=heatTotals(f.periods,def.id,f),afterHeat=heatTotals(periods,def.id,f),heatWorse=afterHeat.avoid>beforeHeat.avoid||afterHeat.avoid===beforeHeat.avoid&&afterHeat.caution>beforeHeat.caution;
-  const improved=days.filter((d,i)=>f.days[i].count>=9&&d.count<f.days[i].count),effects=risks.flatMap(r=>{const count=improved.filter(d=>d.date>=r.start&&d.date<=r.end).length;if(!count)return [];const peak=maxIn(days,r.start,r.end);return [{start:r.start,end:r.end,before:r.peak,after:peak.count,peakDate:peak.date,improvedDays:count}];});
-  const uncertainty=f.missing.length>0||f.unmodelled.length>0||f.periods.some(p=>p.uncertain)||f.rows.some(r=>r.parityUnknown);
-  const worsens=after.peak>baseMetrics.peak||after.over>baseMetrics.over||after.full>baseMetrics.full;
-  const benefit=after.peak<baseMetrics.peak||after.over<baseMetrics.over||after.full<baseMetrics.full||after.caution<baseMetrics.caution;
-  const effective=n!==0&&effects.length>0&&benefit&&!worsens&&!heatWorse&&!currentWorse;
-  const priority=def.kind==='wean'&&n!==21?0:def.kind==='move'?1:def.kind==='entry'?2:3;
-  return {offset:n,date,kind:def.kind,label:n===0?'予定どおり':n===21?'1周期見送り（約21日）':def.kind==='move'?(n<0?Math.abs(n)+'日前へ':n+'日後へ'):'＋'+n+'日',priority,effective,recommendable:effective&&cycle.count<=9&&!uncertainty,uncertainty,worsens,currentWorse,heatWorse,effects,cyclePeak:cycle.count,peakDate:cycle.date,baseCyclePeak:baseCycle.count,annual:after,baseAnnual:baseMetrics,mating:next?.mating||'',estrus:def.kind==='wean'?F.add(date,4):def.kind==='breed'?def.date:'',birth:next?.birth||'',due:next?.due||'',heat:next?F.heat(next.birth):null,currentExtraDays:def.kind==='wean'?n===21?0:n:0,currentRoomExtraDays:oldStay?F.distance(oldStay.exit,newStay.exit):0,currentPeak:maxIn(days,f.day,currentEnd).count,overlaps:F.overlapsAt(f,cycle.date,projected),recommendedFor:[]};
+  if(def.kind==='move'){changed.moveDate=date;changed.moveSource='引っ越し比較案（未保存）';if(def.child)changed.exit=date;}
+  const beforeOcc=[...scope.periods.map(span),...scope.children],afterOcc=[...periods.map(span),...children],keys=new Set([def.periodKey,def.nextKey].filter(Boolean));
+  const oldChanged=beforeOcc.filter(p=>keys.has(p.key)),newChanged=afterOcc.filter(p=>keys.has(p.key));
+  const relevant=[...beforeOcc,...afterOcc].filter(p=>intersects(p,target.start,target.end)||keys.has(p.key));
+  const checkStart=[f.day,target.start,...relevant.map(p=>p.entry)].filter(d=>d>=f.day).sort()[0]||f.day;
+  const checkEnd=[target.end,...relevant.map(p=>p.exit)].sort().at(-1);
+  const before=daysFor(f,beforeOcc,checkStart,checkEnd),after=daysFor(f,afterOcc,checkStart,checkEnd);
+  const base=maximum(before,target.start,target.end),peak=maximum(after,target.start,target.end);
+  // Guard against moving the target peak to either edge of a shifted cycle. Only
+  // the changed intervals are checked; an unrelated existing later peak is not a veto.
+  const changedOn=date=>[...oldChanged,...newChanged].some(p=>intersects(p,date,date));
+  const newFullDays=after.filter((d,i)=>changedOn(d.date)&&d.count>=10&&d.count>before[i].count);
+  const extended=def.kind==='wean'&&n>0&&n!==21,oldStay=original?span(original):null,newStay=changed?span(changed):null;
+  const currentExtraDays=extended?n:0,currentRoomExtraDays=oldStay?F.distance(oldStay.exit,newStay.exit):0;
+  const currentStart=oldStay?(oldStay.entry<f.day?f.day:oldStay.entry):f.day,currentEnd=oldStay?[oldStay.exit,newStay.exit].sort().at(-1):f.day;
+  const currentWorse=extended&&after.some((d,i)=>d.date>=currentStart&&d.date<=currentEnd&&d.count>before[i].count&&d.count>=9);
+  const next=periods.find(p=>p.key===def.nextKey),oldHeat=anchor?F.heat(anchor.birth):null,heat=next?F.heat(next.birth):null;
+  const heatWorse=!!(heat&&(!oldHeat.avoid&&heat.avoid||!oldHeat.caution&&heat.caution));
+  const includedIds=new Set(scope.periods.map(p=>p.id)),uncertainty=(f.unmodelled||[]).length>0||scope.periods.some(p=>p.uncertain)||(f.rows||[]).some(r=>includedIds.has(r.id)&&r.parityUnknown);
+  const improvedDays=after.filter((d,i)=>d.date>=target.start&&d.date<=target.end&&d.count<before[i].count).length;
+  const afterBurden=after.filter(d=>d.date>=target.start&&d.date<=target.end).reduce((s,d)=>s+Math.max(0,d.count-8),0),beforeBurden=before.filter(d=>d.date>=target.start&&d.date<=target.end).reduce((s,d)=>s+Math.max(0,d.count-8),0);
+  const effective=n!==0&&improvedDays>0&&afterBurden<beforeBurden&&!newFullDays.length&&!currentWorse;
+  const goal=base.count>=10?9:8,resolved=effective&&peak.count<=goal;
+  const graphKeys=new Set(relevant.filter(p=>intersects(p,target.start,target.end)||newFullDays.some(d=>intersects(p,d.date,d.date))).map(p=>p.key));
+  if(def.nextKey)graphKeys.add(def.nextKey);
+  const graphPeriods=[...beforeOcc,...afterOcc].filter(p=>graphKeys.has(p.key));
+  const graphStart=graphStartAt(f,[target.start,...graphPeriods.map(p=>p.entry)]),graphEnd=[target.end,...graphPeriods.map(p=>p.exit)].sort().at(-1);
+  return {offset:n,kind:def.kind,actionKey:def.key,date,label:label(def,n),basePeak:base.count,cyclePeak:peak.count,peakDate:peak.date,basePeakDate:base.date,goal,effective,resolved,recommendable:resolved&&base.count>=10&&!uncertainty&&!heatWorse,newFullDays:newFullDays.map(d=>({date:d.date,count:d.count})),worsens:newFullDays.length>0,currentWorse,uncertainty,heatWorse,currentExtraDays,currentRoomExtraDays,currentPeak:maximum(after,currentStart,currentEnd).count,mating:next?.mating||'',estrus:def.kind==='wean'?F.add(date,4):def.kind==='breed'?def.date:'',birth:next?.birth||'',due:next?.due||'',heat,overlaps:after.find(d=>d.date===peak.date)?.overlaps||[],graphStart,graphEnd,graph:after.flatMap((d,i)=>d.date>=graphStart&&d.date<=graphEnd?[{date:d.date,before:before[i].count,after:d.count}]:[]),effects:[{start:target.start,end:target.end,before:base.count,after:peak.count,peakDate:peak.date,improvedDays}],recommendedFor:[]};
 }
-function planActions(f){
-  const risks=F.riskSegments(f),baseline=metrics(f.days);if(!risks.length)return {risks,actions:[],baseline};
-  const actions=definitions(f).map(def=>{const options=def.specs.map(n=>simulate(f,def,n,risks,baseline)).filter(Boolean);return {...def,options,base:options.find(o=>o.offset===0)};}).filter(a=>a.base&&a.options.some(o=>o.effective));
-  for(const a of actions){
-    for(const o of a.options)if(o.recommendable)o.recommendedFor=o.effects.filter(e=>e.after<=9).map(e=>e.start);
-    a.recommended=a.options.filter(o=>o.recommendedFor.length).sort((x,y)=>x.priority-y.priority||Math.abs(x.offset)-Math.abs(y.offset))[0]||null;
-    a.best=a.recommended||a.options.filter(o=>o.effective).sort((x,y)=>x.cyclePeak-y.cyclePeak||x.annual.full-y.annual.full||x.priority-y.priority||Math.abs(x.offset)-Math.abs(y.offset))[0];
+function contextFor(f,target,focus,settings){
+  const scope={periods:[...fixedCycles(f),...(focus?[focus]:[])],children:(f.childStays||[]).map(p=>({...p,pigletsOnly:true}))};
+  const occupancies=[...scope.periods.map(span),...scope.children],baseDays=daysFor(f,occupancies,target.start,target.end),peak=maximum(baseDays,target.start,target.end);
+  const key=target.key+':'+(focus?.key||'fixed'),included=new Set(scope.periods.map(p=>p.key));
+  const excluded=f.periods.filter(p=>p.basis==='estimate'&&!included.has(p.key)&&intersects(span(p),target.start,target.end));
+  const context={key,focusKey:focus?.key||'',focusId:focus?.id||'',peak:peak.count,peakDate:peak.date,scopeKeys:[...included],excludedKeys:excluded.map(p=>p.key),overlaps:baseDays.find(d=>d.date===peak.date)?.overlaps||[],actions:[],recommended:null};
+  if(peak.count>=9){context.actions=definitions(f,scope,settings).filter(def=>def.kind!=='move'||F.add(def.date,-10)<=target.end&&F.add(def.date,settings.moveLater?10:0)>=target.start).map(def=>{const options=def.specs.map(n=>simulate(f,scope,target,def,n)).filter(Boolean),base=options.find(o=>o.offset===0);return {...def,key:context.key+'|'+def.key,actionKey:def.key,targetKey:target.key,contextKey:key,options,base,recommended:options.filter(o=>o.recommendable).sort(compareOrder)[0]||null};}).filter(a=>a.base);
+    const candidates=context.actions.flatMap(a=>a.options.filter(o=>o.recommendable).map(o=>({action:a,option:o}))).sort((a,b)=>compareOrder(a.option,b.option));
+    if(candidates[0]){const winner=candidates[0];context.recommended={actionKey:winner.action.key,offset:winner.option.offset};winner.option.recommendedFor=[target.key];}
   }
-  actions.sort((a,b)=>(a.recommended?0:1)-(b.recommended?0:1)||a.best.priority-b.best.priority||a.date.localeCompare(b.date)||a.id.localeCompare(b.id,'ja',{numeric:true}));
-  return {risks,actions,baseline};
+  const relevant=occupancies.filter(p=>intersects(p,target.start,target.end)),graphStart=graphStartAt(f,[target.start,...relevant.map(p=>p.entry)]),graphEnd=[target.end,...relevant.map(p=>p.exit)].sort().at(-1);
+  context.graphStart=graphStart;context.graphEnd=graphEnd;context.graph=daysFor(f,occupancies,graphStart,graphEnd).map(d=>({date:d.date,before:d.count,after:d.count}));
+  return context;
 }
-function actionsForDate(plan,date){return plan.actions.filter(a=>a.options.some(o=>o.effective&&o.effects.some(e=>e.start<=date&&e.end>=date)));}
-Object.assign(F,{planActions,actionsForDate});
+function planActions(f,settings={}){
+  const risks=F.riskSegments(f),targets=[];
+  const firsts=(f.rows||[]).flatMap(r=>{const p=firstFuture(f,r.id);return p?[p]:[];});
+  for(const risk of risks){const target={...risk,key:risk.start+'_'+risk.end,annualPeak:risk.peak,contexts:[]};
+    const fixed=contextFor(f,target,null,settings);target.contexts.push(fixed);
+    for(const p of firsts.filter(p=>intersects(span(p),target.start,target.end))){const ctx=contextFor(f,target,p,settings);if(ctx.peak>fixed.peak)target.contexts.push(ctx);}
+    target.contexts.sort((a,b)=>{const ao=a.recommended&&a.actions.find(x=>x.key===a.recommended.actionKey)?.options.find(o=>o.offset===a.recommended.offset),bo=b.recommended&&b.actions.find(x=>x.key===b.recommended.actionKey)?.options.find(o=>o.offset===b.recommended.offset);return Number(!ao)-Number(!bo)||(ao&&bo?compareOrder(ao,bo):0)||b.peak-a.peak||a.key.localeCompare(b.key,'ja',{numeric:true});});
+    target.context=target.contexts[0];targets.push(target);
+  }
+  const actions=targets.flatMap(t=>t.contexts.flatMap(c=>c.actions));
+  return {risks,targets,actions,scopeRule:'記録済みの今回サイクル＋比較対象1頭の次回サイクル。その他の未種付け・次々回以降は年間参考のみ。'};
+}
+// A daily-work assessment uses the same cohort rule, not every later yearly cycle.
+function nextCorrection(f,id,weanDate='',matingDate=''){
+  const source=firstFuture(f,id);if(!source)return null;
+  const originalPeriods=fixedCycles(f),periods=originalPeriods.map(p=>({...p})),parent=periods.find(p=>p.id===id&&p.actualBirth&&!p.actualWean),n=parent&&F.valid(weanDate)?F.distance(parent.exit,weanDate):F.valid(matingDate)?F.distance(source.mating,matingDate):0;
+  const next=n?shifted(source,n):{...source};if(parent&&F.valid(weanDate))parent.exit=weanDate;
+  const scope={periods:[...periods,next],children:f.childStays||[]},occupancies=[...scope.periods.map(span),...scope.children],stay=span(next),days=daysFor(f,occupancies,next.entry,stay.exit),peak=maximum(days,next.entry,stay.exit),heat=F.heat(next.birth),age=parent&&F.valid(weanDate)?F.distance(parent.birth,weanDate):null;
+  const uncertainty=(f.unmodelled||[]).length>0||scope.periods.some(p=>p.uncertain)||(f.rows||[]).some(r=>scope.periods.some(p=>p.id===r.id)&&r.parityUnknown);
+  const originalParent=originalPeriods.find(p=>p.key===parent?.key),holdEnd=parent?span(parent).exit:f.day,holdStart=originalParent?span(originalParent).exit:f.day,hold=n>0&&holdEnd>holdStart?daysFor(f,occupancies,F.add(holdStart,1),holdEnd).filter(d=>d.count>daysFor(f,[...originalPeriods.map(span),span(source),...scope.children],d.date,d.date)[0].count).reduce((b,d)=>d.count>b.count?{count:d.count,date:d.date}:b,{count:0,date:''}):{count:0,date:''};
+  const unavailable=!!matingDate&&originalPeriods.some(p=>p.id===id&&F.add(p.exit,4)>next.mating);
+  const level=peak.count>=11||hold.count>=11||heat.avoid?'bad':peak.count>=9||hold.count>=9||heat.caution||uncertainty||unavailable||age!==null&&age<30?'warn':'good';
+  return {peak:peak.count,peakDate:peak.date,level,heat,age,uncertainty,unavailable,holdPeak:hold.count,holdDate:hold.date,mating:next.mating,birth:next.birth,due:next.due,entry:next.entry,exit:stay.exit};
+}
+function targetForDate(plan,date){return plan.targets.find(t=>t.start<=date&&t.end>=date)||null;}
+function actionsForDate(plan,date){return targetForDate(plan,date)?.context.actions||[];}
+Object.assign(F,{planActions,targetForDate,actionsForDate,nextCorrection});
 })(typeof globalThis!=='undefined'?globalThis:this);

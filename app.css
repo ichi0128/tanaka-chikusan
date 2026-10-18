@@ -396,3 +396,22 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 .ff-action-options .ff-comparison{margin-top:.75rem}
 .ff-actions h3{margin-top:1rem}
 .ff-actions .ff-action-card{margin-bottom:.75rem}
+
+/* Target-specific correction planning; annual forecast layout stays intact. */
+.ff-target-card{display:grid;gap:.55rem;min-width:0}
+.ff-target-card>small,.ff-target-details .muted,.ff-short-graph>small{font-size:.8rem;line-height:1.5}
+.ff-short-graph{margin:1rem 0;padding:.6rem;border:1px solid var(--border,#ddd);border-radius:10px;background:var(--card,#fff)}
+.ff-short-graph figcaption{font-size:.85rem;font-weight:700;margin-bottom:.4rem}
+.ff-short-graph svg{display:block;width:100%;height:auto;min-height:130px}
+.ff-short-graph text{font-size:12px;fill:#58685f}
+.ff-short-legend{display:flex;gap:1rem;font-size:.8rem;color:#416756}
+.ff-short-legend span:first-child{color:#71859a}
+.ff-target-table-wrap{overflow-x:auto;max-width:100%}
+.ff-target-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.ff-target-table th,.ff-target-table td{border:1px solid #d9dfd8;padding:.45rem;vertical-align:top;overflow-wrap:anywhere}
+.ff-target-table th{white-space:normal}
+.ff-recommended-row{background:#edf4ef;color:#234b35}
+.ff-target-action{margin:.65rem 0;padding:.5rem;border:1px solid #d9dfd8;border-radius:8px}
+.ff-target-details select{max-width:100%;font-size:.85rem}
+
+@media(max-width:600px){.ff-short-graph text{font-size:24px}}
