@@ -392,7 +392,7 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 .ff-action-card>p{margin:0;overflow-wrap:anywhere}
 .ff-action-card>small,.ff-action-choice span{display:block;font-size:.82rem;line-height:1.5}
 .ff-action-state{font-size:1.1rem;font-weight:800}
-.ff-action-choice{display:grid;gap:.3rem;border-left:4px solid #658775;background:#edf4ef;padding:.65rem;border-radius:6px}
+.ff-action-choice{display:grid;gap:.3rem;border-left:4px solid var(--ff-choice-border,#658775);background:var(--ff-choice-bg,#edf4ef);color:var(--ff-choice-text,#234b35);padding:.65rem;border-radius:6px}
 .ff-action-options .ff-comparison{margin-top:.75rem}
 .ff-actions h3{margin-top:1rem}
 .ff-actions .ff-action-card{margin-bottom:.75rem}
@@ -410,8 +410,15 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 .ff-target-table{width:100%;border-collapse:collapse;font-size:.8rem}
 .ff-target-table th,.ff-target-table td{border:1px solid #d9dfd8;padding:.45rem;vertical-align:top;overflow-wrap:anywhere}
 .ff-target-table th{white-space:normal}
-.ff-recommended-row{background:#edf4ef;color:#234b35}
+.ff-recommended-row{background:var(--ff-choice-bg,#edf4ef);color:var(--ff-choice-text,#234b35)}
 .ff-target-action{margin:.65rem 0;padding:.5rem;border:1px solid #d9dfd8;border-radius:8px}
 .ff-target-details select{max-width:100%;font-size:.85rem}
 
 @media(max-width:600px){.ff-short-graph text{font-size:24px}}
+
+/* Explicit foreground/background pairs for forecast recommendations. */
+:root[data-theme=dark]{--ff-choice-bg:#314a3b;--ff-choice-text:#edf7ee;--ff-choice-border:#a3cead}
+:root[data-theme=dark] .ff-target-card .ff-tone-normal{color:#b8ddc4}
+:root[data-theme=dark] .ff-target-card .ff-tone-caution{color:#ffe09a}
+:root[data-theme=dark] .ff-target-card .ff-tone-full{color:#ffb4aa}
+:root[data-theme=dark] .ff-target-card .ff-tone-over{color:#dfb8ff}
