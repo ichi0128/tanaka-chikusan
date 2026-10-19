@@ -73,7 +73,7 @@ function edit(data,id,key,card,expected){
   if(target===store.current)target.capturedKeys=events(data,id).map(l=>l.key);
 }
 // The compact history is a view of the existing parity cards, never a second ledger.
-const historyCounts=['birthCount','weanCount','nursingDays','foster','blackPiglets','crushed','weakDeaths','stillborn'];
+const historyCounts=['birthCount','weanCount','nursingDays','foster','fosterOut','fosterIn','blackPiglets','crushed','weakDeaths','stillborn'];
 const historyDates=['mating','due','birthDateActual','weanDateActual'];
 function historyDate(value){
   const text=String(value??'').trim();if(!text)return '';
@@ -84,7 +84,7 @@ function historyDate(value){
   if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==iso)throw Error('存在する日付を入力してください。');
   return full?iso:month+'/'+day;
 }
-function historyRows(data,id){return pages(data,id).slice().reverse();}
+function historyRows(data,id){const all=pages(data,id),current=all.shift();all.sort((a,b)=>(a.parity??9999)-(b.parity??9999)||String(a.card.birthDateActual||'').localeCompare(String(b.card.birthDateActual||'')));return [...all,...(current?[current]:[])];}
 function editHistory(data,id,key,patch,expected){
   const old=pages(data,id).find(p=>p.key===key);if(!old||JSON.stringify(old)!==expected)throw Error('カードが更新されました。開き直してください。');
   const card=clone(old.card);
