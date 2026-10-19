@@ -442,3 +442,11 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 @media(min-width:620px){.ff-timeline-scroll:not(.is-expanded) .ff-month-label:not(.ff-quarter){display:block}}
 
 .ff-response{display:block;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:14px;font-weight:500;line-height:1.6;color:inherit}.ff-response>b{display:block;font-size:15px}.ff-response>span{display:block;margin-top:6px}.ff-response small{display:block;font-size:11px;margin-top:6px}.ff-response-proposal{padding:10px;border-radius:8px;background:var(--ff-choice-bg,var(--surface));color:var(--ff-choice-text,var(--text));border:1px solid var(--ff-choice-border,var(--border))}.ff-response-proposal>b,.ff-response-proposal>span{display:block;font-size:14px}
+
+/* Location counts stay inside the existing square home buttons. */
+.home-app-location:nth-child(-n+4) .tab-icon{width:clamp(28px,26cqw,56px);height:clamp(28px,26cqw,56px)}
+.home-app-location .home-app-icon{gap:1.5cqw}
+.home-location-counts{display:flex;flex-direction:column;gap:1cqw;width:100%}
+.home-location-counts>span{display:flex;align-items:baseline;justify-content:center;gap:3cqw;white-space:nowrap}
+.home-location-counts small{font-size:clamp(10px,9cqw,16px);font-weight:600;line-height:1.15}
+.home-location-counts strong{font-size:clamp(21px,17cqw,34px);font-weight:800;line-height:1.05}
