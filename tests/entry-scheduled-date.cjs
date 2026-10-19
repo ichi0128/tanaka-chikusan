@@ -1,0 +1,13 @@
+const fs=require('fs'),vm=require('vm'),a=require('assert/strict'),path=require('path'),c=vm.createContext({});
+for(const file of ['model.js','finishing-model.js','schedules.js','inventory-model.js','sow-parity.js','gilt-model.js','farrowing-forecast.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),c);
+const F=c.TanakaForecast;
+const stay=(id,entry,moveDate,current=false)=>({id,entry,exit:moveDate,moveDate,birth:entry,basis:'record',current,source:'test record'});
+const f={day:'2026-10-19',end:'2027-10-19',rows:[{id:'target'}],rooms:Array.from({length:10},(_,i)=>({key:'r'+i,state:i<2?'waiting':'empty',sowId:i<2?'old'+i:''})),periods:[stay('old0','2026-09-01','2026-10-27',true),stay('old1','2026-09-01','2026-10-27',true),...Array.from({length:8},(_,i)=>stay('future'+i,'2026-11-01','2026-12-01')),stay('target','2026-11-03','2026-12-01')],childStays:[],unmodelled:[],missing:[]};
+const before=JSON.stringify(f),x={id:'target',type:'分娩舎へ移動',date:'2026-11-03'};
+const today=F.entryJudgement(f,'target',f.day),future=F.decision(f,x);
+a.equal(today.date,'2026-10-19');a.equal(today.peak,3);a.equal(today.level,'good');
+a.equal(future.date,x.date);a.equal(future.end,'2026-11-10');a.equal(future.peak,9);a.equal(future.level,'warn');a.equal(future.onDateCount,9);a.equal(future.projectedEmpty,1);a.equal(future.overlaps.length,9);a.ok(future.overlaps.some(p=>p.id==='target'));a.ok(!future.overlaps.some(p=>p.id==='old0'));a.equal(JSON.stringify(f),before);
+f.periods.push(stay('extra1','2026-11-05','2026-12-01'));let j=F.decision(f,x);a.equal(j.peak,10);a.equal(j.peakDate,'2026-11-05');a.equal(j.level,'warn');a.match(j.message,/満室/);a.equal(j.overlaps.length,j.peak);
+f.periods.push(stay('extra2','2026-11-06','2026-12-01'));j=F.decision(f,x);a.equal(j.peak,11);a.equal(j.peakDate,'2026-11-06');a.equal(j.level,'bad');a.match(j.message,/収容超過/);a.equal(j.overlaps.length,j.peak);
+a.equal(F.decision(f,{...x,date:'2026-10-01'}).date,f.day);
+console.log('PASS scheduled entry: future date propagated, physical releases and future arrivals reflected, peak day and full overlap list agree, target counted once, 9/10 warn and 11 danger, overdue clamped to today, readonly.');

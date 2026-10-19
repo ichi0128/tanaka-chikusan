@@ -99,11 +99,11 @@ function peakBetween(periods,start,end){let count=0,date=start;for(let d=start;d
 // Near-term capacity starts with physical rooms. Unknown releases remain occupied.
 function nearCapacity(f,date,{id='',wean='',enter=false}={}){
   const rooms=f.rooms||[],occupied=rooms.filter(r=>r.state!=='empty'),resident=new Set(occupied.filter(r=>r.state!=='piglets').map(r=>r.sowId));
-  let count=occupied.filter(r=>{const p=f.periods.find(p=>p.current&&p.id===r.sowId);const child=f.childStays?.find(p=>p.roomKey===r.key),stay=p?roomStay({...p,exit:r.sowId===id&&wean?wean:p.exit}):null,exit=child?.exit||stay?.exit;return !exit||exit>=date;}).length;
+  const retained=occupied.filter(r=>{const p=f.periods.find(p=>p.current&&p.id===r.sowId);const child=f.childStays?.find(p=>p.roomKey===r.key),stay=p?roomStay({...p,exit:r.sowId===id&&wean?wean:p.exit}):null,exit=child?.exit||stay?.exit;return !exit||exit>=date;});let count=retained.length;
   const incoming=f.periods.map(roomStay).filter(p=>!(resident.has(p.id)&&p.current)&&p.entry>=f.day&&p.entry<=date&&p.exit>=date&&p.id!==id);
   count+=incoming.length;
   if(enter&&!resident.has(id))count++;
-  return {count,incoming};
+  const overlaps=retained.map(r=>{const child=f.childStays?.find(p=>p.roomKey===r.key),p=f.periods.find(p=>p.current&&p.id===r.sowId);return child|| (p?roomStay({...p,exit:r.sowId===id&&wean?wean:p.exit}):{id:r.state==='piglets'?'piglets:'+r.key:r.sowId,roomKey:r.key,entry:f.day,exit:'未確定',basis:'record',source:'現在の在室記録・退室日未確定'});}).concat(incoming);return {count,incoming,overlaps};
 }
 const verdict=level=>({good:'問題なし',warn:'注意',bad:'危険'})[level];
 function compare(f,id,mating,options={}){
@@ -146,12 +146,13 @@ function weanConclusion(options){return weanAdvice(options).title;}
 function weanJudgement(f,id){const options=weanOptions(f,id,weanBaseDate(f,id)),base=options[0],advice=weanAdvice(options),capacity=capacitySummary(base),message=base.level==='good'?'このまま離乳してよさそう':base.peak>=11?capacity.message:base.heat.avoid?'次回分娩が8月の分娩回避推奨期間に重なる予測':base.peak>=9?capacity.message:base.heat.caution?'次回分娩が暑熱期間に重なる予測':base.reasons[0]||'離乳日の調整を検討';return {level:base.level,text:verdict(base.level),message,capacity,peak:base.peak,peakDate:base.peakDate,birthCount:base.birthCount,reasons:base.reasons,conclusion:advice.title,advice,options};}
 function breedingSchedules(f){return f.rows.flatMap(r=>{const p=f.periods.find(p=>p.id===r.id&&p.basis==='estimate'&&p.mating>=f.day&&p.mating<=f.end);return p?[{id:r.id,date:p.mating,label:'種付け予定（予測）',type:'種付け',forecastBreeding:true}]:[];});}
 function entryJudgement(f,id,date){
-  date=date<f.day?f.day:date;const target=f.rows.find(r=>r.id===id),p=f.periods.find(p=>p.id===id&&p.exit>=date),resident=(f.rooms||[]).some(r=>r.state!=='empty'&&r.sowId===id);
-  const days=[];for(let d=date;d<=add(date,7);d=add(d,1))days.push({date:d,...nearCapacity(f,d,{id,enter:!resident&&(!p||d<=p.exit)})});
+  date=valid(date)&&date>=f.day?date:f.day;const target=f.rows.find(r=>r.id===id),p=f.periods.find(p=>p.id===id&&p.exit>=date),resident=(f.rooms||[]).some(r=>r.state!=='empty'&&r.sowId===id);
+  const days=[];for(let d=date;d<=add(date,7);d=add(d,1)){const enter=!resident&&(!p||d<=p.exit),capacity=nearCapacity(f,d,{id,enter});if(enter)capacity.overlaps.push(p?{...roomStay(p),entry:date}:{id,entry:date,exit:'未確定',basis:'estimate',source:'指定日の移入を仮定'});days.push({date:d,...capacity});}
   const peak=days.reduce((a,b)=>b.count>a.count?b:a),unknown=f.unmodelled.length>0||f.missing.length>0,lev=peak.count>10?'bad':peak.count>=9||unknown||!target||!p?'warn':'good';
-  return {level:lev,text:verdict(lev),message:resident?'現在入室済み':lev==='bad'?'移入すると10室超過':lev==='good'?'移入可能':peak.count>=10?'近日中に満室予測':'入退室予定・空室を確認',date,peak:peak.count,peakDate:peak.date,empty:(f.rooms||[]).filter(r=>r.state==='empty').length,neighbours:peak.incoming,uncertain:unknown||!p,resident};
+  const message=lev==='bad'?'収容超過予測・日程調整が必要':peak.count===10?'満室予測・収容可能ですが余裕なし':peak.count===9?'残り1室のため注意':lev==='good'?'移入可能':'未確定の在室・日付を確認';
+  return {level:lev,text:verdict(lev),message,date,end:add(date,7),onDateCount:days[0].count,peak:peak.count,peakDate:peak.date,empty:(f.rooms||[]).filter(r=>r.state==='empty').length,projectedEmpty:Math.max(0,10-days[0].count),neighbours:peak.incoming,overlaps:peak.overlaps,uncertain:unknown||!target||!p,resident};
 }
-function decision(f,x){if(x.type==='離乳')return weanJudgement(f,x.id);if(x.type==='種付け'){const c=compare(f,x.id,x.date<f.day?f.day:x.date);return {...c,text:verdict(c.level),message:c.level==='good'?'収容・暑熱予測上は問題なし':'次の発情を1周期見送る案も確認'};}if(x.type==='分娩舎へ移動')return entryJudgement(f,x.id,f.day);return null;}
+function decision(f,x){if(x.type==='離乳')return weanJudgement(f,x.id);if(x.type==='種付け'){const c=compare(f,x.id,x.date<f.day?f.day:x.date);return {...c,text:verdict(c.level),message:c.level==='good'?'収容・暑熱予測上は問題なし':'次の発情を1周期見送る案も確認'};}if(x.type==='分娩舎へ移動')return entryJudgement(f,x.id,x.date||f.day);return null;}
 function weanSchedules(f){return f.periods.filter(p=>p.current&&p.actualBirth&&!p.actualWean).map(p=>({id:p.id,date:add(p.birth,30),label:'離乳予定',type:'離乳',forecastWean:true,roomKey:f.rows.find(r=>r.id===p.id)?.roomKey||''}));}
 root.TanakaForecast={valid,normalizeDate,add,months,distance,heat,level,status,period,pigletMove,roomStay,occupanciesFor,build,riskSegments,overlapsAt,compare,capacitySummary,weanOptions,weanBaseDate,weanJudgement,weanSchedules,weanConclusion,weanAdvice,breedingSchedules,entryJudgement,decision,nearCapacity,verdict};
 })(typeof globalThis!=='undefined'?globalThis:this);
