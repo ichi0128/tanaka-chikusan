@@ -456,3 +456,12 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 .sow-yard-swipe>.sow-card-link{scroll-snap-align:start;scroll-snap-stop:always;min-width:0;align-self:start}
 .sow-yard-swipe:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:20px}
 .sow-swipe-hint{margin:0 0 8px}.sow-yard-tools{margin-top:18px}.sow-yard-tools>.btn{margin-bottom:18px}
+
+/* Compact seven-column parity history; no horizontal scrolling on phones. */
+.sow-history-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:clamp(11px,3.2vw,14px);font-variant-numeric:tabular-nums;background:var(--surface);color:var(--text)}
+.sow-history-table col.history-parity{width:8%}.sow-history-table col.history-heads{width:9%}
+.sow-history-table th,.sow-history-table td{padding:0;border:1px solid var(--border);text-align:center;vertical-align:middle}
+.sow-history-table thead th{padding:9px 0;background:var(--soft);color:var(--softtext);font-size:12px}
+.sow-history-table button{display:block;width:100%;min-height:44px;padding:8px 0;border:0;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer}
+.sow-history-table tbody th button{font-weight:700;color:var(--accent)}.sow-history-table td button:hover{background:var(--soft)}
+.sow-history-hint{font-size:12px;margin:8px 0 12px}.sow-history-logs{margin:18px 0}.sow-history-logs>summary{cursor:pointer;color:var(--softtext)}

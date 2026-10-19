@@ -72,10 +72,36 @@ function edit(data,id,key,card,expected){
   target.revisions=[...(target.revisions||[]),{savedAt:new Date().toISOString(),card:clone(old.card)}];target.card=clone(card);target.parity=number(card.parity);target.updatedAt=new Date().toISOString();
   if(target===store.current)target.capturedKeys=events(data,id).map(l=>l.key);
 }
+// The compact history is a view of the existing parity cards, never a second ledger.
+const historyCounts=['birthCount','weanCount','nursingDays','foster','blackPiglets','crushed','weakDeaths','stillborn'];
+const historyDates=['mating','due','birthDateActual','weanDateActual'];
+function historyDate(value){
+  const text=String(value??'').trim();if(!text)return '';
+  const full=/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(text),md=/^(\d{1,2})\/(\d{1,2})$/.exec(text);
+  if(!full&&!md)throw Error('日付は 4/4 または 2026-04-04 の形で入力してください。');
+  const year=full?Number(full[1]):2000,month=Number(full?full[2]:md[1]),day=Number(full?full[3]:md[2]);
+  const iso=String(year).padStart(4,'0')+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0'),date=new Date(iso+'T00:00:00Z');
+  if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==iso)throw Error('存在する日付を入力してください。');
+  return full?iso:month+'/'+day;
+}
+function historyRows(data,id){return pages(data,id).slice().reverse();}
+function editHistory(data,id,key,patch,expected){
+  const old=pages(data,id).find(p=>p.key===key);if(!old||JSON.stringify(old)!==expected)throw Error('カードが更新されました。開き直してください。');
+  const card=clone(old.card);
+  for(const [name,value] of Object.entries(patch)){
+    if(historyDates.includes(name))card[name]=historyDate(value);
+    else if(historyCounts.includes(name)){const text=String(value??'').trim();if(text&&!/^\d+$/.test(text)||text&&!Number.isSafeInteger(Number(text)))throw Error('頭数・日数は0以上の整数で入力してください。');card[name]=text?Number(text):null;}
+    else if(['birthNote','weanNote','note'].includes(name))card[name]=String(value??'');
+    else throw Error('編集する項目を確認してください。');
+  }
+  if('birthCount' in patch||'weanCount' in patch)card.result=(card.birthCount??'')+'－'+(card.weanCount??'');
+  if('weanDateActual' in patch&&(card.weanDateActual||card.wean===old.card.weanDateActual))card.wean=card.weanDateActual;
+  edit(data,id,key,card,expected);
+}
 const validate=M.validate;
 M.validate=function(data){validate(data);for(const s of data.sows){if(!s.parityCards)continue;const p=s.parityCards;if(p.version!==1||!Array.isArray(p.history)||!p.current)throw Error('母豚の産次カード形式を確認してください。');const keys=new Set();for(const x of [...p.history,p.current]){if(!x||typeof x.key!=='string'||keys.has(x.key)||!x.card||typeof x.card!=='object'||(x.parity!==null&&number(x.parity)===null)||!Array.isArray(x.revisions))throw Error('母豚の産次カードを確認してください。');keys.add(x.key);}if(!Array.isArray(p.current.capturedKeys))throw Error('母豚カードの履歴を確認してください。');}};
 const migrate=M.migrate,commit=M.commit;
 M.migrate=function(raw){const data=migrate(raw);M.validate(data);return data;};
 M.commit=function(data,fn){const next=commit(data,fn);M.validate(next);return next;};
-root.TanakaSowParity={pages,start,edit,beforeRecord};
+root.TanakaSowParity={pages,start,edit,beforeRecord,historyRows,editHistory};
 })(typeof globalThis!=='undefined'?globalThis:this);
