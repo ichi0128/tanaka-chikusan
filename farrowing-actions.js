@@ -3,13 +3,13 @@
 'use strict';
 const F=root.TanakaForecast;
 const forward=(f,date)=>F.valid(date)&&date>=f.day;
-const span=(p)=>p.pigletsOnly?p:F.roomStay(p);
-const intersects=(p,a,b)=>p.entry<=b&&p.exit>=a;
-const maximum=(days,a,b)=>days.filter(d=>d.date>=a&&d.date<=b).reduce((best,d)=>d.count>best.count?{count:d.count,date:d.date}:best,{count:0,date:a});
+const span=p=>F.roomStay(p);
+const intersects=F.intersects;
+const maximum=F.capacityPeak;
 const graphStartAt=(f,dates)=>{const d=dates.sort()[0];return d<f.day?f.day:d;};
 const firstFuture=(f,id)=>f.periods.filter(p=>p.id===id&&p.basis==='estimate'&&p.mating>=f.day).sort((a,b)=>a.mating.localeCompare(b.mating))[0];
 const fixedCycles=f=>f.periods.filter(p=>p.basis==='record');
-function daysFor(f,occupancies,start,end){const out=[];for(let date=start;date<=end;date=F.add(date,1)){const overlaps=occupancies.filter(p=>intersects(p,date,date));out.push({date,count:overlaps.length+(f.unmodelled||[]).length,overlaps});}return out;}
+function daysFor(f,occupancies,start,end){return F.capacityDays(occupancies,start,end,F.unknownRoomStays(f));}
 function definitions(f,scope,settings){
   const out=[],pending=new Set(),records=scope.periods.filter(p=>p.basis==='record');
   for(const p of records){const next=scope.periods.find(q=>q.id===p.id&&q.basis==='estimate');if(!next||p.actualWean||!forward(f,p.exit))continue;
@@ -45,11 +45,11 @@ function simulate(f,scope,target,def,n){
   // Guard against moving the target peak to either edge of a shifted cycle. Only
   // the changed intervals are checked; an unrelated existing later peak is not a veto.
   const changedOn=date=>[...oldChanged,...newChanged].some(p=>intersects(p,date,date));
-  const newFullDays=after.filter((d,i)=>changedOn(d.date)&&d.count>=10&&d.count>before[i].count);
+  const newFullDays=after.filter((d,i)=>changedOn(d.date)&&F.capacityState(d.count).atCapacity&&d.count>before[i].count);
   const extended=def.kind==='wean'&&n>0&&n!==21,oldStay=original?span(original):null,newStay=changed?span(changed):null;
   const currentExtraDays=extended?n:0,currentRoomExtraDays=oldStay?F.distance(oldStay.exit,newStay.exit):0;
   const currentStart=oldStay?(oldStay.entry<f.day?f.day:oldStay.entry):f.day,currentEnd=oldStay?[oldStay.exit,newStay.exit].sort().at(-1):f.day;
-  const currentWorse=extended&&after.some((d,i)=>d.date>=currentStart&&d.date<=currentEnd&&d.count>before[i].count&&d.count>=9);
+  const currentWorse=extended&&after.some((d,i)=>d.date>=currentStart&&d.date<=currentEnd&&d.count>before[i].count&&F.capacityState(d.count).attention);
   const next=periods.find(p=>p.key===def.nextKey),oldHeat=anchor?F.heat(anchor.birth):null,heat=next?F.heat(next.birth):null;
   const heatWorse=!!(heat&&(!oldHeat.avoid&&heat.avoid||!oldHeat.caution&&heat.caution));
   const includedIds=new Set(scope.periods.map(p=>p.id)),uncertainty=(f.unmodelled||[]).length>0||scope.periods.some(p=>p.uncertain)||(f.rows||[]).some(r=>includedIds.has(r.id)&&r.parityUnknown);
@@ -69,7 +69,7 @@ function contextFor(f,target,focus,settings){
   const key=target.key+':'+(focus?.key||'fixed'),included=new Set(scope.periods.map(p=>p.key));
   const excluded=f.periods.filter(p=>p.basis==='estimate'&&!included.has(p.key)&&intersects(span(p),target.start,target.end));
   const context={key,focusKey:focus?.key||'',focusId:focus?.id||'',peak:peak.count,peakDate:peak.date,scopeKeys:[...included],excludedKeys:excluded.map(p=>p.key),overlaps:baseDays.find(d=>d.date===peak.date)?.overlaps||[],actions:[],recommended:null};
-  if(peak.count>=9){context.actions=definitions(f,scope,settings).filter(def=>def.kind!=='move'||F.add(def.date,-10)<=target.end&&F.add(def.date,settings.moveLater?10:0)>=target.start).map(def=>{const options=def.specs.map(n=>simulate(f,scope,target,def,n)).filter(Boolean),base=options.find(o=>o.offset===0);return {...def,key:context.key+'|'+def.key,actionKey:def.key,targetKey:target.key,contextKey:key,options,base,recommended:options.filter(o=>o.recommendable).sort(compareOrder)[0]||null};}).filter(a=>a.base);
+  if(F.capacityState(peak.count).attention){context.actions=definitions(f,scope,settings).filter(def=>def.kind!=='move'||F.add(def.date,-10)<=target.end&&F.add(def.date,settings.moveLater?10:0)>=target.start).map(def=>{const options=def.specs.map(n=>simulate(f,scope,target,def,n)).filter(Boolean),base=options.find(o=>o.offset===0);return {...def,key:context.key+'|'+def.key,actionKey:def.key,targetKey:target.key,contextKey:key,options,base,recommended:options.filter(o=>o.recommendable).sort(compareOrder)[0]||null};}).filter(a=>a.base);
     const candidates=context.actions.flatMap(a=>a.options.filter(o=>o.recommendable).map(o=>({action:a,option:o}))).sort((a,b)=>compareOrder(a.option,b.option));
     if(candidates[0]){const winner=candidates[0];context.recommended={actionKey:winner.action.key,offset:winner.option.offset};winner.option.recommendedFor=[target.key];}
   }
@@ -96,9 +96,9 @@ function nextCorrection(f,id,weanDate='',matingDate=''){
   const next=n?shifted(source,n):{...source};if(parent&&F.valid(weanDate))parent.exit=weanDate;
   const scope={periods:[...periods,next],children:f.childStays||[]},occupancies=[...scope.periods.map(span),...scope.children],stay=span(next),days=daysFor(f,occupancies,next.entry,stay.exit),peak=maximum(days,next.entry,stay.exit),heat=F.heat(next.birth),age=parent&&F.valid(weanDate)?F.distance(parent.birth,weanDate):null;
   const uncertainty=(f.unmodelled||[]).length>0||scope.periods.some(p=>p.uncertain)||(f.rows||[]).some(r=>scope.periods.some(p=>p.id===r.id)&&r.parityUnknown);
-  const originalParent=originalPeriods.find(p=>p.key===parent?.key),holdEnd=parent?span(parent).exit:f.day,holdStart=originalParent?span(originalParent).exit:f.day,hold=n>0&&holdEnd>holdStart?daysFor(f,occupancies,F.add(holdStart,1),holdEnd).filter(d=>d.count>daysFor(f,[...originalPeriods.map(span),span(source),...scope.children],d.date,d.date)[0].count).reduce((b,d)=>d.count>b.count?{count:d.count,date:d.date}:b,{count:0,date:''}):{count:0,date:''};
+  const originalParent=originalPeriods.find(p=>p.key===parent?.key),holdEnd=parent?span(parent).exit:f.day,holdStart=originalParent?span(originalParent).exit:f.day,holdDays=n>0&&holdEnd>holdStart?daysFor(f,occupancies,F.add(holdStart,1),holdEnd).filter(d=>d.count>daysFor(f,[...originalPeriods.map(span),span(source),...scope.children],d.date,d.date)[0].count) :[],hold=F.capacityPeak(holdDays);
   const unavailable=!!matingDate&&originalPeriods.some(p=>p.id===id&&F.add(p.exit,4)>next.mating);
-  const level=peak.count>=11||hold.count>=11||heat.avoid?'bad':peak.count>=9||hold.count>=9||heat.caution||uncertainty||unavailable||age!==null&&age<30?'warn':'good';
+  const capacity=F.capacityState(Math.max(peak.count,hold.count)),level=capacity.over||heat.avoid?'bad':capacity.attention||heat.caution||uncertainty||unavailable||age!==null&&age<30?'warn':'good';
   return {capacityDays:days.map(d=>({date:d.date,count:d.count})),peak:peak.count,peakDate:peak.date,level,heat,age,uncertainty,unavailable,holdPeak:hold.count,holdDate:hold.date,mating:next.mating,birth:next.birth,due:next.due,entry:next.entry,exit:stay.exit};
 }
 function targetForDate(plan,date){return plan.targets.find(t=>t.start<=date&&t.end>=date)||null;}
@@ -112,7 +112,7 @@ function guidanceChoice(j,plan){
     const graph=new Map(o.graph.map(d=>[d.date,d]));
     // Do not promise a result from another cohort or from only part of this view.
     if(days.some(d=>!graph.has(d.date)||graph.get(d.date).before!==d.count))continue;
-    const after=Math.max(...days.map(d=>graph.get(d.date).after));if(after>=j.peak||after>goal)continue;
+    const after=F.capacityPeak(days.map(d=>({date:d.date,count:graph.get(d.date).after}))).count;if(after>=j.peak||after>goal)continue;
     candidates.push({action:a,option:o,peak:after,targetKey:t.key,contextKey:c.key});
   }
   return candidates.sort((a,b)=>compareOrder(a.option,b.option))[0]||null;
@@ -120,14 +120,14 @@ function guidanceChoice(j,plan){
 function workGuidance(f,x,j,plan={targets:[]}){
   if(!j||j.level==='good')return null;
   const entry=x.type==='分娩舎へ移動',date=j.date||x.date||f.day,md=d=>F.valid(d)?Number(d.slice(5,7))+'/'+Number(d.slice(8,10)):'予定日',uncertain=!!(j.uncertain||j.uncertainty),steps=[];
-  const peak=j.peak||0,required=peak>=11?peak-10:peak===10?1:0,deadline=j.peakDate||date,firstProblem=(j.capacityDays||[]).find(d=>d.count>10)?.date||deadline;
+  const peak=j.peak||0,capacity=F.capacityState(peak),required=capacity.over?capacity.shortage:capacity.full?1:0,deadline=j.peakDate||date,firstProblem=(j.capacityDays||[]).find(d=>F.capacityState(d.count).over)?.date||deadline;
   const within=!(uncertain||j.heat?.caution||j.unavailable||(j.holdPeak||0)>=9||j.age!=null&&j.age<30),possible=entry?'収容予測上は'+md(date)+'の移入は予定どおり可能です。':'収容予測上、予定どおりでも収容範囲内です。';
-  if(peak>=11){
+  if(capacity.over){
     const start=entry?(j.onDateCount>10?md(date)+'の移入は当日から収容超過の見込みです。そのまま移入せず、受入枠を確認してください。':md(date)+'の移入当日は収容範囲内ですが、'+md(firstProblem)+'から収容超過の見込みです。'):'このままの'+(x.type==='離乳'?'離乳':x.type==='種付け'?'種付け':'予定')+'では、'+md(firstProblem)+'から収容超過の見込みです。';
     steps.push(start+md(deadline)+'までに最低'+required+'室空ける対策を確認してください。');
-  }else if(peak===10){
+  }else if(capacity.full){
     steps.push((within?possible:'')+md(deadline)+'に満室になるため、それまでに1室空けられるか確認してください。');
-  }else if(peak===9){
+  }else if(capacity.attention){
     steps.push((within?possible:'')+md(deadline)+'は残り1室です。予定日前に入退室を確認し、空室1室を維持できるか確認してください。');
   }
   if(j.holdPeak>=9)steps.push('離乳日の延長で今の部屋を長く使います。'+md(j.holdDate)+'の入室予定と受入枠を確認してから調整してください。');
