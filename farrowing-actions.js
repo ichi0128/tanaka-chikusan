@@ -99,9 +99,44 @@ function nextCorrection(f,id,weanDate='',matingDate=''){
   const originalParent=originalPeriods.find(p=>p.key===parent?.key),holdEnd=parent?span(parent).exit:f.day,holdStart=originalParent?span(originalParent).exit:f.day,hold=n>0&&holdEnd>holdStart?daysFor(f,occupancies,F.add(holdStart,1),holdEnd).filter(d=>d.count>daysFor(f,[...originalPeriods.map(span),span(source),...scope.children],d.date,d.date)[0].count).reduce((b,d)=>d.count>b.count?{count:d.count,date:d.date}:b,{count:0,date:''}):{count:0,date:''};
   const unavailable=!!matingDate&&originalPeriods.some(p=>p.id===id&&F.add(p.exit,4)>next.mating);
   const level=peak.count>=11||hold.count>=11||heat.avoid?'bad':peak.count>=9||hold.count>=9||heat.caution||uncertainty||unavailable||age!==null&&age<30?'warn':'good';
-  return {peak:peak.count,peakDate:peak.date,level,heat,age,uncertainty,unavailable,holdPeak:hold.count,holdDate:hold.date,mating:next.mating,birth:next.birth,due:next.due,entry:next.entry,exit:stay.exit};
+  return {capacityDays:days.map(d=>({date:d.date,count:d.count})),peak:peak.count,peakDate:peak.date,level,heat,age,uncertainty,unavailable,holdPeak:hold.count,holdDate:hold.date,mating:next.mating,birth:next.birth,due:next.due,entry:next.entry,exit:stay.exit};
 }
 function targetForDate(plan,date){return plan.targets.find(t=>t.start<=date&&t.end>=date)||null;}
 function actionsForDate(plan,date){return targetForDate(plan,date)?.context.actions||[];}
-Object.assign(F,{planActions,targetForDate,actionsForDate,nextCorrection});
+// Guidance reads the existing comparisons; it never adopts or saves an option.
+function guidanceChoice(j,plan){
+  const days=j.capacityDays||[];if(!days.length||j.peak<9||j.uncertain||j.uncertainty||j.unavailable||(j.holdPeak||0)>=9||j.age!=null&&j.age<30)return null;
+  const goal=j.peak>=11?10:j.peak===10?9:8,candidates=[];
+  for(const t of plan.targets||[])if(t.start<=days.at(-1).date&&t.end>=days[0].date)for(const c of t.contexts)for(const a of c.actions)for(const o of a.options){
+    if(!o.offset||!o.effective||o.currentWorse||o.newFullDays.length||o.uncertainty||o.heatWorse)continue;
+    const graph=new Map(o.graph.map(d=>[d.date,d]));
+    // Do not promise a result from another cohort or from only part of this view.
+    if(days.some(d=>!graph.has(d.date)||graph.get(d.date).before!==d.count))continue;
+    const after=Math.max(...days.map(d=>graph.get(d.date).after));if(after>=j.peak||after>goal)continue;
+    candidates.push({action:a,option:o,peak:after,targetKey:t.key,contextKey:c.key});
+  }
+  return candidates.sort((a,b)=>compareOrder(a.option,b.option))[0]||null;
+}
+function workGuidance(f,x,j,plan={targets:[]}){
+  if(!j||j.level==='good')return null;
+  const entry=x.type==='分娩舎へ移動',date=j.date||x.date||f.day,md=d=>F.valid(d)?Number(d.slice(5,7))+'/'+Number(d.slice(8,10)):'予定日',uncertain=!!(j.uncertain||j.uncertainty),steps=[];
+  const peak=j.peak||0,required=peak>=11?peak-10:peak===10?1:0,deadline=j.peakDate||date,firstProblem=(j.capacityDays||[]).find(d=>d.count>10)?.date||deadline;
+  const within=!(uncertain||j.heat?.caution||j.unavailable||(j.holdPeak||0)>=9||j.age!=null&&j.age<30),possible=entry?'収容予測上は'+md(date)+'の移入は予定どおり可能です。':'収容予測上、予定どおりでも収容範囲内です。';
+  if(peak>=11){
+    const start=entry?(j.onDateCount>10?md(date)+'の移入は当日から収容超過の見込みです。そのまま移入せず、受入枠を確認してください。':md(date)+'の移入当日は収容範囲内ですが、'+md(firstProblem)+'から収容超過の見込みです。'):'このままの'+(x.type==='離乳'?'離乳':x.type==='種付け'?'種付け':'予定')+'では、'+md(firstProblem)+'から収容超過の見込みです。';
+    steps.push(start+md(deadline)+'までに最低'+required+'室空ける対策を確認してください。');
+  }else if(peak===10){
+    steps.push((within?possible:'')+md(deadline)+'に満室になるため、それまでに1室空けられるか確認してください。');
+  }else if(peak===9){
+    steps.push((within?possible:'')+md(deadline)+'は残り1室です。予定日前に入退室を確認し、空室1室を維持できるか確認してください。');
+  }
+  if(j.holdPeak>=9)steps.push('離乳日の延長で今の部屋を長く使います。'+md(j.holdDate)+'の入室予定と受入枠を確認してから調整してください。');
+  if(j.heat?.caution)steps.push('分娩予測'+md(j.birth)+'は'+(j.heat.avoid?'8月の分娩回避推奨期間':'暑熱注意期間')+'です。1周期見送り案と収容・暑熱予測を比較し、暑熱対策を確認してください。');
+  if(uncertain)steps.push('未確定の在室・日付を確認してください。空室を実際に確認してから実施日を判断してください。');
+  if(j.unavailable)steps.push('現在の妊娠・授乳記録と種付け予定が重なっています。母豚カードの日付を確認してください。');
+  if(j.age!==null&&j.age!==undefined&&j.age<30)steps.push('基準日では授乳'+j.age+'日です。あと'+(30-j.age)+'日で30日になるため、実分娩日と離乳予定日を確認してください。');
+  if(!steps.length)steps.push('予定日の入退室と母豚カードの日付を確認し、年間予測の対象期間で調整案を比較してください。');
+  return {steps,required,deadline,firstProblem,proposal:guidanceChoice(j,plan)};
+}
+Object.assign(F,{workGuidance,guidanceChoice,planActions,targetForDate,actionsForDate,nextCorrection});
 })(typeof globalThis!=='undefined'?globalThis:this);
