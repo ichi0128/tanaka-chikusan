@@ -95,7 +95,9 @@
     }
     check(rooms);
   }
-  root.TanakaFinishing={TYPES,empty,roomKind,group,yardState,yardPig,yardBirthMonth,validIndividuals,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?yardState(r):{...r,kind:roomKind(r.kind)})};
+  // Candidate is a marker within meat stock until the selected pigs enter yard.
+  function meatTotal(state){return state.finishing.reduce((sum,r)=>sum+(r.key==='yard'?yardState(r).individuals.filter(p=>(root.TanakaGilts?.yardKind(p,state)||p.kind)==='肉豚').length:r.state==='occupied'&&['肉豚','育成母豚候補'].includes(roomKind(r.kind))?r.count:0),0);}
+  root.TanakaFinishing={meatTotal,TYPES,empty,roomKind,group,yardState,yardPig,yardBirthMonth,validIndividuals,validGroup,validYard,check,baseline,apply,current:rooms=>rooms.map(r=>r.key==='yard'?yardState(r):{...r,kind:roomKind(r.kind)})};
 })(typeof globalThis!=='undefined'?globalThis:this);
 
 // Shipment history adjustments never change the replayed room ledger.

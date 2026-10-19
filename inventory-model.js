@@ -45,11 +45,11 @@ function snapshot(data,state,date,roomBirthDate){
   })]);
 }
 // Old room records keep their stored values; stage names are a display/counting projection.
-function rowKind(row){return row.kind==='育成母豚'&&row.area!=='yard'?'育成母豚候補':row.kind;}
+function rowKind(row){if(row.area==='yard'&&row.kind==='育成母豚候補')return '育成母豚';return row.kind==='育成母豚'&&row.area!=='yard'?'育成母豚候補':row.kind;}
 function aggregate(rows){
   const totals=Object.fromEntries(CATEGORIES.map(k=>[k,0]));let gilts=0,candidates=0,sows=0,unclassified=0,unknown=0,headTotal=0;
   for(const r of rows){if(r.count===null){unknown++;continue;}headTotal+=r.count;const kind=rowKind(r);
-    if(kind==='育成母豚候補'){candidates+=r.count;continue;}if(kind==='育成母豚'){gilts+=r.count;continue;}if(kind==='母豚'){sows+=r.count;continue;}
+    if(kind==='育成母豚候補')candidates+=r.count;if(kind==='育成母豚'){gilts+=r.count;continue;}if(kind==='母豚'){sows+=r.count;continue;}
     if(!r.count)continue;if(CATEGORIES.includes(r.category))totals[r.category]+=r.count;else unclassified+=r.count;
   }
   return {totals,gilts,candidates,sows,unclassified,unknown,headTotal,total:Object.values(totals).reduce((a,b)=>a+b,0)};
@@ -142,7 +142,8 @@ function validateReport(r,month,history=false){
     if(row.area==='yard'&&row.yardIndividual===1&&row.count!==null&&row.count>1)fail('運動場は1頭につき1行で入力してください。');
     keys.add(row.key);
   }
-  if(r.status==='confirmed'){const s=aggregate(r.rows.filter(row=>row.area!=='yard'));if(s.unknown||s.unclassified)fail('未入力の頭数・要確認の体重区分を確認してから確定してください。');}
+  // Older confirmed reports could leave candidate weights blank. Keep them restorable.
+  if(r.status==='confirmed'){const s=aggregate(r.rows.filter(row=>row.area!=='yard'&&rowKind(row)!=='育成母豚候補'));if(s.unknown||s.unclassified)fail('未入力の頭数・要確認の体重区分を確認してから確定してください。');}
   if(!history){if(!Array.isArray(r.revisions))fail('頭数調べの履歴形式を確認してください。');for(const entry of r.revisions){if(!entry||!validDate(entry.savedAt?.slice(0,10)))fail('履歴の日付を確認してください。');validateReport(entry.report,month,true);}}
 }
 function validate(data){
@@ -155,6 +156,7 @@ function saveReport(data,report,expected){
   if(JSON.stringify(old??null)!==expected)fail('別の画面で月次記録が変わりました。開き直してください。');
   const next=clone(report);next.rows=individualYardRows(next.rows);next.updatedAt=new Date().toISOString();
   next.revisions=old?[...(old.revisions||[]),{savedAt:next.updatedAt,report:(()=>{const p=clone(old);delete p.revisions;return p;})()}]:[];
+  if(next.status==='confirmed'){const stats=aggregate(next.rows.filter(row=>row.area!=='yard'));if(stats.unknown||stats.unclassified)fail('未入力の頭数・要確認の体重区分を確認してから確定してください。');}
   validateReport(next,next.month);data.inventoryMonths=data.inventoryMonths||{};data.inventoryMonths[next.month]=next;
 }
 function gilts(state){return state.finishing.filter(r=>r.key==='yard').flatMap(r=>root.TanakaFinishing.yardState(r).individuals).filter(p=>(root.TanakaGilts?.yardKind(p,state)||p.kind)==='育成母豚').length;}
