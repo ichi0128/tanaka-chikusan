@@ -450,3 +450,9 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 .home-location-counts>span{display:flex;align-items:baseline;justify-content:center;gap:3cqw;white-space:nowrap}
 .home-location-counts small{font-size:clamp(10px,9cqw,16px);font-weight:600;line-height:1.15}
 .home-location-counts strong{font-size:clamp(21px,17cqw,34px);font-weight:800;line-height:1.05}
+
+/* One existing sow card per horizontal viewport; room and detail cards stay unchanged. */
+.sow-yard-swipe{display:grid;grid-auto-flow:column;grid-auto-columns:100%;gap:14px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-inline:0;padding:3px 0 8px;direction:ltr}
+.sow-yard-swipe>.sow-card-link{scroll-snap-align:start;scroll-snap-stop:always;min-width:0;align-self:start}
+.sow-yard-swipe:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:20px}
+.sow-swipe-hint{margin:0 0 8px}.sow-yard-tools{margin-top:18px}.sow-yard-tools>.btn{margin-bottom:18px}
