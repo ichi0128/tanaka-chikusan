@@ -1,5 +1,24 @@
 (function(){'use strict';const M=TanakaModel,replay=M.replay;
   function addDays(date,days){const d=new Date(date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
+  // Shared card projection: confirmation and subsequent mating are separate facts.
+  function applyReproductionEvent(card,log){
+    if(log.type==='再発情確認'){
+      card.reheatCount=(Number(card.reheatCount)||0)+1;
+      card.reheatPending=true;card.lastReheatDate=log.date;card.lastReheatKey=log.key;
+      card.failedMating=log.failedMating||{date:card.mating||'',boar:card.boar||'',due:card.due||''};
+      card.reproductionStatus='再種付け待ち';
+      card.reheat='';card.due='';card.swimgen='';
+    }else if(log.type==='種付け'){
+      // Older remating-only records still count; a confirmed return counts once.
+      if(log.remating&&!card.reheatPending&&!log.reheatConfirmationKey)card.reheatCount=(Number(card.reheatCount)||0)+1;
+      card.reheatPending=false;card.reproductionStatus='種付け済み';
+      card.boar=log.boar||'';card.mating=log.date;card.reheat=addDays(log.date,21);card.due=addDays(log.date,114);card.swimgen=addDays(log.date,100);
+    }else if(log.type==='分娩'){
+      card.reheatPending=false;card.reproductionStatus='分娩済み';
+    }
+    return card;
+  }
+  M.applyReproductionEvent=applyReproductionEvent;
   function schedules(data,day){
     if(!day){const d=new Date();day=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
     const state=replay(data),out=[];
@@ -8,6 +27,7 @@
       const logs=data.logs.filter(l=>!l.legacy&&l.id===sow.id);
       const last=type=>logs.filter(l=>l.type===type).sort((a,b)=>a.date.localeCompare(b.date)||data.logs.indexOf(a)-data.logs.indexOf(b)).at(-1);
       const mating=last('種付け'),birth=last('分娩');
+      if(M.isReheatPending(data,sow.id))continue;
       function add(base,days,label,type){
         const date=addDays(base.date,days);
         const complete=logs.filter(l=>l.type===type&&l.date>=base.date&&data.logs.indexOf(l)>data.logs.indexOf(base)).at(-1);
@@ -57,13 +77,19 @@ function sowCard(data,id){
   const md=date=>date?Number(date.slice(5,7))+'/'+Number(date.slice(8,10)):'';
   if(mating){c.boar=mating.boar||'未入力';c.mating=md(mating.date);c.reheat=md(addDays(mating.date,21));c.due=md(addDays(mating.date,114));c.swimgen=md(addDays(mating.date,100));}
   if(wean){c.wean=md(wean.date);const previous=logs.filter(l=>l.type==='分娩'&&l.date<=wean.date).at(-1);c.result=(previous?.count??'―')+'－'+(wean.count??'―');}
-  const swim=last('スイムジェン 実施');if(swim&&(!mating||swim.date>=mating.date))c.swimgen=md(swim.date)+' 済';
-  c.reheatCount=(birth?0:Number(c.reheatCount)||0)+logs.filter(l=>l.type==='種付け'&&l.remating&&(!birth||l.date>birth.date)).length;
+  const swim=last('スイムジェン 実施');
+  c.reheatCount=birth?0:Number(c.reheatCount)||0;
+  for(const log of logs.filter(l=>!birth||l.date>birth.date))applyReproductionEvent(c,log);
+  for(const name of ['mating','reheat','due','swimgen'])if(/^\d{4}-\d{2}-\d{2}$/.test(c[name]||''))c[name]=md(c[name]);
+  if(swim&&(!mating||swim.date>=mating.date)&&!c.reheatPending)c.swimgen=md(swim.date)+' 済';
+  const current=globalThis.TanakaSowParity?.pages(data,id)[0]?.card;
+  if(current){for(const name of ['reheatCount','reheatPending','lastReheatDate','lastReheatKey','failedMating','reproductionStatus'])if(name in current)c[name]=M.clone(current[name]);if(current.reheatPending){c.due='';c.reheat='';c.swimgen='';}}
   return c;
 }
 // Annual farm-wide notices use the saved settings, independently of sow care.
 M.farmReminders=function(day,data){return TanakaReminders.entries(data,day);};
 M.sowCard=sowCard;
+M.isReheatPending=(data,id)=>!!(globalThis.TanakaSowParity?.pages(data,id)[0]?.card||sowCard(data,id)).reheatPending;
 for(const t of ['再発情確認','バイコックス 実施','レシュピシュア 実施','フォステラ 実施'])if(!M.TYPES.includes(t))M.TYPES.push(t);M.addDays=addDays;M.schedules=schedules;
 const migrate=M.migrate;
 M.migrate=function(raw){

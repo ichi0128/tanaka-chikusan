@@ -6,10 +6,7 @@ const blank=(s,parity)=>({birth:s.cardBaseline?.birth||'',mother:s.cardBaseline?
 const number=v=>v!==''&&v!==null&&v!==undefined&&Number.isSafeInteger(Number(v))&&Number(v)>=0?Number(v):null;
 function apply(card,events){
   for(const l of events){
-    if(l.type==='種付け'){
-      card.boar=l.boar||'';card.mating=l.date;card.reheat=M.addDays(l.date,21);card.due=M.addDays(l.date,114);card.swimgen=M.addDays(l.date,100);
-      if(l.remating)card.reheatCount=(Number(card.reheatCount)||0)+1;
-    }
+    M.applyReproductionEvent(card,l);
     if(l.type==='分娩'){card.birthDateActual=l.date;card.birthTime=l.birthTime||'';card.birthCount=l.count??null;card.stillborn=l.stillborn??null;card.birthNote=l.note||'';card.result=(l.count??'')+'－';}
     if(l.type==='離乳'){card.wean=l.date;card.weanDateActual=l.date;card.weanCount=l.count??null;card.weanNote=l.note||'';card.result=(card.birthCount??'')+'－'+(l.count??'');}
     if(l.type==='スイムジェン 実施')card.swimgen=l.date+' 済';
@@ -34,9 +31,9 @@ function pages(data,id){
   const births=logs.filter(l=>l.type==='分娩');
   for(let i=0;i<births.length;i++){
     const b=births[i],at=logs.indexOf(b),end=i+1<births.length?logs.indexOf(births[i+1]):logs.length,previous=i?logs.indexOf(births[i-1]):-1;
-    const mating=logs.slice(previous+1,at).filter(l=>l.type==='種付け');
+    const mating=logs.slice(previous+1,at).filter(l=>['種付け','再発情確認'].includes(l.type));
     const parity=base===null?null:base+i+1,card=blank(s,parity);
-    apply(card,[...mating,b,...logs.slice(at+1,end).filter(l=>l.type==='離乳'||l.type==='スイムジェン 実施')]);
+    apply(card,[...mating,b,...logs.slice(at+1,end).filter(l=>l.type==='離乳'||l.type==='スイムジェン 実施'||l.type==='再発情確認')]);
     out.push({key:'birth:'+b.key,parity,card,source:'出産履歴',revisions:[]});
   }
   const lastBirth=births.at(-1),after=lastBirth?logs.slice(logs.indexOf(lastBirth)+1):logs;
@@ -59,6 +56,14 @@ function start(data,id,expected){
 }
 function beforeRecord(data,id,log){
   const current=pages(data,id)[0];if(!current)return;
+  if(log.type==='再発情確認'){
+    if(current.card.reheatPending)throw Error('既に再種付け待ちです。実際に種付けしたときに記録してください。');
+    const store=ensure(data,id);
+    if(store.current.source==='元カード')store.current.source='作業履歴';
+    log.failedMating={date:current.card.mating||'',boar:current.card.boar||'',due:current.card.due||'',parity:current.parity};
+    return;
+  }
+  if(log.type==='種付け'&&current.card.reheatPending){log.remating=true;log.reheatConfirmationKey=current.card.lastReheatKey;return;}
   if(log.type==='種付け'&&!log.remating&&current.card.birthDateActual&&current.card.weanDateActual)start(data,id);
   else if(log.type==='分娩'&&current.source==='元カード'){
     start(data,id);

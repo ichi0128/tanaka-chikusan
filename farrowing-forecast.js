@@ -60,6 +60,7 @@ function build(data,day){
   for(const target of rows){
     const s=target.sow,logs=data.logs.map((l,i)=>({...l,index:i})).filter(l=>!l.legacy&&l.id===target.id&&valid(l.date)).sort((a,b)=>a.date.localeCompare(b.date)||a.index-b.index);
     const last=t=>logs.filter(l=>l.type===t).at(-1),card=s?(root.TanakaSowParity.pages(data,s.id)[0]?.card||s.cardBaseline||{}):{};
+    if(card.reheatPending){target.missing='再種付け待ち（前回の種付けは不成立）';continue;}
     const pick=(value,fallback)=>valid(value)?value:valid(fallback)?fallback:'';
     const matingAnchor=last('種付け')?.date||(card.mating===s?.cardBaseline?.mating?String(card.mating||'').replace(/^(\d{1,2})\/(\d{1,2})$/,(_,m,d)=>'2026-'+m.padStart(2,'0')+'-'+d.padStart(2,'0')):''),mating=pick(normalizeDate(card.mating,matingAnchor),last('種付け')?.date),birth=pick(normalizeDate(card.birthDateActual,last('分娩')?.date||(mating?add(mating,121):'')),last('分娩')?.date),wean=pick(normalizeDate(card.weanDateActual,last('離乳')?.date||(birth?add(birth,30):'')),last('離乳')?.date),normalizedDue=normalizeDate(card.due,mating?add(mating,114):'');
     const room=state.rooms.find(r=>['family','waiting'].includes(r.state)&&r.sowId===target.id);
