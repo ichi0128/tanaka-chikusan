@@ -40,8 +40,8 @@ document.addEventListener('change',e=>{
 function changeSimulationDay(day){
   if(!simulation)return;
   if(!TanakaForecast.valid(day)||day<simulation.baseDay)throw Error('シミュレーション開始日以降の日付を選んでください。');
-  if(simulation.manuallyEdited&&!window.confirm('日付を変更すると、開始時の本番コピーから再計算します。途中の仮編集は破棄されます。続けますか？')){render();return;}
-  const result=TanakaSimulationFarm.advance(simulation.initial,simulation.baseDay,day),nextState=M.replay(result.data);
+  const checkpoint=(simulation.checkpoints||[]).filter(x=>x.day<=day).sort((a,b)=>b.day.localeCompare(a.day))[0];
+  const result=TanakaSimulationFarm.advance(checkpoint?.data||simulation.initial,checkpoint?.day||simulation.baseDay,day),nextState=M.replay(result.data);
   // Commit atomically to the existing memory-only session, never through persistence.
   dataSession++;db=result.data;state=nextState;simulation.day=day;simulation.progress=result;
   simulation.eventTotal=result.events.length;simulation.manuallyEdited=false;
@@ -52,7 +52,7 @@ function simulationProgressSummary(){
   if(!simulation)return '';
   const progress=simulation.progress||{events:[],blocked:[]};
   const counts=Object.fromEntries(['分娩','離乳','子豚移動','肉豚舎へ移動'].map(type=>[type,db.logs.filter(l=>l.origin==='simulation'&&l.type===type).length]));
-  return `<section class="simulation-progress notice"><b>予測・仮想状態（実績ではありません）</b><p>予測分娩 ${counts['分娩']}件 ／ 仮想離乳 ${counts['離乳']}件 ／ 育成舎へ ${counts['子豚移動']}件 ／ 肉豚舎へ ${counts['肉豚舎へ移動']}件</p><details><summary>進行ルール・仮定を確認</summary><p>既存の年間予測に沿って、予定日＋7日で予測分娩、30日後に仮想離乳、子豚移動の実績がなければ60日齢で育成舎へ移動、育成舎入室から30日後に肉豚舎へ移動します。仮頭数は同じ母豚の直近の出生実績を使用し、不明なら未入力です。減耗・出荷は自動で行いません。番号未設定の育成母豚は自動採番しません。受入先が満室なら、元の部屋から出したうえで「仮想受入待ち」に頭数を保持します。実在する空室がある扱いにはしません。</p><p>日付を前後に変更するたび、開始時の本番コピーから再計算します。途中の手修正は引き継ぎません。開始日より前の状態は再現しません。</p></details>${simulationWaitingNotice()}${progress.blocked.length?`<details open><summary>未進行 ${progress.blocked.length}件・収容先などを確認</summary>${progress.blocked.map(x=>`<p>${esc(x.planned)} ${esc(state.sows[x.id]?sowIdentityLabel(x.id):x.roomKey||x.nurseryKey||x.id)}：${esc(x.reason)}</p>`).join('')}<button type="button" class="btn secondary" data-action="simulation-progress">開始時コピーから再計算</button></details>`:''}</section>`;
+  return `<section class="simulation-progress notice"><b>予測・仮想状態（実績ではありません）</b><p>予測分娩 ${counts['分娩']}件 ／ 仮想離乳 ${counts['離乳']}件 ／ 育成舎へ ${counts['子豚移動']}件 ／ 肉豚舎へ ${counts['肉豚舎へ移動']}件</p><details><summary>進行ルール・仮定を確認</summary><p>既存の年間予測に沿って、予定日＋7日で予測分娩、30日後に仮想離乳、子豚移動の実績がなければ60日齢で育成舎へ移動、育成舎入室から30日後に肉豚舎へ移動します。仮頭数は同じ母豚の直近の出生実績を使用し、不明なら未入力です。肉豚は生後8か月の到達日に仮想出荷します（候補豚を含み、正式な育成母豚は除外）。誕生日不明の豚は自動出荷しません。減耗は自動計算しません。番号未設定の育成母豚は自動採番しません。受入先が満室なら、元の部屋から出したうえで「仮想受入待ち」に頭数を保持します。実在する空室がある扱いにはしません。</p><p>開始時コピーと仮編集から日付ごとに再計算します。仮編集は編集日以降に引き継ぎ、手動で出荷・移動・頭数などを変えた肉豚群は自動出荷しません。編集日より前にはその変更を適用しません。開始日より前の状態は再現しません。</p></details>${simulationShipmentSummary()}${simulationWaitingNotice()}${progress.blocked.length?`<details open><summary>未進行 ${progress.blocked.length}件・収容先などを確認</summary>${progress.blocked.map(x=>`<p>${esc(x.planned)} ${esc(state.sows[x.id]?sowIdentityLabel(x.id):x.roomKey||x.nurseryKey||x.id)}：${esc(x.reason)}</p>`).join('')}<button type="button" class="btn secondary" data-action="simulation-progress">仮編集を含めて再計算</button></details>`:''}</section>`;
 }
 function simulationGroupBadge(area,key){
   if(!simulation)return '';const labels=TanakaSimulationFarm.labels(db,state),text=labels[area]?.[key];return text?`<span class="badge simulation-prediction">${esc(text)}</span>`:'';
@@ -80,3 +80,8 @@ function simulationWaitingList(area){
 function simulationWaitingEdit(key){const old=simulationVirtualGroups().find(g=>g.key===key);if(!old)return;const expected=JSON.stringify(old);form('仮想受入待ちの子豚を編集',`${field('count','頭数',old.count??'','number')}${field('birthDate','誕生日',old.birthDate,'date')}${field('entered','仮想移動日',old.entered,'date')}`,'仮データを変更',f=>save(d=>{const group=d.simulationProjection.virtualGroups.find(g=>g.key===key);if(JSON.stringify(group)!==expected)throw Error('仮データが変わりました。開き直してください。');const count=f.get('count');if(count!==''&&(!/^\d+$/.test(count)||!Number.isSafeInteger(Number(count))))throw Error('頭数を確認してください。');group.count=count===''?null:Number(count);if(group.count===0){d.simulationProjection.virtualGroups=d.simulationProjection.virtualGroups.filter(g=>g.key!==key);return;}for(const k of ['birthDate','entered']){const date=f.get(k);if(date&&!TanakaForecast.valid(date))throw Error('日付を確認してください。');group[k]=date;}if(!group.entered)throw Error('仮想移動日を入力してください。');}));}
 function simulationWaitingPlace(key){const group=simulationVirtualGroups().find(g=>g.key===key);if(!group)return;save(d=>TanakaSimulationFarm.placeWaiting(d,key,today()));}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-action="simulation-waiting-edit"],[data-action="simulation-waiting-place"]');if(!b)return;try{if(b.dataset.action==='simulation-waiting-edit')simulationWaitingEdit(b.dataset.id);else simulationWaitingPlace(b.dataset.id);}catch(err){toast(err.message);}});
+
+function simulationShipmentSummary(){
+  const records=db.simulationProjection?.virtualShipments||[];if(!records.length)return '';
+  return `<details><summary>仮想出荷 ${records.reduce((n,r)=>n+r.count,0)}頭（実出荷履歴には含めません）</summary>${records.map(r=>`<p>${esc(r.date)} ／ ${esc(r.place==='waiting'?'肉豚舎・受入待ち':finishingPlace(r.place))} ／ ${r.count}頭 ／ ${esc(r.birthDate)}生まれ</p>`).join('')}</details>`;
+}

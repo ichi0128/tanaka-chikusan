@@ -15,7 +15,7 @@ const names={waiting:'分娩待ち',family:'授乳',piglets:'離乳',empty:'空�
 const roomName=r=>r.state==='empty'?'空き':(r.mixed?'混成':r.sowId?'母豚 '+r.sowId:names[r.state]||'分娩舎')+(r.state==='piglets'&&r.count!==null?' · '+r.count+'頭':'');
 const dateText=l=>l.date|| (l.t&&Number.isFinite(Date.parse(l.t))?new Date(l.t).toLocaleString('ja-JP'): '日付未確認');
 function toast(s){document.getElementById('toast').textContent=s;document.getElementById('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>document.getElementById('toast').classList.remove('show'),3500);}
-function save(fn){if(simulation){db=M.commit(db,fn);simulation.manuallyEdited=true;state=M.replay(db);render();return;}if(localStorage.getItem(KEY)!==JSON.stringify(db))throw Error('別画面でデータが変更されました。画面を開き直してから保存してください。');const next=M.commit(db,fn);localStorage.setItem(KEY,JSON.stringify(next));db=next;state=M.replay(db);render();if(typeof cloudStore!=='undefined')cloudStore.localChanged();}
+function save(fn){if(simulation){const before=db;db=M.commit(db,fn);TanakaSimulationFarm.protectManualChanges(before,db);simulation.checkpoints=(simulation.checkpoints||[]).filter(x=>x.day<simulation.day);simulation.checkpoints.push({day:simulation.day,data:M.clone(db)});simulation.manuallyEdited=true;state=M.replay(db);render();return;}if(localStorage.getItem(KEY)!==JSON.stringify(db))throw Error('別画面でデータが変更されました。画面を開き直してから保存してください。');const next=M.commit(db,fn);localStorage.setItem(KEY,JSON.stringify(next));db=next;state=M.replay(db);render();if(typeof cloudStore!=='undefined')cloudStore.localChanged();}
 try{
   const stored=localStorage.getItem(KEY),raw=stored===null?null:JSON.parse(stored);
   db=M.migrate(raw);state=M.replay(db);
