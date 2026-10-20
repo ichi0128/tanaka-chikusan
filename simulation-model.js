@@ -14,7 +14,10 @@ function advance(source,from,to){
   if(!valid(from)||!valid(to)||to<from)throw Error('進行先の日付を確認してください。');
   let data=clone(source);const events=[],blocked=new Map();
   const log=(type,id,date,extra={})=>({key:M.uid(),origin:'simulation',type,id,date,t:date+'T12:00:00.000Z',note:'シミュレーション上の予測・仮想記録（実績ではありません）',simulation:{predicted:true},...extra});
-  function append(l){data=M.commit(data,d=>{if(['種付け','分娩','離乳'].includes(l.type))P.beforeRecord(d,l.id,l);d.logs.push(l)});events.push({key:l.key,type:l.type,id:l.id,date:l.date,roomKey:l.roomKey||l.nurseryKey||l.finishingKey||''});}
+  function append(l){data=M.commit(data,d=>{
+    if(l.type==='分娩'){const sow=d.sows.find(s=>s.id===l.id);if(!sow.parityCards){const page=P.pages(d,l.id)[0];P.edit(d,l.id,page.key,clone(page.card),JSON.stringify(page));}}
+    else if(['種付け','離乳'].includes(l.type))P.beforeRecord(d,l.id,l);
+    d.logs.push(l)});events.push({key:l.key,type:l.type,id:l.id,date:l.date,roomKey:l.roomKey||l.nurseryKey||l.finishingKey||''});}
   const priority={finish:0,move:1,wean:2,mating:3,entry:4,birth:5};
   function segment(start,end){
     const f=FF.build(data,start),queue=[],known=new Set();
