@@ -194,6 +194,7 @@ document.addEventListener('click',e=>{
   const a=b.dataset.action,id=b.dataset.id;
   if(a==='simulation-start'||a==='simulation-end'){try{if(a==='simulation-start')startSimulation();else endSimulation();}catch(err){toast(err.message);}return;}
   if(simulation&&['export','import','raw-export','recovery-export'].includes(a)){toast('シミュレーション中はJSONの保存・読込を停止しています');return;}
+  if(a==='page'&&simulation&&b.closest('#simulation-banner')){dlg.close();go(id);return;}
   if(a==='global-home'){try{if(typeof navigator.vibrate==='function')navigator.vibrate(15);}catch{}if(dlg.open)dlg.close();go('home');document.querySelector('.home-app')?.focus({preventScroll:true});return;}
   if(a==='headcount-step'){stepHeadcount(id,Number(b.dataset.delta));return;}
   if(a==='piglet-check'){try{save(d=>M.setPigletCheck(d,id,b.dataset.care));}catch(err){toast(err.message);}return;}
