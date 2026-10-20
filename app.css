@@ -477,3 +477,7 @@ body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simula
 .simulation-settings h2{margin-top:0}.simulation-settings input{max-width:230px}
 @media print{#simulation-banner{display:none!important}body.simulation-active{padding-top:0}}
 .simulation-progress{margin-bottom:14px;border-color:#9675bb}.simulation-progress p{margin:6px 0}.simulation-progress details{font-size:12px}.simulation-progress summary{cursor:pointer;min-height:30px;padding:5px 0}.simulation-prediction{background:#eaddfa;color:#48296e;white-space:normal;font-size:11px;margin-bottom:5px}.fin-card .simulation-prediction{font-size:10px;padding:3px 5px}
+
+/* Compact return-to-estrus count beside the mating information. */
+.sow-boar{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+.sow-boar .sow-reheat-count{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:2px 6px;font-size:13px;font-weight:700;line-height:1.2;background:var(--soft);color:var(--softtext);white-space:nowrap}
