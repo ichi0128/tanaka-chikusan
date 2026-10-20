@@ -476,3 +476,4 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simulation-active dialog{max-height:calc(88dvh - 76px);margin-top:calc(86px + env(safe-area-inset-top))}
 .simulation-settings h2{margin-top:0}.simulation-settings input{max-width:230px}
 @media print{#simulation-banner{display:none!important}body.simulation-active{padding-top:0}}
+.simulation-progress{margin-bottom:14px;border-color:#9675bb}.simulation-progress p{margin:6px 0}.simulation-progress details{font-size:12px}.simulation-progress summary{cursor:pointer;min-height:30px;padding:5px 0}.simulation-prediction{background:#eaddfa;color:#48296e;white-space:normal;font-size:11px;margin-bottom:5px}.fin-card .simulation-prediction{font-size:10px;padding:3px 5px}
