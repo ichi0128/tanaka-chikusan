@@ -4,6 +4,7 @@ function cloudSettings(){
   return `<h2>クラウド保存</h2><section class="card" id="cloud-settings">${cloudSettingsBody()}${cloudVerificationSummary()}</section>`;
 }
 function cloudSettingsBody(){
+  if(simulation)return '<p>シミュレーション中はクラウド保存・復元を停止しています。</p>';
   const c=cloudStore,locked=!c||c.busy||!!c.saving||c.status==='saving',disabled=locked?'disabled':'';
   const email=c?.user?.email||'',status=c?.message||'接続を準備しています';
   let actions=!c?.user?`<button class="btn" data-cloud="login" ${disabled}>メール・パスワードでログイン</button>`:
@@ -20,6 +21,7 @@ function cloudSettingsBody(){
   return `<p class="cloud-message" role="status">${esc(status)}</p>${actions}<p class="muted">端末保存とJSONの保存・読込も引き続き使えます。クラウド使用中の変更は、端末保存後に送信します。</p>`;
 }
 function cloudDisplayState(){
+  if(simulation)return {label:'シミュレーション中',mode:'simulation'};
   const c=cloudStore,online=navigator.onLine;
   if(c?.status==='saving')return {label:'クラウド保存中',mode:'saving'};
   if(c?.status==='ready'&&c.user&&c.row?.user_id===c.user.id){
@@ -36,9 +38,10 @@ function cloudDisplayState(){
 function updateCloudBadge(){
   const badge=document.getElementById('network');if(!badge)return;
   const display=cloudDisplayState();badge.textContent=display.label;badge.dataset.cloudState=display.mode;
-  badge.title='端末保存は継続します。クラウド使用中の変更は端末保存後にクラウドへ送信します。';
+  badge.title=simulation?'仮データは保存・同期しません':'端末保存は継続します。クラウド使用中の変更は端末保存後にクラウドへ送信します。';
 }
 function cloudVerificationSummary(){
+  if(simulation)return '';
   const c=cloudStore;
   if(c?.status!=='ready'||!c.user||c.row?.user_id!==c.user.id)return '';
   const same=!fatal&&db&&TanakaCloud.signature(db)===TanakaCloud.signature(c.row.data);
@@ -48,7 +51,7 @@ function updateCloudUI(){
   updateCloudBadge();
   const panel=document.getElementById('cloud-settings');if(panel)panel.innerHTML=cloudSettingsBody()+cloudVerificationSummary();
   const strip=document.getElementById('cloud-status');
-  if(strip){strip.textContent=cloudStore?.message||'端末に保存しています';strip.dataset.state=cloudStore?.status||'signedout';}
+  if(strip){strip.textContent=simulation?'シミュレーション中 · 本番へ保存・同期しません':cloudStore?.message||'端末に保存しています';strip.dataset.state=cloudStore?.status||'signedout';}
 }
 let sdkLoading;
 function loadSupabaseSDK(url){
@@ -91,11 +94,13 @@ cloudStore=new TanakaCloud.CloudStore({
     }});
   },
   getLocal:()=>{
+    if(simulation)throw Error('シミュレーション中は本番データを送信しません。');
     if(fatal||!db)throw Error('端末データを読み込めないため、クラウド保存を止めています。');
     if(localStorage.getItem(KEY)!==JSON.stringify(db))throw Error('別画面で記録が変わりました。画面を開き直してください。');
     return db;
   },
   replaceLocal:data=>{
+    if(simulation)throw Error('シミュレーション中は本番データを切り替えません。');
     const old=localStorage.getItem(KEY),nextState=M.replay(data);
     if(fatal||old!==JSON.stringify(db))throw Error('端末データを確認できません。画面を開き直してください。');
     const unique=new Date().toISOString().replace(/[:.]/g,'-')+'-'+M.uid();
@@ -109,6 +114,7 @@ document.addEventListener('click',async e=>{
   const button=e.target.closest('button[data-cloud]');if(!button||button.disabled)return;
   try{
     const action=button.dataset.cloud;
+    if(simulation)throw Error('シミュレーションを終了してから操作してください。');
     if(action==='login'){
       cloudPrompt('クラウドへログイン',`<p class="muted">作成済みのアカウントでログインしてください。</p><label for="cloud-email">メールアドレス</label><input id="cloud-email" name="email" type="email" autocomplete="username" required><label for="cloud-password">パスワード</label><input id="cloud-password" name="password" type="password" autocomplete="current-password" required>`,'ログイン',async f=>{
         const password=f.get('password');document.getElementById('cloud-password').value='';
@@ -131,7 +137,7 @@ window.addEventListener('storage',e=>{
   if([KEY,TanakaCloud.META,'sb-kurobuta-auth'].includes(e.key)||e.key===null)cloudStore.externalChanged();
 });
 window.addEventListener('beforeunload',e=>{
-  if(cloudStore.user&&(cloudStore.saving||cloudStore.failedWrite||cloudStore.status==='ready'&&cloudStore.row&&TanakaCloud.signature(db)!==TanakaCloud.signature(cloudStore.row.data))){e.preventDefault();e.returnValue='';}
+  if(!simulation&&cloudStore.user&&(cloudStore.saving||cloudStore.failedWrite||cloudStore.status==='ready'&&cloudStore.row&&TanakaCloud.signature(db)!==TanakaCloud.signature(cloudStore.row.data))){e.preventDefault();e.returnValue='';}
 });
 updateCloudUI();
 if(!fatal)cloudStore.start();

@@ -55,3 +55,20 @@ test('unsafe revision cannot be rounded into a write',async()=>{const s=setup({r
 test('auth and cross-tab changes invalidate in-flight binding',async()=>{const s=setup({remote:row()});await s.store.login('a','ok');s.box.data.sows[0].note='sent';s.state.before=async()=>s.store.externalChanged();await s.store.flush();assert.equal(s.store.row,null);assert.equal(s.store.status,'conflict');assert.equal(s.box.data.sows[0].note,'sent');});
 test('auth state never lives in farm JSON or recovery binding metadata',async()=>{const s=setup();await s.store.login('a','ok');await s.store.flush(true);const meta=s.storage.getItem(META);assert.doesNotMatch(meta,/password|access_token|refresh_token/);assert.deepEqual(s.state.row.data,s.box.data);});
 test('backup storage failure prevents sending any cloud write',async()=>{const s=setup({remote:row()});await s.store.login('a','ok');s.box.data.sows[0].note='local';s.storage.setItem=()=>{throw Error('quota');};await assert.rejects(s.store.flush(),/quota/);assert.equal(s.state.writes.length,0);assert.equal(s.box.data.sows[0].note,'local');});
+
+test('simulation pause cancels scheduled writes and blocks every cloud save/restore path',async()=>{
+  const s=setup({remote:row()});await s.store.login('a','ok');
+  const production=clone(s.box.data),before=new Map(s.storage.values),token=s.store.capture();
+  s.store.localChanged();assert.notEqual(s.store.timer,null);s.store.pause();
+  assert.equal(s.store.timer,null);assert.equal(s.store.current(token),false);
+  s.box.data.sows[0].note='simulation';s.store.localChanged();assert.equal(s.store.timer,null);
+  for(const act of [()=>s.store.flush(),()=>s.store.write(false),()=>s.store.load(),()=>s.store.reload(),()=>s.store.readRow(),()=>s.store.start(),()=>s.store.login('a','ok')])await assert.rejects(act,/シミュレーション/);
+  assert.throws(()=>s.store.acceptCloud(),/シミュレーション/);assert.throws(()=>s.store.remember(s.store.row),/シミュレーション/);
+  assert.equal(s.state.writes.length,0);assert.deepEqual(s.state.row.data,production);assert.deepEqual(s.storage.values,before);
+  s.box.data=production;s.store.resume();await s.store.flush();assert.equal(s.state.writes.length,0);
+  s.box.data.sows[0].note='production edit after exit';await s.store.flush();assert.equal(s.state.writes.length,1);assert.equal(s.state.row.data.sows[0].note,'production edit after exit');
+});
+test('simulation cannot start while a cloud save or read is running',()=>{
+  const s=setup();s.store.busy=true;assert.throws(()=>s.store.pause(),/終わって/);assert.equal(s.store.paused,false);
+  s.store.busy=false;s.store.saving=Promise.resolve();assert.throws(()=>s.store.pause(),/終わって/);assert.equal(s.store.paused,false);
+});

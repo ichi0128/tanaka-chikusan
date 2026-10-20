@@ -2,9 +2,9 @@
 let maternalSeedPromise=null,maternalInitializationQueued=false,maternalInitializationError='';
 function queueMaternalInitialization(){
   if(db.maternalLineage!==undefined||maternalInitializationQueued)return;
-  maternalInitializationQueued=true;
+  maternalInitializationQueued=true;const session=dataSession;
   maternalSeedPromise=maternalSeedPromise||fetch('maternal-lineage-seed.json').then(r=>{if(!r.ok)throw Error('初期データを取得できません。通信を確認してください。');return r.json();});
-  maternalSeedPromise.then(seed=>{if(db.maternalLineage===undefined)save(d=>TanakaMaternal.initialize(d,seed));maternalInitializationError='';}).catch(err=>{maternalInitializationError=err.message;maternalSeedPromise=null;toast('系譜を保存できませんでした：'+err.message);if(page==='edit')render();}).finally(()=>{maternalInitializationQueued=false;});
+  maternalSeedPromise.then(seed=>{if(session!==dataSession)return;if(db.maternalLineage===undefined)save(d=>TanakaMaternal.initialize(d,seed));maternalInitializationError='';}).catch(err=>{maternalInitializationError=err.message;maternalSeedPromise=null;toast('系譜を保存できませんでした：'+err.message);if(page==='edit')render();}).finally(()=>{maternalInitializationQueued=false;});
 }
 function maternalStatus(node){return node.sow?(node.sow.numberPending?'育成・番号未設定':node.sow.active?'現役':'廃豚済み'):'過去・未登録';}
 function maternalMarkup(roots,selectedId=''){

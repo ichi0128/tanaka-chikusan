@@ -467,3 +467,12 @@ details.piglet-care{margin:10px 0;padding-top:0}details.piglet-care>summary{curs
 .sow-history-hint{font-size:12px;margin:8px 0 12px}.sow-history-logs{margin:18px 0}.sow-history-logs>summary{cursor:pointer;color:var(--softtext)}
 
 .sow-history-review{display:block;font-size:8px;font-weight:600;white-space:nowrap;color:var(--softtext)}.notebook-source dd{margin-left:0;overflow-wrap:anywhere}.notebook-source dt{font-weight:700;margin-top:10px}
+
+/* The sandbox indicator stays visible, including over modal dialogs. */
+#simulation-banner[hidden]{display:none}
+#simulation-banner{position:fixed;inset:0 0 auto;z-index:10000;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top));background:#593687;color:#fff;border-bottom:2px solid #cfb1ff;box-shadow:0 2px 8px #0003;font-size:13px}
+#simulation-banner strong{display:block;font-size:15px}#simulation-banner small{display:block;font-size:11px;line-height:1.5}
+#simulation-banner button{border:1px solid #d6c4ef;border-radius:9px;padding:8px;min-height:44px;background:#fff;color:#48296e;font:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
+body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simulation-active dialog{max-height:calc(88dvh - 76px);margin-top:calc(86px + env(safe-area-inset-top))}
+.simulation-settings h2{margin-top:0}.simulation-settings input{max-width:230px}
+@media print{#simulation-banner{display:none!important}body.simulation-active{padding-top:0}}

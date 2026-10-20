@@ -2,8 +2,8 @@
 let remindersInitializationQueued=false;
 function queueRemindersInitialization(){
   if(db.recurringReminders!==undefined||remindersInitializationQueued)return;
-  remindersInitializationQueued=true;
-  queueMicrotask(()=>{try{if(db.recurringReminders===undefined)save(d=>TanakaReminders.initialize(d));}catch(err){toast('定期お知らせを保存できませんでした：'+err.message);}finally{remindersInitializationQueued=false;}});
+  remindersInitializationQueued=true;const session=dataSession;
+  queueMicrotask(()=>{try{if(session!==dataSession)return;if(db.recurringReminders===undefined)save(d=>TanakaReminders.initialize(d));}catch(err){toast('定期お知らせを保存できませんでした：'+err.message);}finally{remindersInitializationQueued=false;}});
 }
 function recurringRemindersSettings(){
   const items=TanakaReminders.list(db).slice().sort((a,b)=>a.month-b.month||a.day-b.day||a.id.localeCompare(b.id));

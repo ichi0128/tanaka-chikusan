@@ -6,9 +6,10 @@ let inventoryMonth='',inventoryDrafts=new Map(),inventoryStep=1;
 let inventoryPlanRepairQueued=false;
 function inventoryQueuePlanRepair(){
   if(inventoryPlanRepairQueued||!I.needsOctoberPlanRepair(db.inventoryMonths?.['2026-10'])||[...inventoryDrafts.values()].some(c=>c.dirty))return;
-  const expected=JSON.stringify(db.inventoryMonths['2026-10']);inventoryPlanRepairQueued=true;
+  const session=dataSession,expected=JSON.stringify(db.inventoryMonths['2026-10']);inventoryPlanRepairQueued=true;
   queueMicrotask(()=>{
     try{
+      if(session!==dataSession)return;
       if([...inventoryDrafts.values()].some(c=>c.dirty))return;
       if(JSON.stringify(db.inventoryMonths?.['2026-10'])!==expected)return;
       save(data=>I.repairOctoberPlan(data,expected));

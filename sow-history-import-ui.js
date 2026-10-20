@@ -3,6 +3,7 @@ let lastSowNotebookImport=null;
 function sowNotebookImportSummary(r){return `追加 ${r.add}件 ／ 重複 ${r.duplicate}件 ／ 要照合 ${r.conflict+r.protected}件 ／ 台帳未登録 ${r.unmatched}件`;}
 function sowNotebookImportControls(){return `<details class="card"><summary>過去の分娩ノートを補完</summary><p class="muted">取込用JSONを照合し、既存の母豚の過去産次だけを追加します。最新カード・今後の予定・各豚舎の頭数・系譜は変更しません。</p><button type="button" class="btn secondary" data-notebook="open">分娩ノート取込用JSONを選ぶ</button>${lastSowNotebookImport?`<p role="status">${esc(sowNotebookImportSummary(lastSowNotebookImport))}</p><p class="muted">取込前バックアップを端末に保存・JSON出力しました。追加した履歴は母豚の分娩履歴表から確認できます。</p>`:''}</details>`;}
 function openSowNotebookImport(){
+  if(simulation){toast('シミュレーション中は分娩ノートの取込を停止しています');return;}
   let payload=null,preview=null,expected='';
   form('過去の分娩ノートを補完','<label for="notebook-file">分娩ノート取込用JSON</label><input id="notebook-file" type="file" accept=".json,application/json" required><div id="notebook-preview" aria-live="polite"></div>','バックアップして過去履歴を追加',()=>{
     if(!payload||!preview)throw Error('先に取込用JSONを選んでください。');if(!preview.add)throw Error('追加対象がありません。重複・要照合の内容を確認してください。');

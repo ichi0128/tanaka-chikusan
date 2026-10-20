@@ -12,8 +12,14 @@
       Object.assign(this,options);
       this.status='signedout';this.message='端末に保存しています';this.user=null;
       this.row=null;this.pending=null;this.busy=false;this.saving=null;this.timer=null;
-      this.generation=0;this.subscription=null;this.client=null;this.failedWrite=false;
+      this.paused=false;this.generation=0;this.subscription=null;this.client=null;this.failedWrite=false;
     }
+    pause(){
+      if(this.busy||this.saving||this.status==='saving')throw Error('クラウドの保存・読込が終わってから開始してください。');
+      this.cancelTimers();this.generation++;this.paused=true;
+    }
+    resume(){this.paused=false;}
+    assertNotPaused(){if(this.paused)throw Error('シミュレーション中はクラウド保存・復元を停止しています。');}
     emit(status,message){this.status=status;this.message=message;this.onChange?.(this);}
     validate(data){
       if(!data||data.version!==3||Array.isArray(data))throw Error('クラウドのデータ形式を確認できません。端末の記録は変更していません。');
@@ -29,11 +35,12 @@
       try{const value=JSON.parse(raw);return value.project===this.config.url&&value.userId===this.user?.id?value:null;}catch(e){return null;}
     }
     remember(row,attempt=null){
+      this.assertNotPaused();
       this.storage.setItem(META,JSON.stringify({project:this.config.url,userId:this.user.id,
         rowId:row?.id||null,revision:row?.revision||0,signature:row?signature(row.data):'',attempt}));
     }
     capture(){return {generation:this.generation,userId:this.user?.id};}
-    current(token){return token.generation===this.generation&&token.userId===this.user?.id;}
+    current(token){return !this.paused&&token.generation===this.generation&&token.userId===this.user?.id;}
     cancelTimers(){clearTimeout(this.timer);this.timer=null;}
     fail(error,status='error'){
       const messages={invalid_credentials:'メールアドレスまたはパスワードを確認してください。',
@@ -61,6 +68,7 @@
       return this.client;
     }
     async start(){
+      this.assertNotPaused();
       this.busy=true;this.emit('loading','ログイン状態を確認しています');
       try{
         const client=await this.ensureClient();const {data,error}=await client.auth.getSession();
@@ -72,6 +80,7 @@
       }catch(e){this.fail(e);}finally{this.busy=false;this.onChange?.(this);}
     }
     async login(email,password){
+      this.assertNotPaused();
       if(this.busy||this.saving)throw Error('処理が終わるまでお待ちください。');
       this.busy=true;this.emit('loading','ログインしています');
       try{
@@ -82,6 +91,7 @@
       }catch(e){this.fail(e);throw e;}finally{this.busy=false;this.onChange?.(this);}
     }
     async logout(){
+      this.assertNotPaused();
       if(this.saving||this.busy)throw Error('保存・読込が終わるまでお待ちください。');
       this.cancelTimers();
       const {error}=await this.client.auth.signOut({scope:'local'});if(error)throw error;
@@ -89,11 +99,13 @@
       this.emit('signedout','ログアウトしました。端末の記録は残っています。');
     }
     async readRow(){
+      this.assertNotPaused();
       const {data,error}=await this.client.from(this.config.table).select('id,user_id,data,revision,updated_at')
         .eq('user_id',this.user.id).maybeSingle();
       if(error)throw error;return data?this.checkedRow(data):null;
     }
     async load(force=false){
+      this.assertNotPaused();
       if(!this.user)throw Error('先にログインしてください。');
       this.cancelTimers();const token=this.capture();this.emit('loading','クラウドの記録を確認しています');
       try{
@@ -117,10 +129,12 @@
       }catch(e){if(this.current(token))this.fail(e);throw e;}
     }
     async reload(force=false){
+      this.assertNotPaused();
       if(this.busy||this.saving)throw Error('処理が終わるまでお待ちください。');
       this.busy=true;try{await this.load(force);}finally{this.busy=false;this.onChange?.(this);}
     }
     acceptCloud(){
+      this.assertNotPaused();
       if(this.busy||this.saving||!this.pending)throw Error('読み込み待ちの記録がありません。');
       const {row,localSignature}=this.pending;
       if(signature(this.local())!==localSignature)throw Error('確認中に端末の記録が変わりました。クラウドを再確認してください。');
@@ -130,6 +144,7 @@
       this.emit('ready','クラウドの記録を使用しています。切替前の端末データは退避済みです。');
     }
     localChanged(){
+      if(this.paused)return;
       if(this.status!=='ready'||!this.user)return;
       this.emit('ready','端末に保存しました。クラウドへ送信待ちです');
       this.cancelTimers();this.timer=setTimeout(()=>{this.timer=null;this.flush().catch(()=>{});},500);
@@ -139,6 +154,7 @@
       if(this.user)this.emit('conflict','別画面で保存状態が変わりました。クラウドを再確認してください。');
     }
     async flush(initial=false){
+      this.assertNotPaused();
       if(this.saving)return this.saving;
       if(this.busy||!this.user)throw Error('ログイン・読込が終わってから保存してください。');
       if(initial?this.status!=='empty':this.status!=='ready'||!this.row)throw Error('先にクラウドの記録を確認してください。');
@@ -146,6 +162,7 @@
       try{await this.saving;}finally{this.saving=null;this.onChange?.(this);}
     }
     async write(initial){
+      this.assertNotPaused();
       const token=this.capture();
       try{
         do{
