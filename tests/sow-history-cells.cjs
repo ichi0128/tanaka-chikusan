@@ -1,0 +1,19 @@
+// Exercise rendered cell attributes through the real click handler and model save.
+const fs=require('fs'),vm=require('vm'),path=require('path'),a=require('assert/strict');
+const listeners=[],c=vm.createContext({document:{addEventListener:(type,fn)=>{if(type==='click')listeners.push(fn);}},esc:x=>String(x??''),sowIdentityLabel:id=>id,toast:message=>{throw Error(message)}});
+for(const file of ['model.js','finishing-model.js','schedules.js','inventory-model.js','sow-parity.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),c);
+const M=c.TanakaModel,P=c.TanakaSowParity;c.M=M;c.db=M.migrate(null);let current=P.pages(c.db,'149')[0];P.edit(c.db,'149',current.key,{...current.card,parity:5},JSON.stringify(current));P.start(c.db,'149');c.state=M.replay(c.db);
+const currentSnapshot=JSON.stringify(P.pages(c.db,'149')[0]);const barnState=d=>{const {rooms,nursery,finishing}=M.replay(d);return JSON.stringify({rooms,nursery,finishing});};const beforeState=barnState(c.db),beforeLogs=JSON.stringify(c.db.logs);
+c.field=(name,label,value,type)=>{c.input={name,label,value,type};return '<input>';};c.form=(title,body,label,submit)=>{c.modal={title,body,label,submit};};c.save=fn=>{c.db=M.commit(c.db,fn);};
+vm.runInContext(fs.readFileSync(path.join(__dirname,'..','sow-parity-ui.js'),'utf8'),c);
+const row=P.historyRows(c.db,'149').find(p=>p.parity===5),markup=c.sowHistoryTable(c.db.sows.find(s=>s.id==='149')),html=markup.match(/<tbody>([\s\S]*?)<\/tbody>/)[1].split('</tr>')[0];
+const fields=[...html.matchAll(/data-field="([^"]+)"/g)].map(m=>m[1]);a.deepEqual(fields,['parity','mating','due','birthDateActual','birthCount','weanDateActual','weanCount']);a.doesNotMatch(html,/parity-history-details|nursingDays/);a.match(markup,/授乳日数・里子・備考などの詳細/);
+function click(name){const button={dataset:{action:'parity-history-cell',id:'149',key:row.key,field:name}};const target={closest:selector=>selector.includes('parity-history-cell')?button:null};for(const fn of listeners)fn({target});}
+for(const [name,label,value] of [['parity','産次','4'],['mating','種付日','2025-04-01'],['due','分娩予定日','2025-07-24'],['birthDateActual','実分娩日','2025-07-29'],['birthCount','出産頭数','11'],['weanDateActual','離乳日','2025-08-28'],['weanCount','離乳頭数','9']]){
+ const p=P.pages(c.db,'149').find(p=>p.key===row.key),before=JSON.stringify(c.db);click(name);a.equal(JSON.stringify(c.db),before);a.equal(c.modal.title,`149・${p.parity}産・${label}を編集`);a.equal(c.input.name,'historyValue');a.equal(c.input.label,label);a.equal(c.input.type,name==='parity'||name.endsWith('Count')?'number':'text');a.doesNotMatch(c.modal.body,/授乳日数/);
+ c.modal.submit(new Map([['historyValue',value]]));const after=P.pages(c.db,'149').find(p=>p.key===row.key);a.equal(after.card[name],name==='parity'||name.endsWith('Count')?Number(value):value);a.equal(after.parity,name==='parity'?4:p.parity);a.equal(after.revisions.length,p.revisions.length+1);a.equal(JSON.stringify(P.pages(c.db,'149')[0]),currentSnapshot);
+}
+a.equal(barnState(c.db),beforeState);a.equal(JSON.stringify(c.db.logs),beforeLogs);const p=P.pages(c.db,'149').find(p=>p.key===row.key),before=JSON.stringify(c.db);a.throws(()=>P.editHistory(c.db,'149',row.key,{parity:'6'},JSON.stringify(p)),/同じ産次/);a.equal(JSON.stringify(c.db),before);a.equal(JSON.stringify(P.historyRows(M.migrate(JSON.parse(JSON.stringify(c.db))),'149')),JSON.stringify(P.historyRows(c.db,'149')));
+// Details remain a separate explicit action; nursing days are never a table cell.
+c.sowHistoryDetails('149',row.key);a.match(c.modal.title,/4産 詳細/);a.match(c.modal.body,/input/);
+console.log('PASS seven history cells: rendered bindings, real click dispatch, matching titles/input/save targets, parity validation and duplicate guard, detail separation, no changes on open, archived edits preserve current/barns/logs, revisions and JSON restore.');

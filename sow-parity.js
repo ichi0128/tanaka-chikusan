@@ -89,7 +89,14 @@ function editHistory(data,id,key,patch,expected){
   const old=pages(data,id).find(p=>p.key===key);if(!old||JSON.stringify(old)!==expected)throw Error('カードが更新されました。開き直してください。');
   const card=clone(old.card);
   for(const [name,value] of Object.entries(patch)){
-    if(historyDates.includes(name))card[name]=historyDate(value);
+    if(name==='parity'){
+      const text=String(value??'').trim();
+      if(text&&(!/^\d+$/.test(text)||!Number.isSafeInteger(Number(text))))throw Error('産次は0以上の整数で入力してください。');
+      const parity=text?Number(text):null;
+      if(parity!==null&&parity!==old.parity&&pages(data,id).some(p=>p.key!==key&&p.parity===parity))throw Error('同じ産次の履歴が既にあります。産次を確認してください。');
+      card.parity=parity;
+    }
+    else if(historyDates.includes(name))card[name]=historyDate(value);
     else if(historyCounts.includes(name)){const text=String(value??'').trim();if(text&&!/^\d+$/.test(text)||text&&!Number.isSafeInteger(Number(text)))throw Error('頭数・日数は0以上の整数で入力してください。');card[name]=text?Number(text):null;}
     else if(['birthNote','weanNote','note'].includes(name))card[name]=String(value??'');
     else throw Error('編集する項目を確認してください。');
