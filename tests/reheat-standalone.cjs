@@ -17,3 +17,9 @@ a.equal(JSON.stringify(M.replay(d).rooms),barns);a.notEqual(JSON.stringify(d),or
 const plain=seed();delete plain.sows[0].parityCards;plain.sows[0].cardBaseline.parity=5;let pregnancy=append(plain,{key:'plain-return',type:'再発情確認',id:'149',date:'2026-10-20'});pregnancy=append(pregnancy,{key:'plain-mate',type:'種付け',id:'149',date:'2026-10-20',boar:'B1'});pregnancy=append(pregnancy,{key:'plain-birth',type:'分娩',id:'149',date:'2027-02-18',roomKey:'r1',count:10});a.equal(P.pages(pregnancy,'149')[0].parity,5);console.log('PASS confirmed current parity remains unchanged through the eventual birth, including original baseline cards.');
 
 const withCare=append(d,{key:'swim',type:'スイムジェン 実施',id:'149',date:'2027-02-19'});a.equal(M.sowCard(withCare,'149').swimgen,'2/19 済');
+
+// Both days following a confirmed return are rematings in the same parity.
+let twoDays=append(seed(),{key:'two-return',type:'再発情確認',id:'149',date:'2026-10-20'});
+for(const [key,date,boar] of [['two-first','2026-10-20','B1'],['two-second','2026-10-21','B2']]){a.equal(P.matingReturnKey(twoDays,'149',date),'two-return');const l={key,type:'種付け',id:'149',date,boar,remating:false};twoDays=append(twoDays,l);a.equal(l.remating,true);a.equal(l.reheatConfirmationKey,'two-return');a.equal(P.pages(twoDays,'149')[0].parity,5);a.equal(P.pages(twoDays,'149')[0].card.reheatCount,1);}
+a.equal(twoDays.logs.filter(l=>l.type==='種付け'&&l.remating).length,2);a.equal(P.pages(twoDays,'149')[0].card.boar,'B2');a.equal(P.pages(twoDays,'149')[0].card.mating,'2026-10-21');a.equal(JSON.stringify(P.historyRows(M.migrate(JSON.parse(JSON.stringify(twoDays))),'149')),JSON.stringify(P.historyRows(twoDays,'149')));
+console.log('PASS two-day remating: both standard-format records automatically link the same confirmation; user-selected B1 then B2; parity and return count unchanged; JSON restored.');

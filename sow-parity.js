@@ -89,6 +89,11 @@ function start(data,id,expected){
   const nextParity=latest.awaitingMating?parity:parity+1,next=blank(s,nextParity);if(latest.awaitingMating){for(const k of ['birth','mother','csf','wean'])next[k]=latest.card[k]||'';}
   store.current={key:M.uid(),parity:nextParity,card:next,capturedKeys:events(data,id).map(l=>l.key),source:'新しい産次',revisions:[]};
 }
+function matingReturnKey(data,id,date){
+  const current=pages(data,id)[0],card=current?.card;
+  if(!card||current.awaitingMating)return '';
+  return card.lastReheatKey&&(card.reheatPending||card.lastReheatDate<=date)?card.lastReheatKey:'';
+}
 function beforeRecord(data,id,log){
   const current=pages(data,id)[0];if(!current)return;
   if(log.type==='離乳'){
@@ -104,7 +109,7 @@ function beforeRecord(data,id,log){
     log.failedMating={date:current.card.mating||'',boar:current.card.boar||'',due:current.card.due||'',parity:current.parity};
     return;
   }
-  if(log.type==='種付け'&&current.card.reheatPending){log.remating=true;log.reheatConfirmationKey=current.card.lastReheatKey;return;}
+  if(log.type==='種付け'){const key=matingReturnKey(data,id,log.date);if(key){log.remating=true;log.reheatConfirmationKey=key;return;}}
   if(log.type==='種付け'&&!log.remating&&current.card.birthDateActual&&current.card.weanDateActual)start(data,id);
   else if(log.type==='分娩'&&current.source==='元カード'){
     start(data,id);
@@ -156,5 +161,5 @@ M.validate=function(data){validate(data);for(const s of data.sows){if(!s.parityC
 const migrate=M.migrate,commit=M.commit;
 M.migrate=function(raw){const data=migrate(raw);M.validate(data);return data;};
 M.commit=function(data,fn){const next=commit(data,fn);M.validate(next);return next;};
-root.TanakaSowParity={pages,start,edit,beforeRecord,historyRows,editHistory};
+root.TanakaSowParity={pages,start,edit,beforeRecord,historyRows,editHistory,matingReturnKey};
 })(typeof globalThis!=='undefined'?globalThis:this);
