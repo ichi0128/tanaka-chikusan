@@ -51,6 +51,13 @@
     }
     return card;
   }
+  function resetSwimgenAfterBirth(card,logs){
+    const ordered=logs.filter(l=>!l.legacy).slice().sort((a,b)=>a.date.localeCompare(b.date)||logs.indexOf(a)-logs.indexOf(b));
+    const birth=ordered.filter(l=>l.type==='分娩').at(-1),mating=ordered.filter(l=>l.type==='種付け').at(-1),swim=ordered.filter(l=>l.type==='スイムジェン 実施').at(-1);
+    if(birth&&(!mating||ordered.indexOf(birth)>ordered.indexOf(mating))&&(!swim||ordered.indexOf(swim)<ordered.indexOf(birth))&&(card.birthDateActual===birth.date||card.reproductionStatus==='分娩済み'))card.swimgen='';
+    return card;
+  }
+  M.resetSwimgenAfterBirth=resetSwimgenAfterBirth;
   M.matingSet=matingSet;M.reconcileMating=reconcileMating;
   // Shared card projection: confirmation and subsequent mating are separate facts.
   function applyReproductionEvent(card,log){
@@ -67,7 +74,7 @@
       card.reheatPending=false;card.reproductionStatus='種付け済み';
       setMatingDates(card,consecutive?[...prior,log]:[log]);
     }else if(log.type==='分娩'){
-      card.reheatPending=false;card.reproductionStatus='分娩済み';
+      card.reheatPending=false;card.reproductionStatus='分娩済み';card.swimgen='';
     }
     return card;
   }
@@ -140,6 +147,7 @@ function sowCard(data,id){
   if(current){for(const name of ['reheatCount','reheatPending','lastReheatDate','lastReheatKey','failedMating','reproductionStatus'])if(name in current)c[name]=M.clone(current[name]);if(current.reheatPending){c.due='';c.reheat='';c.swimgen='';}}
   if(current)for(const name of ['mating','boar','reheat','due','swimgen','matingSet'])if(name in current)c[name]=M.clone(current[name]);
   reconcileMating(c,logs);
+  resetSwimgenAfterBirth(c,logs);
   for(const name of ['mating','reheat','due','swimgen'])c[name]=String(c[name]??'').replace(/^(\d{4}-\d{2}-\d{2})(.*)$/,(_,date,suffix)=>md(date)+suffix);
   return c;
 }

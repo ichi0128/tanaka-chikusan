@@ -27,6 +27,7 @@ function rawPages(data,id){
     const current=clone(managed.current),known=new Set(current.capturedKeys||[]);
     apply(current.card,logs.filter(l=>!known.has(l.key)));
     M.reconcileMating(current.card,logs);
+    M.resetSwimgenAfterBirth(current.card,logs);
     return [...clone(managed.history),current].reverse();
   }
   const base=number(s.cardBaseline?.parity),out=[{key:'baseline',parity:base,card:{...blank(s,base),...clone(s.cardBaseline||{})},source:'元カード',revisions:[]}];
