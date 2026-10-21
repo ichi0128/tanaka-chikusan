@@ -494,3 +494,5 @@ body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simula
 .quick-mating-boars input:checked+span{border-color:var(--accent);background:var(--soft);color:var(--softtext)}.quick-mating-boars input:focus-visible+span{outline:3px solid var(--accent);outline-offset:3px}
 
 .sow-card-dates small .sow-reheat-count{margin-left:5px;vertical-align:middle}.sow-mating-set{display:grid;gap:4px;font-size:18px}.sow-mating-set>span{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px}.sow-mating-set b{font-size:28px}
+
+.sow-mating-summary{display:flex;align-items:baseline;flex-wrap:nowrap;gap:4px}.sow-mating-summary>b{font-size:clamp(14px,4vw,28px);white-space:nowrap}.sow-mating-summary>span{font-size:clamp(11px,3vw,18px);white-space:nowrap}

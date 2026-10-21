@@ -1,9 +1,33 @@
 (function(){'use strict';const M=TanakaModel,replay=M.replay;
   function addDays(date,days){const d=new Date(date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
+  // Keep saved history intact; collapse identical work records only in projections.
+  function uniqueMatingLogs(logs){
+    const seen=new Set(),duplicates=new Set(),cycles=new Map();
+    const sorted=logs.map((l,i)=>({l,i})).sort((a,b)=>String(a.l.date||'').localeCompare(String(b.l.date||''))||a.i-b.i);
+    for(const {l,i} of sorted){
+      if(l.legacy)continue;
+      const id=String(l.id||''),cycle=cycles.get(id)||{epoch:0,start:'',last:''};
+      if(['再発情確認','分娩','離乳'].includes(l.type)){cycle.epoch++;cycle.start='';cycle.last='';}
+      if(l.type==='種付け'){
+        if(!cycle.last||l.date>addDays(cycle.last,1))cycle.start=l.date;
+        cycle.last=l.date;
+        const key=JSON.stringify([id,cycle.epoch,cycle.start,l.parity??'',l.date,String(l.boar||'').trim()]);
+        if(seen.has(key))duplicates.add(i);else seen.add(key);
+      }
+      cycles.set(id,cycle);
+    }
+    return logs.filter((_,i)=>!duplicates.has(i));
+  }
+  M.uniqueMatingLogs=uniqueMatingLogs;
+  M.assertUniqueMating=function(data,log,excludeKey){
+    if(log.legacy||log.type!=='種付け')return;
+    const logs=[...data.logs.filter(l=>!excludeKey||l.key!==excludeKey),log];
+    if(!uniqueMatingLogs(logs).includes(log))throw Error('同じ日・同じ種雄の種付けは、この周期ですでに登録されています。履歴を確認してください。');
+  };
   // A consecutive mating set is derived from existing logs; the first date anchors it.
   function matingSet(logs){
     let set=[];
-    for(const l of logs.filter(l=>!l.legacy).slice().sort((a,b)=>a.date.localeCompare(b.date)||logs.indexOf(a)-logs.indexOf(b))){
+    for(const l of uniqueMatingLogs(logs).filter(l=>!l.legacy).slice().sort((a,b)=>a.date.localeCompare(b.date)||logs.indexOf(a)-logs.indexOf(b))){
       if(['再発情確認','分娩','離乳'].includes(l.type)){set=[];continue;}
       if(l.type!=='種付け')continue;
       const last=set.at(-1);
@@ -13,7 +37,7 @@
     return set;
   }
   function setMatingDates(card,set){
-    card.matingSet=set.map(l=>({key:l.key,date:l.date,boar:l.boar||''}));
+    card.matingSet=[...new Map(set.map(l=>[JSON.stringify([l.date,String(l.boar||'').trim()]),{key:l.key,date:l.date,boar:l.boar||''}])).values()];
     card.mating=set[0].date;card.boar=set.at(-1).boar||'';
     card.reheat=addDays(card.mating,21);card.due=addDays(card.mating,114);card.swimgen=addDays(card.mating,100);
   }

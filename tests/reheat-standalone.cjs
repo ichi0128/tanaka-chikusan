@@ -43,3 +43,23 @@ nextReturn=append(nextReturn,{key:'another-first',type:'種付け',id:'149',date
 nextReturn=append(nextReturn,{key:'another-second',type:'種付け',id:'149',date:'2026-11-11',boar:'B1'});
 a.equal(P.pages(nextReturn,'149')[0].card.mating,'2026-11-10');a.equal(P.pages(nextReturn,'149')[0].card.reheatCount,2);
 console.log('PASS first-date mating set: cards, schedules, forecast, captured older cards, cloud/JSON roundtrip and distinct returned cycle.');
+
+// Duplicate submissions are rejected atomically, but prior duplicate logs remain stored.
+const dup={key:'duplicate-day-two',type:'種付け',id:'149',date:'2026-10-21',boar:'B2'};
+const beforeDuplicate=JSON.stringify(twoDays);
+a.throws(()=>append(twoDays,dup),/すでに登録/);a.equal(JSON.stringify(twoDays),beforeDuplicate);
+const oldDuplicates=M.clone(twoDays);oldDuplicates.logs.push(dup,{...dup,key:'duplicate-again'});
+const oldRaw=JSON.stringify(oldDuplicates),shown=M.uniqueMatingLogs(oldDuplicates.logs);
+a.equal(shown.filter(l=>l.date==='2026-10-21'&&l.boar==='B2').length,1);
+a.equal(P.pages(oldDuplicates,'149')[0].card.matingSet.length,2);
+a.equal(P.pages(oldDuplicates,'149')[0].card.mating,'2026-10-20');a.equal(P.pages(oldDuplicates,'149')[0].card.reheatCount,1);
+a.equal(JSON.stringify(oldDuplicates),oldRaw);
+// Same boar on another day or another sow is not a duplicate; edits cannot collide.
+a.doesNotThrow(()=>M.assertUniqueMating(twoDays,{...dup,key:'different-day',date:'2026-10-22'}));
+a.doesNotThrow(()=>M.assertUniqueMating(twoDays,{...dup,key:'different-sow',id:'53'}));
+a.doesNotThrow(()=>M.assertUniqueMating(twoDays,twoDays.logs.find(l=>l.key==='two-second'),'two-second'));
+a.throws(()=>M.assertUniqueMating(twoDays,{...dup,key:'two-first'},'two-first'),/すでに登録/);
+a.equal(P.pages(M.migrate(JSON.parse(JSON.stringify(oldDuplicates))),'149')[0].card.due,'2027-02-11');
+a.equal(P.pages(cloud.validate(oldDuplicates),'149')[0].card.reheat,'2026-11-10');
+a.equal(M.uniqueMatingLogs([{legacy:true,type:'種付け',t:'old'},...oldDuplicates.logs]).length,shown.length+1);
+console.log('PASS duplicate guard, edit collision guard, legacy display dedup without deletion, first-day basis, same sow/cycle/day/boar identity, JSON/cloud restore.');

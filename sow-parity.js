@@ -96,6 +96,7 @@ function matingReturnKey(data,id,date){
   return card.lastReheatKey&&(card.reheatPending||card.lastReheatDate<=date)?card.lastReheatKey:'';
 }
 function beforeRecord(data,id,log){
+  M.assertUniqueMating(data,log);
   const current=pages(data,id)[0];if(!current)return;
   if(log.type==='離乳'){
     if(current.awaitingMating)throw Error('この産次は離乳済みです。記録を確認してください。');
