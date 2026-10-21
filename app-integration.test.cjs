@@ -142,3 +142,23 @@ test('monthly inventory saves and restores with full JSON and cloud data, withou
   vm.runInContext('monthlyImport();',b.context);
   assert.deepEqual(JSON.parse(b.storage.getItem('tanaka-db')),saved);
 });
+
+test('nursery displays older birthdays first without exposing internal slot names or changing saved data',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));
+ vm.runInContext(`state.nursery=[
+ {key:'n1',state:'occupied',sowId:'149',count:4,birthDate:'2026-09-01',weight:20},
+ {key:'n2',state:'occupied',sowId:'512',count:5,birthDate:'2026-07-01',weight:30},
+ {key:'n3',state:'occupied',mixed:true,sowId:'',count:6,birthDate:'2026-07-01',weight:30},
+ {key:'n4',state:'occupied',sowId:'106',count:3,birthDate:'',weight:20},
+ {key:'n5',state:'empty',sowId:'',count:0,birthDate:''}];`,b.context);
+ const saved=b.storage.getItem('tanaka-db'),original=vm.runInContext('JSON.stringify(state.nursery)',b.context),dbBefore=vm.runInContext('JSON.stringify(db)',b.context);
+ vm.runInContext("go('nursery');",b.context);const html=b.elements.get('app').innerHTML;
+ assert.deepEqual([...html.matchAll(/data-action="nursery-edit" data-id="([^"]+)"/g)].map(m=>m[1]),['n2','n3','n1','n4','n5']);
+ assert.doesNotMatch(html,/管理枠/);assert.match(html,/混成/);assert.match(html,/512/);
+ assert.equal(vm.runInContext('JSON.stringify(state.nursery)',b.context),original);
+ assert.equal(vm.runInContext('JSON.stringify(db)',b.context),dbBefore);assert.equal(b.storage.getItem('tanaka-db'),saved);
+ assert.doesNotMatch(vm.runInContext("finishingSourceName('nursery',state.nursery[0])",b.context),/管理枠/);
+ const label=vm.runInContext("inventoryDisplayPlace({area:'nursery',state:'occupied',roomKey:'n1',place:'育成舎 管理枠1',sowId:'149',birthDate:'2026-09-01'})",b.context);
+ assert.match(label,/149/);assert.doesNotMatch(label,/管理枠/);
+ assert.equal(vm.runInContext("nurseryName({key:'n5'})",b.context),'空き');
+});

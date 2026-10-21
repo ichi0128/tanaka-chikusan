@@ -71,9 +71,9 @@ function finishingYardEdit(pigKey){
   });
 }
 function finishingSources(){
-  return [...state.nursery.filter(r=>r.state==='occupied').map(r=>({area:'nursery',r})),...state.finishing.filter(r=>r.state==='occupied').flatMap(r=>r.key==='yard'?F.yardState(r).individuals.filter(p=>TanakaGilts.yardKind(p,state)!=='母豚').map(p=>({area:'finishing',r:{...p,key:'yard',pigKey:p.key,state:'occupied'}})):[{area:'finishing',r}])];
+  return [...nurseryByAge(state.nursery).filter(r=>r.state==='occupied').map(r=>({area:'nursery',r})),...state.finishing.filter(r=>r.state==='occupied').flatMap(r=>r.key==='yard'?F.yardState(r).individuals.filter(p=>TanakaGilts.yardKind(p,state)!=='母豚').map(p=>({area:'finishing',r:{...p,key:'yard',pigKey:p.key,state:'occupied'}})):[{area:'finishing',r}])];
 }
-function finishingSourceName(area,r){return area==='nursery'?'育成舎 管理枠 '+r.key.slice(1):finishingPlace(r.key);}
+function finishingSourceName(area,r){return area==='nursery'?'育成舎':finishingPlace(r.key);}
 function finishingEmpty(key){
   const r=state.finishing.find(x=>x.key===key);if(!r||key!=='yard'&&r.state!=='empty'){toast('移動先は空室を選んでください');return;}
   const sources=finishingSources().filter(x=>key!=='yard'||x.r.key!=='yard');
