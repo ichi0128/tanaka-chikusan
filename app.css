@@ -501,3 +501,5 @@ body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simula
 .sow-mating-summary>.sow-reheat-count{font-size:11px;padding:2px 4px;align-self:center;flex-shrink:0}
 .sow-mating-row>.sow-quick-mating{flex-shrink:0;padding:4px 6px}
 @media(max-width:350px){.sow-mating-summary{gap:5px}}
+
+.sow-card-top>b.sow-parity-large{font-size:clamp(34px,7vw,52px);line-height:1;white-space:nowrap}
