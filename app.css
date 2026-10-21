@@ -503,3 +503,5 @@ body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simula
 @media(max-width:350px){.sow-mating-summary{gap:5px}}
 
 .sow-card-top>b.sow-parity-large{font-size:clamp(34px,7vw,52px);line-height:1;white-space:nowrap}
+
+.app-version{margin:24px 0 10px;text-align:center;font-size:12px;line-height:1.7;color:var(--muted)}

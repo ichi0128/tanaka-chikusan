@@ -2,14 +2,21 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 function boot(){
   const map=new Map(),elements=new Map(),listeners={};
-  const element=id=>{if(!elements.has(id))elements.set(id,{id,innerHTML:'',textContent:'',dataset:{},classList:{add(){},remove(){}},setAttribute(){},close(){this.open=false;},showModal(){this.open=true;},insertAdjacentHTML(){},querySelector(){return null;},querySelectorAll(){return [];}});return elements.get(id);};
+  const element=id=>{if(!elements.has(id))elements.set(id,{id,innerHTML:'',textContent:'',dataset:{},classList:{add(){},remove(){},toggle(){}},setAttribute(){},addEventListener(){},appendChild(child){child.parentNode=this;},close(){this.open=false;},showModal(){this.open=true;},insertAdjacentHTML(){},querySelector(){return null;},querySelectorAll(){return [];}});return elements.get(id);};
   const storage={getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k),key:i=>[...map.keys()][i]??null,get length(){return map.size;}};
-  const document={getElementById:element,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(name,fn)=>{(listeners[name]??=[]).push(fn);},documentElement:{dataset:{}},visibilityState:'visible'};
+  const document={getElementById:element,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(name,fn)=>{(listeners[name]??=[]).push(fn);},documentElement:element('html'),body:element('body'),visibilityState:'visible'};
   const client={auth:{getSession:async()=>({data:{session:null}}),onAuthStateChange:()=>({data:{subscription:{}}})}};
-  const context=vm.createContext({console,document,localStorage:storage,navigator:{onLine:true},location:{protocol:'http:'},setTimeout:()=>1,clearTimeout(){},setInterval(){},addEventListener(){},scrollTo(){},supabase:{createClient:()=>client}});
+  const context=vm.createContext({console,document,localStorage:storage,navigator:{onLine:true},location:{protocol:'http:'},setTimeout:()=>1,clearTimeout(){},setInterval(){},queueMicrotask,confirm:()=>true,addEventListener(){},scrollTo(){},supabase:{createClient:()=>client}});
   vm.runInContext('window=globalThis;',context);
-  const scripts=['model.js','finishing-model.js','birth-validation.js','schedules.js','finishing-ui.js','cloud-config.js','cloud-store.js','inventory-model.js','inventory-ui.js','app.js','cloud-ui.js'];
-  for(const name of scripts)vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,name),'utf8'),context,{filename:name});
+  const root=require('node:path').join(__dirname),scripts=[...fs.readFileSync(require('node:path').join(root,'index.html'),'utf8').matchAll(/<script src="([^"?]+)(?:\?[^\"]*)?"><\/script>/g)].map(x=>x[1]);
+  for(const name of scripts){
+    if(name==='app.js'){
+      vm.runInContext('const seed=TanakaModel.migrate(null);TanakaReminders.initialize(seed);',context);
+      context.seedRelationships=JSON.parse(fs.readFileSync(require('node:path').join(root,'maternal-lineage-seed.json')));
+      vm.runInContext("TanakaMaternal.initialize(seed,seedRelationships);localStorage.setItem('tanaka-db',JSON.stringify(seed));",context);
+    }
+    vm.runInContext(fs.readFileSync(require('node:path').join(root,name),'utf8'),context,{filename:name});
+  }
   return {context,storage,elements,listeners};
 }
 test('real app boot, settings and local save still work with cloud module',async()=>{
@@ -17,6 +24,9 @@ test('real app boot, settings and local save still work with cloud module',async
   assert.equal(vm.runInContext('fatal',b.context),'');
   vm.runInContext("go('edit');",b.context);
   assert.match(b.elements.get('app').innerHTML,/クラウド保存/);
+  const releaseVersion=vm.runInContext('APP_VERSION',b.context);
+  assert.match(releaseVersion,/^\d+\.\d+\.\d+$/);
+  assert.ok(b.elements.get('app').innerHTML.includes('クロブタアプリ<br><span>Version '+releaseVersion+'</span>'));
   assert.match(b.elements.get('app').innerHTML,/データ保存/);
   assert.match(b.elements.get('app').innerHTML,/データ読込/);
   vm.runInContext("save(d=>{d.sows[0].note='端末保存テスト';});",b.context);
