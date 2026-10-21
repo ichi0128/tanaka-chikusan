@@ -8,13 +8,19 @@ function apply(card,events){
   for(const l of events){
     M.applyReproductionEvent(card,l);
     if(l.type==='分娩'){card.birthDateActual=l.date;card.birthTime=l.birthTime||'';card.birthCount=l.count??null;card.stillborn=l.stillborn??null;card.birthNote=l.note||'';card.result=(l.count??'')+'－';}
-    if(l.type==='離乳'){card.wean=l.date;card.weanDateActual=l.date;card.weanCount=l.count??null;card.weanNote=l.note||'';card.result=(card.birthCount??'')+'－'+(l.count??'');}
+    if(l.type==='離乳'){
+      if(!card.birthDateActual&&l.birthDate)card.birthDateActual=l.birthDate;
+      if(card.birthCount==null&&Number.isInteger(l.sourceRoom?.birthCount))card.birthCount=l.sourceRoom.birthCount;
+      card.wean=l.date;card.weanDateActual=l.date;card.weanCount=l.count??null;card.weanNote=l.note||'';card.result=(card.birthCount??'')+'－'+(l.count??'');
+      if(l.nursingDays!==undefined)card.nursingDays=l.nursingDays;
+      if(l.operator)card.weanOperator=l.operator;
+    }
     if(l.type==='スイムジェン 実施')card.swimgen=l.date+' 済';
   }
   return card;
 }
 function events(data,id){return data.logs.map((l,i)=>({l,i})).filter(x=>!x.l.legacy&&x.l.id===id).sort((a,b)=>a.l.date.localeCompare(b.l.date)||a.i-b.i).map(x=>x.l);}
-function pages(data,id){
+function rawPages(data,id){
   const s=data.sows.find(s=>s.id===id);if(!s)return [];
   const logs=events(data,id),managed=s.parityCards;
   if(managed){
@@ -43,19 +49,53 @@ function pages(data,id){
   // Do not infer a year's date or populate missing older parities.
   return out.reverse();
 }
+// A waiting card is a view/state of the completed parity, not a new parity.
+function waitingPage(s,completed,logs){
+  const c=completed.card,card={...blank(s,completed.parity),birth:c.birth||'',mother:c.mother||'',csf:c.csf||'',wean:c.weanDateActual||'',weanDateActual:c.weanDateActual||'',weanCount:c.weanCount??null,birthCount:null,stillborn:null,nursingDays:null,reheatPending:false,cycleCompleted:true,reproductionStatus:'離乳済み／次回発情待ち'};
+  return {key:'postwean:'+completed.key,parity:completed.parity,card,source:'離乳後・次回種付け待ち',revisions:[],awaitingMating:true,completedKey:completed.key,capturedKeys:logs.map(l=>l.key)};
+}
+function pages(data,id){
+  const all=rawPages(data,id),current=all[0],s=data.sows.find(s=>s.id===id);if(!current)return all;
+  if(current.awaitingMating){
+    const completed=all.find(p=>p.key===current.completedKey);
+    if(completed){current.parity=completed.parity;current.card.parity=completed.parity;for(const k of ['wean','weanDateActual','weanCount'])current.card[k]=clone(completed.card[k]??(k==='weanCount'?null:''));}
+    return all;
+  }
+  // Existing weaning records are projected read-only; opening a card never migrates storage.
+  const logs=events(data,id),last=logs.filter(l=>['種付け','分娩','離乳'].includes(l.type)).at(-1);
+  if(last?.type!=='離乳'||current.card.weanDateActual!==last.date)return all;
+  const mating=String(current.card.mating||'');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(mating)&&mating>last.date)return all;
+  const md=/^(\d{1,2})\/(\d{1,2})$/.exec(mating);
+  if(md){let year=Number(last.date.slice(0,4));if(Number(md[1])-Number(last.date.slice(5,7))>6)year--;const date=year+'-'+md[1].padStart(2,'0')+'-'+md[2].padStart(2,'0');if(date>last.date)return all;}
+  const completed={...current,card:apply(clone(current.card),[last]),completedAt:last.date,completionLogKey:last.key};
+  return [waitingPage(s,completed,logs),completed,...all.slice(1)];
+}
 function ensure(data,id){
   const s=data.sows.find(s=>s.id===id);if(!s)throw Error('母豚が見つかりません。');
-  if(!s.parityCards){const all=pages(data,id).reverse(),current=all.pop();s.parityCards={version:1,history:all,current:{...current,capturedKeys:events(data,id).map(l=>l.key)}};}
+  const all=pages(data,id),current=all[0];
+  if(!s.parityCards){s.parityCards={version:1,history:all.slice(1).reverse(),current:{...current,capturedKeys:events(data,id).map(l=>l.key)}};}
+  else if(current.awaitingMating&&s.parityCards.current.key!==current.key){
+    // Materialize the already saved completion only during an explicit edit/action.
+    s.parityCards.history=all.slice(1).reverse();s.parityCards.current=clone(current);
+  }
   return s.parityCards;
 }
 function start(data,id,expected){
   const before=pages(data,id);if(expected!==undefined&&JSON.stringify(before)!==expected)throw Error('カードが更新されました。開き直してください。');
   const s=data.sows.find(s=>s.id===id),latest=before[0],parity=number(latest.parity);if(parity===null)throw Error('現在の産次を入力してから新しい産次を開始してください。');
-  const store=ensure(data,id),archived={...clone(latest),savedAt:new Date().toISOString()};delete archived.capturedKeys;store.history.push(archived);
-  store.current={key:M.uid(),parity:parity+1,card:blank(s,parity+1),capturedKeys:events(data,id).map(l=>l.key),source:'新しい産次',revisions:[]};
+  const store=ensure(data,id),archived={...clone(latest),savedAt:new Date().toISOString()};delete archived.capturedKeys;if(!latest.awaitingMating)store.history.push(archived);
+  const next=blank(s,parity+1);if(latest.awaitingMating){for(const k of ['birth','mother','csf','wean'])next[k]=latest.card[k]||'';}
+  store.current={key:M.uid(),parity:parity+1,card:next,capturedKeys:events(data,id).map(l=>l.key),source:'新しい産次',revisions:[]};
 }
 function beforeRecord(data,id,log){
   const current=pages(data,id)[0];if(!current)return;
+  if(log.type==='離乳'){
+    if(current.awaitingMating)throw Error('この産次は離乳済みです。記録を確認してください。');
+    const store=ensure(data,id),completed={...clone(current),card:apply(clone(current.card),[log]),completedAt:log.date,completionLogKey:log.key,savedAt:new Date().toISOString()};delete completed.capturedKeys;
+    store.history.push(completed);store.current=waitingPage(data.sows.find(s=>s.id===id),completed,[...events(data,id),log]);return;
+  }
+  if(log.type==='種付け'&&current.awaitingMating){start(data,id);log.remating=false;delete log.reheatConfirmationKey;return;}
   if(log.type==='再発情確認'){
     if(current.card.reheatPending)throw Error('既に再種付け待ちです。実際に種付けしたときに記録してください。');
     const store=ensure(data,id);
@@ -89,7 +129,7 @@ function historyDate(value){
   if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==iso)throw Error('存在する日付を入力してください。');
   return full?iso:month+'/'+day;
 }
-function historyRows(data,id){const all=pages(data,id),current=all.shift();all.sort((a,b)=>(a.parity??9999)-(b.parity??9999)||String(a.card.birthDateActual||'').localeCompare(String(b.card.birthDateActual||'')));return [...all,...(current?[current]:[])];}
+function historyRows(data,id){const all=pages(data,id).filter(p=>!p.awaitingMating),current=all.shift();all.sort((a,b)=>(a.parity??9999)-(b.parity??9999)||String(a.card.birthDateActual||'').localeCompare(String(b.card.birthDateActual||'')));return [...all,...(current?[current]:[])];}
 function editHistory(data,id,key,patch,expected){
   const old=pages(data,id).find(p=>p.key===key);if(!old||JSON.stringify(old)!==expected)throw Error('カードが更新されました。開き直してください。');
   const card=clone(old.card);

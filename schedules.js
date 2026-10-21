@@ -27,7 +27,7 @@
       const logs=data.logs.filter(l=>!l.legacy&&l.id===sow.id);
       const last=type=>logs.filter(l=>l.type===type).sort((a,b)=>a.date.localeCompare(b.date)||data.logs.indexOf(a)-data.logs.indexOf(b)).at(-1);
       const mating=last('種付け'),birth=last('分娩');
-      if(M.isReheatPending(data,sow.id))continue;
+      if(M.isReheatPending(data,sow.id)||globalThis.TanakaSowParity?.pages(data,sow.id)[0]?.awaitingMating)continue;
       function add(base,days,label,type){
         const date=addDays(base.date,days);
         const complete=logs.filter(l=>l.type===type&&l.date>=base.date&&data.logs.indexOf(l)>data.logs.indexOf(base)).at(-1);
@@ -82,7 +82,8 @@ function sowCard(data,id){
   for(const log of logs.filter(l=>!birth||l.date>birth.date))applyReproductionEvent(c,log);
   for(const name of ['mating','reheat','due','swimgen'])if(/^\d{4}-\d{2}-\d{2}$/.test(c[name]||''))c[name]=md(c[name]);
   if(swim&&(!mating||swim.date>=mating.date)&&!c.reheatPending)c.swimgen=md(swim.date)+' 済';
-  const current=globalThis.TanakaSowParity?.pages(data,id)[0]?.card;
+  const page=globalThis.TanakaSowParity?.pages(data,id)[0],current=page?.card;
+  if(page?.awaitingMating)Object.assign(c,M.clone(current));
   if(current){for(const name of ['reheatCount','reheatPending','lastReheatDate','lastReheatKey','failedMating','reproductionStatus'])if(name in current)c[name]=M.clone(current[name]);if(current.reheatPending){c.due='';c.reheat='';c.swimgen='';}}
   return c;
 }
