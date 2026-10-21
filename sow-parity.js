@@ -49,16 +49,17 @@ function rawPages(data,id){
   // Do not infer a year's date or populate missing older parities.
   return out.reverse();
 }
-// A waiting card is a view/state of the completed parity, not a new parity.
+// Weaning prepares the next parity; mating fills it without another increment.
 function waitingPage(s,completed,logs){
-  const c=completed.card,card={...blank(s,completed.parity),birth:c.birth||'',mother:c.mother||'',csf:c.csf||'',wean:c.weanDateActual||'',weanDateActual:c.weanDateActual||'',weanCount:c.weanCount??null,birthCount:null,stillborn:null,nursingDays:null,reheatPending:false,cycleCompleted:true,reproductionStatus:'離乳済み／次回発情待ち'};
-  return {key:'postwean:'+completed.key,parity:completed.parity,card,source:'離乳後・次回種付け待ち',revisions:[],awaitingMating:true,completedKey:completed.key,capturedKeys:logs.map(l=>l.key)};
+  const previous=number(completed.parity),parity=previous===null?null:previous+1;
+  const c=completed.card,card={...blank(s,parity),birth:c.birth||'',mother:c.mother||'',csf:c.csf||'',wean:c.weanDateActual||'',weanDateActual:c.weanDateActual||'',weanCount:c.weanCount??null,birthCount:null,stillborn:null,nursingDays:null,reheatPending:false,cycleCompleted:true,reproductionStatus:'離乳済み／次回発情待ち'};
+  return {key:'postwean:'+completed.key,parity,card,source:'離乳後・次回種付け待ち',revisions:[],awaitingMating:true,completedKey:completed.key,capturedKeys:logs.map(l=>l.key)};
 }
 function pages(data,id){
   const all=rawPages(data,id),current=all[0],s=data.sows.find(s=>s.id===id);if(!current)return all;
   if(current.awaitingMating){
     const completed=all.find(p=>p.key===current.completedKey);
-    if(completed){current.parity=completed.parity;current.card.parity=completed.parity;for(const k of ['wean','weanDateActual','weanCount'])current.card[k]=clone(completed.card[k]??(k==='weanCount'?null:''));}
+    if(completed){const n=number(completed.parity);current.parity=n===null?null:n+1;current.card.parity=current.parity;for(const k of ['wean','weanDateActual','weanCount'])current.card[k]=clone(completed.card[k]??(k==='weanCount'?null:''));}
     return all;
   }
   // Existing weaning records are projected read-only; opening a card never migrates storage.
@@ -85,8 +86,8 @@ function start(data,id,expected){
   const before=pages(data,id);if(expected!==undefined&&JSON.stringify(before)!==expected)throw Error('カードが更新されました。開き直してください。');
   const s=data.sows.find(s=>s.id===id),latest=before[0],parity=number(latest.parity);if(parity===null)throw Error('現在の産次を入力してから新しい産次を開始してください。');
   const store=ensure(data,id),archived={...clone(latest),savedAt:new Date().toISOString()};delete archived.capturedKeys;if(!latest.awaitingMating)store.history.push(archived);
-  const next=blank(s,parity+1);if(latest.awaitingMating){for(const k of ['birth','mother','csf','wean'])next[k]=latest.card[k]||'';}
-  store.current={key:M.uid(),parity:parity+1,card:next,capturedKeys:events(data,id).map(l=>l.key),source:'新しい産次',revisions:[]};
+  const nextParity=latest.awaitingMating?parity:parity+1,next=blank(s,nextParity);if(latest.awaitingMating){for(const k of ['birth','mother','csf','wean'])next[k]=latest.card[k]||'';}
+  store.current={key:M.uid(),parity:nextParity,card:next,capturedKeys:events(data,id).map(l=>l.key),source:'新しい産次',revisions:[]};
 }
 function beforeRecord(data,id,log){
   const current=pages(data,id)[0];if(!current)return;
