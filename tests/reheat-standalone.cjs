@@ -21,5 +21,25 @@ const withCare=append(d,{key:'swim',type:'スイムジェン 実施',id:'149',da
 // Both days following a confirmed return are rematings in the same parity.
 let twoDays=append(seed(),{key:'two-return',type:'再発情確認',id:'149',date:'2026-10-20'});
 for(const [key,date,boar] of [['two-first','2026-10-20','B1'],['two-second','2026-10-21','B2']]){a.equal(P.matingReturnKey(twoDays,'149',date),'two-return');const l={key,type:'種付け',id:'149',date,boar,remating:false};twoDays=append(twoDays,l);a.equal(l.remating,true);a.equal(l.reheatConfirmationKey,'two-return');a.equal(P.pages(twoDays,'149')[0].parity,5);a.equal(P.pages(twoDays,'149')[0].card.reheatCount,1);}
-a.equal(twoDays.logs.filter(l=>l.type==='種付け'&&l.remating).length,2);a.equal(P.pages(twoDays,'149')[0].card.boar,'B2');a.equal(P.pages(twoDays,'149')[0].card.mating,'2026-10-21');a.equal(JSON.stringify(P.historyRows(M.migrate(JSON.parse(JSON.stringify(twoDays))),'149')),JSON.stringify(P.historyRows(twoDays,'149')));
+a.equal(twoDays.logs.filter(l=>l.type==='種付け'&&l.remating).length,2);a.equal(P.pages(twoDays,'149')[0].card.boar,'B2');a.equal(P.pages(twoDays,'149')[0].card.mating,'2026-10-20');a.equal(JSON.stringify(P.historyRows(M.migrate(JSON.parse(JSON.stringify(twoDays))),'149')),JSON.stringify(P.historyRows(twoDays,'149')));
 console.log('PASS two-day remating: both standard-format records automatically link the same confirmation; user-selected B1 then B2; parity and return count unchanged; JSON restored.');
+
+// Shared baseline: 10/20 + 21 = 11/10; +114 = 2/11, never day two.
+card=P.pages(twoDays,'149')[0].card;
+a.equal(card.lastReheatDate,'2026-10-20');a.equal(card.reheat,'2026-11-10');a.equal(card.due,'2027-02-11');a.equal(card.matingSet.length,2);
+a.equal(M.sowCard(twoDays,'149').mating,'10/20');
+a.ok(M.schedules(twoDays,'2026-10-21').some(p=>p.type==='分娩'&&p.date==='2027-02-11'));
+a.ok(M.schedules(twoDays,'2026-10-21').some(p=>p.type==='再発情確認'&&p.date==='2026-11-10'));
+a.equal(F.build(twoDays,'2026-10-21').periods.find(p=>p.id==='149').mating,'2026-10-20');
+// Older captured card with day-two values is repaired as a view, not a storage migration.
+const captured=M.clone(twoDays),store=captured.sows[0].parityCards;
+store.current.card=M.clone(card);delete store.current.card.matingSet;Object.assign(store.current.card,{mating:'2026-10-21',reheat:'2026-11-11',due:'2027-02-12'});store.current.capturedKeys=captured.logs.map(l=>l.key);
+const untouched=JSON.stringify(captured);a.equal(P.pages(captured,'149')[0].card.due,'2027-02-11');a.equal(JSON.stringify(captured),untouched);
+a.equal(M.sowCard(captured,'149').mating,'10/20');
+a.equal(P.pages(cloud.validate(M.migrate(JSON.parse(JSON.stringify(captured)))),'149')[0].card.reheat,'2026-11-10');
+// Confirmation breaks even a same-day set; a new estrus has its own anchor.
+let nextReturn=append(twoDays,{key:'another-return',type:'再発情確認',id:'149',date:'2026-11-10'});
+nextReturn=append(nextReturn,{key:'another-first',type:'種付け',id:'149',date:'2026-11-10',boar:'B2'});
+nextReturn=append(nextReturn,{key:'another-second',type:'種付け',id:'149',date:'2026-11-11',boar:'B1'});
+a.equal(P.pages(nextReturn,'149')[0].card.mating,'2026-11-10');a.equal(P.pages(nextReturn,'149')[0].card.reheatCount,2);
+console.log('PASS first-date mating set: cards, schedules, forecast, captured older cards, cloud/JSON roundtrip and distinct returned cycle.');
