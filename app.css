@@ -493,11 +493,11 @@ body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simula
 .quick-mating-boars input{position:absolute;opacity:0;width:1px;height:1px;margin:0}.quick-mating-boars span{display:block;text-align:center;padding:16px 12px;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);font-size:24px;font-weight:700}
 .quick-mating-boars input:checked+span{border-color:var(--accent);background:var(--soft);color:var(--softtext)}.quick-mating-boars input:focus-visible+span{outline:3px solid var(--accent);outline-offset:3px}
 
-/* The mating strip uses the card width so the important text stays readable. */
-.sow-mating-row{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);min-width:0}
+/* Match the vertical label/value flow while keeping mating details readable. */
+.sow-mating-row{grid-column:1/-1;display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:18px 12px;border-bottom:1px solid var(--border);min-width:0}
 .sow-mating-summary{display:flex;align-items:baseline;flex-wrap:nowrap;gap:8px;min-width:0}
 .sow-mating-summary>b{font-size:32px;line-height:1.35;white-space:nowrap;overflow-wrap:normal}
 .sow-mating-summary>span:not(.sow-reheat-count){font-size:20px;font-weight:700;white-space:nowrap}
 .sow-mating-summary>.sow-reheat-count{font-size:11px;padding:2px 4px;align-self:center;flex-shrink:0}
 .sow-mating-row>.sow-quick-mating{flex-shrink:0;padding:4px 6px}
-@media(max-width:350px){.sow-mating-row,.sow-mating-summary{gap:5px}.sow-mating-row{padding-inline:10px}}
+@media(max-width:350px){.sow-mating-summary{gap:5px}}
