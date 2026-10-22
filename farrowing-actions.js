@@ -24,9 +24,9 @@ function definitions(f,scope,settings){
   }
   return out;
 }
-function shifted(p,n){const q=F.period(p.id,F.add(p.mating,n),p.first,'比較する次回サイクル（未保存の予測）',root.TanakaModel.plannedWeanDays(p));return {...p,...q,key:p.key,moveDate:F.add(q.birth,60),moveBasis:'estimate',moveSource:'比較案の分娩予測日＋60日'};}
+function shifted(p,n){const q=F.period(p.id,F.add(p.mating,n),p.first,'比較する次回サイクル（未保存の予測）',root.TanakaModel.plannedWeanDays(p));return {...p,...q,key:p.key,summerFirst:p.summerFirst??p.first,moveDate:F.add(q.birth,60),moveBasis:'estimate',moveSource:'比較案の分娩予測日＋60日'};}
 function label(def,n){if(!n)return '予定どおり';if(n===21)return '1周期見送り（約21日）';return def.kind==='move'?Math.abs(n)+'日'+(n<0?'前倒し':'後ろへ'):(n>0?'＋':'')+n+'日離乳';}
-function compareOrder(x,y){return (Math.abs(x.offset)===21?1:0)-(Math.abs(y.offset)===21?1:0)||Math.abs(x.offset)-Math.abs(y.offset)||Math.max(0,x.currentRoomExtraDays)-Math.max(0,y.currentRoomExtraDays)||(x.kind==='move'?0:1)-(y.kind==='move'?0:1)||(x.offset>0?1:0)-(y.offset>0?1:0)||Number(x.heatWorse)-Number(y.heatWorse)||x.actionKey.localeCompare(y.actionKey,'ja',{numeric:true});}
+function compareOrder(x,y){const capacity=o=>{const n=Math.max(o.cyclePeak||0,o.currentPeak||0);return n>=11?n:n===10?10:0;},summer=o=>o.heat?.avoid?2:o.heat?.caution?1:0;return capacity(x)-capacity(y)||(Math.abs(x.offset)===21?1:0)-(Math.abs(y.offset)===21?1:0)||summer(x)-summer(y)||Math.abs(x.offset)-Math.abs(y.offset)||Math.max(0,x.currentRoomExtraDays)-Math.max(0,y.currentRoomExtraDays)||(x.kind==='move'?0:1)-(y.kind==='move'?0:1)||(x.offset>0?1:0)-(y.offset>0?1:0)||Number(x.heatWorse)-Number(y.heatWorse)||x.actionKey.localeCompare(y.actionKey,'ja',{numeric:true});}
 function simulate(f,scope,target,def,n){
   const periods=scope.periods.map(p=>({...p})),children=scope.children.map(p=>({...p}));
   const date=F.add(def.date,def.kind==='wean'&&n===21?0:n);if(!forward(f,date))return null;
@@ -50,7 +50,7 @@ function simulate(f,scope,target,def,n){
   const currentExtraDays=extended?n:0,currentRoomExtraDays=oldStay?F.distance(oldStay.exit,newStay.exit):0;
   const currentStart=oldStay?(oldStay.entry<f.day?f.day:oldStay.entry):f.day,currentEnd=oldStay?[oldStay.exit,newStay.exit].sort().at(-1):f.day;
   const currentWorse=extended&&after.some((d,i)=>d.date>=currentStart&&d.date<=currentEnd&&d.count>before[i].count&&F.capacityState(d.count).attention);
-  const next=periods.find(p=>p.key===def.nextKey),oldHeat=anchor?F.heat(anchor.birth):null,heat=next?F.heat(next.birth):null;
+  const next=periods.find(p=>p.key===def.nextKey),oldHeat=anchor?F.periodHeat(anchor):null,heat=next?F.periodHeat(next):null;
   const heatWorse=!!(heat&&(!oldHeat.avoid&&heat.avoid||!oldHeat.caution&&heat.caution));
   const includedIds=new Set(scope.periods.map(p=>p.id)),uncertainty=(f.unmodelled||[]).length>0||scope.periods.some(p=>p.uncertain)||(f.rows||[]).some(r=>includedIds.has(r.id)&&r.parityUnknown);
   const improvedDays=after.filter((d,i)=>d.date>=target.start&&d.date<=target.end&&d.count<before[i].count).length;
@@ -61,7 +61,7 @@ function simulate(f,scope,target,def,n){
   if(def.nextKey)graphKeys.add(def.nextKey);
   const graphPeriods=[...beforeOcc,...afterOcc].filter(p=>graphKeys.has(p.key));
   const graphStart=graphStartAt(f,[target.start,...graphPeriods.map(p=>p.entry)]),graphEnd=[target.end,...graphPeriods.map(p=>p.exit)].sort().at(-1);
-  return {offset:n,kind:def.kind,actionKey:def.key,date,label:label(def,n),basePeak:base.count,cyclePeak:peak.count,peakDate:peak.date,basePeakDate:base.date,goal,effective,resolved,recommendable:resolved&&base.count>=10&&!uncertainty&&!heatWorse,newFullDays:newFullDays.map(d=>({date:d.date,count:d.count})),worsens:newFullDays.length>0,currentWorse,uncertainty,heatWorse,currentExtraDays,currentRoomExtraDays,currentPeak:maximum(after,currentStart,currentEnd).count,mating:next?.mating||'',estrus:def.kind==='wean'?F.add(date,4):def.kind==='breed'?def.date:'',birth:next?.birth||'',due:next?.due||'',heat,overlaps:after.find(d=>d.date===peak.date)?.overlaps||[],graphStart,graphEnd,graph:after.flatMap((d,i)=>d.date>=graphStart&&d.date<=graphEnd?[{date:d.date,before:before[i].count,after:d.count}]:[]),effects:[{start:target.start,end:target.end,before:base.count,after:peak.count,peakDate:peak.date,improvedDays}],recommendedFor:[]};
+  return {offset:n,kind:def.kind,actionKey:def.key,date,label:label(def,n),basePeak:base.count,cyclePeak:peak.count,peakDate:peak.date,basePeakDate:base.date,goal,effective,resolved,recommendable:resolved&&base.count>=10&&!uncertainty,newFullDays:newFullDays.map(d=>({date:d.date,count:d.count})),worsens:newFullDays.length>0,currentWorse,uncertainty,heatWorse,currentExtraDays,currentRoomExtraDays,currentPeak:maximum(after,currentStart,currentEnd).count,mating:next?.mating||'',estrus:def.kind==='wean'?F.add(date,4):def.kind==='breed'?def.date:'',birth:next?.birth||'',due:next?.due||'',heat,overlaps:after.find(d=>d.date===peak.date)?.overlaps||[],graphStart,graphEnd,graph:after.flatMap((d,i)=>d.date>=graphStart&&d.date<=graphEnd?[{date:d.date,before:before[i].count,after:d.count}]:[]),effects:[{start:target.start,end:target.end,before:base.count,after:peak.count,peakDate:peak.date,improvedDays}],recommendedFor:[]};
 }
 function contextFor(f,target,focus,settings){
   const scope={periods:[...fixedCycles(f),...(focus?[focus]:[])],children:(f.childStays||[]).map(p=>({...p,pigletsOnly:true}))};
@@ -94,11 +94,11 @@ function nextCorrection(f,id,weanDate='',matingDate=''){
   const source=firstFuture(f,id);if(!source)return null;
   const originalPeriods=fixedCycles(f),periods=originalPeriods.map(p=>({...p})),parent=periods.find(p=>p.id===id&&p.actualBirth&&!p.actualWean),n=parent&&F.valid(weanDate)?F.distance(parent.exit,weanDate):F.valid(matingDate)?F.distance(source.mating,matingDate):0;
   const next=n?shifted(source,n):{...source};if(parent&&F.valid(weanDate))parent.exit=weanDate;
-  const scope={periods:[...periods,next],children:f.childStays||[]},occupancies=[...scope.periods.map(span),...scope.children],stay=span(next),days=daysFor(f,occupancies,next.entry,stay.exit),peak=maximum(days,next.entry,stay.exit),heat=F.heat(next.birth),age=parent&&F.valid(weanDate)?F.distance(parent.birth,weanDate):null,requiredNursingDays=root.TanakaModel.plannedWeanDays(parent);
+  const scope={periods:[...periods,next],children:f.childStays||[]},occupancies=[...scope.periods.map(span),...scope.children],stay=span(next),days=daysFor(f,occupancies,next.entry,stay.exit),peak=maximum(days,next.entry,stay.exit),heat=F.periodHeat(next),age=parent&&F.valid(weanDate)?F.distance(parent.birth,weanDate):null,requiredNursingDays=root.TanakaModel.plannedWeanDays(parent);
   const uncertainty=(f.unmodelled||[]).length>0||scope.periods.some(p=>p.uncertain)||(f.rows||[]).some(r=>scope.periods.some(p=>p.id===r.id)&&r.parityUnknown);
   const originalParent=originalPeriods.find(p=>p.key===parent?.key),holdEnd=parent?span(parent).exit:f.day,holdStart=originalParent?span(originalParent).exit:f.day,holdDays=n>0&&holdEnd>holdStart?daysFor(f,occupancies,F.add(holdStart,1),holdEnd).filter(d=>d.count>daysFor(f,[...originalPeriods.map(span),span(source),...scope.children],d.date,d.date)[0].count) :[],hold=F.capacityPeak(holdDays);
   const unavailable=!!matingDate&&originalPeriods.some(p=>p.id===id&&F.add(p.exit,4)>next.mating);
-  const capacity=F.capacityState(Math.max(peak.count,hold.count)),level=capacity.over||heat.avoid?'bad':capacity.attention||heat.caution||uncertainty||unavailable||age!==null&&age<requiredNursingDays?'warn':'good';
+  const capacity=F.capacityState(Math.max(peak.count,hold.count)),level=capacity.over?'bad':capacity.attention||heat.caution||uncertainty||unavailable||age!==null&&age<requiredNursingDays?'warn':'good';
   return {capacityDays:days.map(d=>({date:d.date,count:d.count})),peak:peak.count,peakDate:peak.date,level,heat,age,requiredNursingDays,uncertainty,unavailable,holdPeak:hold.count,holdDate:hold.date,mating:next.mating,birth:next.birth,due:next.due,entry:next.entry,exit:stay.exit};
 }
 function targetForDate(plan,date){return plan.targets.find(t=>t.start<=date&&t.end>=date)||null;}
@@ -108,7 +108,7 @@ function guidanceChoice(j,plan){
   const days=j.capacityDays||[];if(!days.length||j.peak<9||j.uncertain||j.uncertainty||j.unavailable||(j.holdPeak||0)>=9||j.age!=null&&j.age<(j.requiredNursingDays??30))return null;
   const goal=j.peak>=11?10:j.peak===10?9:8,candidates=[];
   for(const t of plan.targets||[])if(t.start<=days.at(-1).date&&t.end>=days[0].date)for(const c of t.contexts)for(const a of c.actions)for(const o of a.options){
-    if(!o.offset||!o.effective||o.currentWorse||o.newFullDays.length||o.uncertainty||o.heatWorse)continue;
+    if(!o.offset||!o.effective||o.currentWorse||o.newFullDays.length||o.uncertainty)continue;
     const graph=new Map(o.graph.map(d=>[d.date,d]));
     // Do not promise a result from another cohort or from only part of this view.
     if(days.some(d=>!graph.has(d.date)||graph.get(d.date).before!==d.count))continue;
@@ -131,7 +131,7 @@ function workGuidance(f,x,j,plan={targets:[]}){
     steps.push((within?possible:'')+md(deadline)+'は残り1室です。予定日前に入退室を確認し、空室1室を維持できるか確認してください。');
   }
   if(j.holdPeak>=9)steps.push('離乳日の延長で今の部屋を長く使います。'+md(j.holdDate)+'の入室予定と受入枠を確認してから調整してください。');
-  if(j.heat?.caution)steps.push('分娩予測'+md(j.birth)+'は'+(j.heat.avoid?'8月の分娩回避推奨期間':'暑熱注意期間')+'です。1周期見送り案と収容・暑熱予測を比較し、暑熱対策を確認してください。');
+  if(j.heat?.caution)steps.push('初産の分娩予測'+md(j.birth)+'は'+(j.heat.avoid?'8月の分娩回避推奨期間':'暑熱注意期間')+'です。収容安全を優先し、混雑が悪化しない範囲で調整案と暑熱対策を確認してください。');
   if(uncertain)steps.push('未確定の在室・日付を確認してください。空室を実際に確認してから実施日を判断してください。');
   if(j.unavailable)steps.push('現在の妊娠・授乳記録と種付け予定が重なっています。母豚カードの日付を確認してください。');
   if(j.age!==null&&j.age!==undefined&&j.age<(j.requiredNursingDays??30))steps.push('基準日では授乳'+j.age+'日です。あと'+((j.requiredNursingDays??30)-j.age)+'日で'+(j.requiredNursingDays??30)+'日になるため、実分娩日と離乳予定日を確認してください。');

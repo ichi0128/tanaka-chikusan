@@ -188,3 +188,14 @@ test('farrowing overdue badges use calendar dates and virtual today without chan
  assert.equal(vm.runInContext('JSON.stringify(db)',b.context),before);
  assert.equal(b.storage.getItem('tanaka-db'),saved);
 });
+
+test('annual screen distinguishes first-birth summer preference and keeps seasonal bands without writes',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));const saved=b.storage.getItem('tanaka-db');
+ vm.runInContext(`db=M.clone(db);db.logs=[];db.sows=[{id:'1',active:true,cardBaseline:{parity:0,mating:'2027-04-10'}},{id:'2',active:true,cardBaseline:{parity:2,mating:'2027-04-10'}}];db.baseline.forEach(r=>Object.assign(r,{state:'empty',sowId:'',count:null,birthDate:''}));state=M.replay(db);simulation={day:'2027-03-01',baseDay:'2027-03-01'};go('forecast');`,b.context);
+ const html=b.elements.get('app').innerHTML;
+ assert.match(html,/初産・8月の分娩予測<\/small><strong>1件/);assert.match(html,/8\/1〜8\/31 初産のみ回避配慮/);
+ assert.match(vm.runInContext("ffHeatLabel(FF.compare(ffData(),'1','2027-04-10').heat)",b.context),/初産のみ/);
+ assert.match(vm.runInContext("ffHeatLabel(FF.compare(ffData(),'2','2027-04-10').heat)",b.context),/対象外/);
+ assert.equal(vm.runInContext("FF.compare(ffData(),'2','2027-04-10').level",b.context),'good');
+ assert.equal(b.storage.getItem('tanaka-db'),saved);
+});
