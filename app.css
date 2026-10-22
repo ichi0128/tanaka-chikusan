@@ -507,3 +507,10 @@ body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simula
 .app-version{margin:24px 0 10px;text-align:center;font-size:12px;line-height:1.7;color:var(--muted)}
 
 .room-wean-settings{margin:14px 0;padding-top:10px;border-top:1px solid var(--border)}.wean-days-controls{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;align-items:center;gap:4px;width:100%;max-width:240px}.wean-days-controls button{min-width:0;width:32px;min-height:44px;border:1px solid var(--border);border-radius:10px;background:var(--soft);color:var(--softtext);font-size:24px;cursor:pointer}.wean-days-controls strong{min-width:0;text-align:center;font-size:18px;white-space:nowrap}.wean-days-controls button:disabled{opacity:.4;cursor:default}
+
+/* Match the compact reheat badge; keep the due date's own color unchanged. */
+.feed-due-value{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px}
+.farrowing-overdue-badge{display:inline-block;flex-shrink:0;border:1px solid var(--border);border-radius:999px;padding:2px 4px;font-size:11px;font-weight:700;line-height:1.2;background:var(--soft);color:var(--softtext);white-space:nowrap}
+.farrowing-overdue-badge.is-late{background:#fbe8e8;color:#942f37;border-color:#d8a0a0}
+html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;color:#ffd6dc;border-color:#b46c7c}
+.overdue-basis{font-size:11px;line-height:1.6}

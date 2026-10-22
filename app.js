@@ -1,6 +1,6 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.2.0';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
@@ -319,6 +319,21 @@ function cancelScheduled(key){const l=db.logs.find(x=>x.key===key);if(!l)return;
 
 function dueMonthDay(id){const raw=sowDue(id),match=/^(?:\d{4}-)?(\d{1,2})[-/](\d{1,2})$/.exec(raw);return match?Number(match[1])+'月'+Number(match[2])+'日':raw;}
 
+// Display only: calendar-day difference from the existing due date, using virtual today in simulation.
+function farrowingOverdueBadge(room){
+  if(room.state!=='waiting'||room.mixed||!room.sowId)return '';
+  const raw=sowDue(room.sowId),day=today(),card=TanakaSowParity.pages(db,room.sowId)[0]?.card||{};
+  const mating=M.matingSet(db.logs.filter(l=>l.id===room.sowId))[0]?.date;
+  const due=FF.valid(raw)?raw:FF.normalizeDate(raw,mating?FF.add(mating,114):'');
+  if(!FF.valid(due)||!FF.valid(day))return '';
+  const actual=FF.normalizeDate(card.birthDateActual,FF.add(due,7));
+  // A previous parity's birth must not hide the current pregnancy's badge.
+  if(actual&&actual>=FF.add(due,-114))return '';
+  const days=FF.distance(due,day);if(days<=0)return '';
+  const basis=`計算基準：${day} − 分娩予定日 ${due}（暦日）${simulation?'・シミュレーション日付':''}`;
+  return `<span class="farrowing-overdue-badge${days>=10?' is-late':''}" aria-label="分娩予定日を${days}日超過。${esc(basis)}" title="${esc(basis)}">+${days}</span>`;
+}
+
 function roomBirthDate(room){return M.roomBirthDate(db,room);}
 
 function recoveryEntries(storage){const entries=[];for(let i=0;i<storage.length;i++){const key=storage.key(i);if(key&&(/^(tanaka(?:[-_]|$)|T[YC]\d)/i.test(key)))entries.push({key,raw:storage.getItem(key)});}return entries.sort((a,b)=>a.key.localeCompare(b.key));}
@@ -352,7 +367,7 @@ function roomBirthCount(room){
 function feedBoxCard(r){
   if(r.state==='empty')return '<div class="feed-box feed-empty"><span>空き</span></div>';
   const waiting=r.state==='waiting',birth=roomBirthDate(r),date=waiting?dueMonthDay(r.sowId):birth?monthDayText(birth):'未入力',birthCount=roomBirthCount(r);
-  return simulationGroupBadge('rooms',r.key)+`<div class="feed-box"><div class="feed-number">${r.mixed?'混成':sowButton(r.sowId)}</div><div class="feed-parity">${r.mixed?'':esc(sowParityText(r.sowId))}</div><div class="feed-date"><small>${waiting?'予定日':r.mixed?'一番若い子の出産日':'出産日'}</small><strong>${esc(date)}</strong></div><div class="feed-age">${waiting?'':birth?esc(pigletAgeText(birth)):'日令未入力'}</div><div class="feed-count">${waiting?'':`<small>出生－現在</small><strong>${birthCount===null?'―':esc(birthCount)}－${r.count===null?'―':esc(r.count)}</strong>`}</div></div>`;
+  return simulationGroupBadge('rooms',r.key)+`<div class="feed-box"><div class="feed-number">${r.mixed?'混成':sowButton(r.sowId)}</div><div class="feed-parity">${r.mixed?'':esc(sowParityText(r.sowId))}</div><div class="feed-date"><small>${waiting?'予定日':r.mixed?'一番若い子の出産日':'出産日'}</small><span class="feed-due-value"><strong>${esc(date)}</strong>${waiting?farrowingOverdueBadge(r):''}</span></div><div class="feed-age">${waiting?'':birth?esc(pigletAgeText(birth)):'日令未入力'}</div><div class="feed-count">${waiting?'':`<small>出生－現在</small><strong>${birthCount===null?'―':esc(birthCount)}－${r.count===null?'―':esc(r.count)}</strong>`}</div></div>`;
 }
 
 
@@ -366,7 +381,7 @@ function roomWeanSettings(room){
 function pigletCareCard(room){
   const checks=M.pigletCare(db,room);if(room.state==='empty')return '';
   const complete=checks.every(x=>x.done);
-  return `<details class="piglet-care" data-care-room="${esc(room.key)}" ${openPigletCare.has(room.key)?'open':''}><summary>詳細操作（接種記録・離乳設定）</summary><div class="piglet-care-content">${checks.length?`<h3>投薬・ワクチン <span class="badge ${complete?'green':'orange'}">${complete?'全て完了':checks.filter(x=>!x.done).length+'件 未'}</span></h3>${checks.map(x=>`<div class="care-row"><div><b>${esc(x.label)}</b><small>${x.days}日齢 · ${x.date?esc(monthDayText(x.date))+'予定':'出産日未入力'}${!x.done&&x.date&&x.date<today()?' · 予定日超過':''}</small></div><button class="care-toggle ${x.done?'done':''}" data-action="piglet-check" data-id="${room.key}" data-care="${x.id}" aria-pressed="${x.done}" aria-label="${esc(room.mixed?'混成':room.sowId)} ${esc(x.label)} ${x.done?'済、未に戻す':'未、済にする'}">${x.done?'✓ 済':'未'}</button></div>`).join('')}${checks.some(x=>!x.date)?'<p class="muted">出産日を編集すると予定日が表示されます。</p>':''}${room.mixed?'<p class="muted">混成は枠全体をチェック。予定日は一番若い子の出産日から計算します。</p>':''}`:''}${roomWeanSettings(room)}${room.state==='piglets'?`<button class="btn secondary" data-action="room-group" data-id="${room.key}">分ける・混ぜる</button>`:''}<button class="btn secondary" data-action="room-edit" data-id="${room.key}">編集</button></div></details>`;
+  return `<details class="piglet-care" data-care-room="${esc(room.key)}" ${openPigletCare.has(room.key)?'open':''}><summary>詳細操作（接種記録・離乳設定）</summary><div class="piglet-care-content">${checks.length?`<h3>投薬・ワクチン <span class="badge ${complete?'green':'orange'}">${complete?'全て完了':checks.filter(x=>!x.done).length+'件 未'}</span></h3>${checks.map(x=>`<div class="care-row"><div><b>${esc(x.label)}</b><small>${x.days}日齢 · ${x.date?esc(monthDayText(x.date))+'予定':'出産日未入力'}${!x.done&&x.date&&x.date<today()?' · 予定日超過':''}</small></div><button class="care-toggle ${x.done?'done':''}" data-action="piglet-check" data-id="${room.key}" data-care="${x.id}" aria-pressed="${x.done}" aria-label="${esc(room.mixed?'混成':room.sowId)} ${esc(x.label)} ${x.done?'済、未に戻す':'未、済にする'}">${x.done?'✓ 済':'未'}</button></div>`).join('')}${checks.some(x=>!x.date)?'<p class="muted">出産日を編集すると予定日が表示されます。</p>':''}${room.mixed?'<p class="muted">混成は枠全体をチェック。予定日は一番若い子の出産日から計算します。</p>':''}`:''}${roomWeanSettings(room)}${room.state==='waiting'?'<p class="muted overdue-basis">超過日数＝現在日 − 分娩予定日（暦日）。シミュレーション中は仮想日付を使用します。予定日未入力・当日以前・分娩後は表示しません。</p>':''}${room.state==='piglets'?`<button class="btn secondary" data-action="room-group" data-id="${room.key}">分ける・混ぜる</button>`:''}<button class="btn secondary" data-action="room-edit" data-id="${room.key}">編集</button></div></details>`;
 }
 function maternalTree(){return maternalTreeOverview();}
 function checkMother(id,mother,oldId=id){

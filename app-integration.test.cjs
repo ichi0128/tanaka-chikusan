@@ -162,3 +162,29 @@ test('nursery displays older birthdays first without exposing internal slot name
  assert.match(label,/149/);assert.doesNotMatch(label,/管理枠/);
  assert.equal(vm.runInContext("nurseryName({key:'n5'})",b.context),'空き');
 });
+
+test('farrowing overdue badges use calendar dates and virtual today without changing saved data',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));
+ const saved=b.storage.getItem('tanaka-db');
+ vm.runInContext(`db={...db,sows:[{id:'badge-test',active:true,cardBaseline:{parity:1,due:'2026-10-30'}},...db.sows],logs:[]};state=M.replay(db);var badgeRoom={key:'r1',state:'waiting',sowId:'badge-test'};simulation={day:'2026-10-29'};`,b.context);
+ const before=vm.runInContext('JSON.stringify(db)',b.context);
+ const badge=(day,due='2026-10-30',birth='')=>vm.runInContext(`simulation.day=${JSON.stringify(day)};db.sows[0].cardBaseline.due=${JSON.stringify(due)};db.sows[0].cardBaseline.birthDateActual=${JSON.stringify(birth)};state=M.replay(db);farrowingOverdueBadge(badgeRoom);`,b.context);
+ assert.equal(badge('2026-10-29'),'');assert.equal(badge('2026-10-30'),'');
+ assert.match(badge('2026-10-31'),/>\+1<\/span>/);
+ assert.doesNotMatch(badge('2026-11-08'),/is-late/);
+ assert.match(badge('2026-11-08'),/>\+9<\/span>/);
+ assert.match(badge('2026-11-09'),/class="farrowing-overdue-badge is-late"/);
+ assert.match(badge('2026-11-11'),/>\+12<\/span>/);
+ assert.match(badge('2027-01-01','2026-12-31'),/>\+1<\/span>/);
+ assert.match(badge('2028-03-01','2028-02-28'),/>\+2<\/span>/);
+ assert.equal(badge('2026-11-01',''),'');assert.equal(badge('2026-11-01','未入力'),'');
+ assert.equal(badge('2026-11-01','2026-02-30'),'');
+ assert.equal(badge('2026-11-01','2026-10-30','2026-10-31'),'');
+ assert.match(badge('2026-11-01','2026-10-30','2026-02-01'),/>\+2<\/span>/);
+ badge('2026-11-01');
+ for(const kind of ['family','piglets','empty'])assert.equal(vm.runInContext(`farrowingOverdueBadge({...badgeRoom,state:${JSON.stringify(kind)}})`,b.context),'');
+ assert.match(vm.runInContext('farrowingOverdueBadge(badgeRoom)',b.context),/2026-11-01 − 分娩予定日 2026-10-30（暦日）・シミュレーション日付/);
+ vm.runInContext('delete db.sows[0].cardBaseline.birthDateActual;',b.context);
+ assert.equal(vm.runInContext('JSON.stringify(db)',b.context),before);
+ assert.equal(b.storage.getItem('tanaka-db'),saved);
+});
