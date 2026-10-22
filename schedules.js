@@ -1,5 +1,7 @@
 (function(){'use strict';const M=TanakaModel,replay=M.replay;
   function addDays(date,days){const d=new Date(date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
+  // One source for the optional, per-parity nursing interval.
+  M.plannedWeanDays=card=>Number.isInteger(card?.plannedWeanDays)&&card.plannedWeanDays>=1&&card.plannedWeanDays<=365?card.plannedWeanDays:30;
   // Keep saved history intact; collapse identical work records only in projections.
   function uniqueMatingLogs(logs){
     const seen=new Set(),duplicates=new Set(),cycles=new Map();
@@ -145,7 +147,7 @@ function sowCard(data,id){
   const page=globalThis.TanakaSowParity?.pages(data,id)[0],current=page?.card;
   if(page?.awaitingMating)Object.assign(c,M.clone(current));
   if(current){for(const name of ['reheatCount','reheatPending','lastReheatDate','lastReheatKey','failedMating','reproductionStatus'])if(name in current)c[name]=M.clone(current[name]);if(current.reheatPending){c.due='';c.reheat='';c.swimgen='';}}
-  if(current)for(const name of ['mating','boar','reheat','due','swimgen','matingSet'])if(name in current)c[name]=M.clone(current[name]);
+  if(current)for(const name of ['mating','boar','reheat','due','swimgen','matingSet','plannedWeanDays'])if(name in current)c[name]=M.clone(current[name]);
   reconcileMating(c,logs);
   resetSwimgenAfterBirth(c,logs);
   for(const name of ['mating','reheat','due','swimgen'])c[name]=String(c[name]??'').replace(/^(\d{4}-\d{2}-\d{2})(.*)$/,(_,date,suffix)=>md(date)+suffix);

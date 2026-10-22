@@ -118,6 +118,7 @@ function beforeRecord(data,id,log){
     start(data,id);
     const card=data.sows.find(s=>s.id===id).parityCards.current.card;
     for(const k of ['boar','mating','reheat','due','swimgen','csf','reheatCount'])card[k]=clone(current.card[k]??'');
+    if(current.card.plannedWeanDays!==undefined)card.plannedWeanDays=current.card.plannedWeanDays;
   }
 }
 function edit(data,id,key,card,expected){
@@ -125,6 +126,13 @@ function edit(data,id,key,card,expected){
   const store=ensure(data,id),target=store.current.key===key?store.current:store.history.find(p=>p.key===key);
   target.revisions=[...(target.revisions||[]),{savedAt:new Date().toISOString(),card:clone(old.card)}];target.card=clone(card);target.parity=number(card.parity);target.updatedAt=new Date().toISOString();
   if(target===store.current)target.capturedKeys=events(data,id).map(l=>l.key);
+}
+function setWeanDays(data,{id,roomKey,birthDate,days,expectedDays}){
+  if(!Number.isInteger(days)||days<1||days>365)throw Error('離乳日数は1〜365日の整数で設定してください。');
+  const room=M.replay(data).rooms.find(r=>r.key===roomKey),current=pages(data,id)[0];
+  if(!room||!['family','waiting'].includes(room.state)||room.mixed||room.sowId!==id||!current||current.awaitingMating)throw Error('対象の母豚と分娩舎を確認してください。');
+  if((room.state==='family'?M.roomBirthDate(data,room)||'':'')!==(birthDate||'')||M.plannedWeanDays(current.card)!==expectedDays)throw Error('離乳設定が更新されました。カードを開き直してください。');
+  edit(data,id,current.key,{...clone(current.card),plannedWeanDays:days},JSON.stringify(current));
 }
 // The compact history is a view of the existing parity cards, never a second ledger.
 const historyCounts=['birthCount','weanCount','nursingDays','foster','fosterOut','fosterIn','blackPiglets','crushed','weakDeaths','stillborn'];
@@ -160,9 +168,9 @@ function editHistory(data,id,key,patch,expected){
   edit(data,id,key,card,expected);
 }
 const validate=M.validate;
-M.validate=function(data){validate(data);for(const s of data.sows){if(!s.parityCards)continue;const p=s.parityCards;if(p.version!==1||!Array.isArray(p.history)||!p.current)throw Error('母豚の産次カード形式を確認してください。');const keys=new Set();for(const x of [...p.history,p.current]){if(!x||typeof x.key!=='string'||keys.has(x.key)||!x.card||typeof x.card!=='object'||(x.parity!==null&&number(x.parity)===null)||!Array.isArray(x.revisions))throw Error('母豚の産次カードを確認してください。');keys.add(x.key);}if(!Array.isArray(p.current.capturedKeys))throw Error('母豚カードの履歴を確認してください。');}};
+M.validate=function(data){validate(data);for(const s of data.sows){if(!s.parityCards)continue;const p=s.parityCards;if(p.version!==1||!Array.isArray(p.history)||!p.current)throw Error('母豚の産次カード形式を確認してください。');const keys=new Set();for(const x of [...p.history,p.current]){if(x?.card?.plannedWeanDays!==undefined&&(!Number.isInteger(x.card.plannedWeanDays)||x.card.plannedWeanDays<1||x.card.plannedWeanDays>365))throw Error('産次ごとの離乳日数を確認してください。');if(!x||typeof x.key!=='string'||keys.has(x.key)||!x.card||typeof x.card!=='object'||(x.parity!==null&&number(x.parity)===null)||!Array.isArray(x.revisions))throw Error('母豚の産次カードを確認してください。');keys.add(x.key);}if(!Array.isArray(p.current.capturedKeys))throw Error('母豚カードの履歴を確認してください。');}};
 const migrate=M.migrate,commit=M.commit;
 M.migrate=function(raw){const data=migrate(raw);M.validate(data);return data;};
 M.commit=function(data,fn){const next=commit(data,fn);M.validate(next);return next;};
-root.TanakaSowParity={pages,start,edit,beforeRecord,historyRows,editHistory,matingReturnKey};
+root.TanakaSowParity={pages,start,edit,beforeRecord,historyRows,editHistory,matingReturnKey,setWeanDays};
 })(typeof globalThis!=='undefined'?globalThis:this);

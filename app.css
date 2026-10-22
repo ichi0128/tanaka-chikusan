@@ -505,3 +505,5 @@ body.simulation-active{padding-top:calc(76px + env(safe-area-inset-top))}.simula
 .sow-card-top>b.sow-parity-large{font-size:clamp(34px,7vw,52px);line-height:1;white-space:nowrap}
 
 .app-version{margin:24px 0 10px;text-align:center;font-size:12px;line-height:1.7;color:var(--muted)}
+
+.room-wean-settings{margin:14px 0;padding-top:10px;border-top:1px solid var(--border)}.wean-days-controls{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;align-items:center;gap:4px;width:100%;max-width:240px}.wean-days-controls button{min-width:0;width:32px;min-height:44px;border:1px solid var(--border);border-radius:10px;background:var(--soft);color:var(--softtext);font-size:24px;cursor:pointer}.wean-days-controls strong{min-width:0;text-align:center;font-size:18px;white-space:nowrap}.wean-days-controls button:disabled{opacity:.4;cursor:default}

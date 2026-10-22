@@ -14,7 +14,7 @@ function definitions(f,scope,settings){
   const out=[],pending=new Set(),records=scope.periods.filter(p=>p.basis==='record');
   for(const p of records){const next=scope.periods.find(q=>q.id===p.id&&q.basis==='estimate');if(!next||p.actualWean||!forward(f,p.exit))continue;
     const specs=[0,...Array.from({length:10},(_,i)=>i+1),21];
-    if(settings.weanEarlier)specs.splice(1,0,...Array.from({length:10},(_,i)=>-i-1).filter(n=>F.add(p.exit,n)>=F.add(p.birth,30)));
+    if(settings.weanEarlier)specs.splice(1,0,...Array.from({length:10},(_,i)=>-i-1).filter(n=>F.add(p.exit,n)>=F.add(p.birth,root.TanakaModel.plannedWeanDays(p))));
     out.push({key:'wean:'+p.key,id:p.id,kind:'wean',type:'離乳',label:'離乳予定',date:p.exit,periodKey:p.key,nextKey:next.key,specs,source:p.actualBirth?'実分娩日からの離乳予定':'登録済み繁殖サイクルからの仮離乳予定'});pending.add(p.id);
   }
   for(const p of scope.periods.filter(p=>p.basis==='estimate'&&forward(f,p.mating)&&!pending.has(p.id)))out.push({key:'breed:'+p.key,id:p.id,kind:'breed',type:'種付け',label:'種付け予定',date:p.mating,nextKey:p.key,specs:[0,21],source:'次の発情・種付け予測'});
@@ -24,7 +24,7 @@ function definitions(f,scope,settings){
   }
   return out;
 }
-function shifted(p,n){const q=F.period(p.id,F.add(p.mating,n),p.first,'比較する次回サイクル（未保存の予測）');return {...p,...q,key:p.key,moveDate:F.add(q.birth,60),moveBasis:'estimate',moveSource:'比較案の分娩予測日＋60日'};}
+function shifted(p,n){const q=F.period(p.id,F.add(p.mating,n),p.first,'比較する次回サイクル（未保存の予測）',root.TanakaModel.plannedWeanDays(p));return {...p,...q,key:p.key,moveDate:F.add(q.birth,60),moveBasis:'estimate',moveSource:'比較案の分娩予測日＋60日'};}
 function label(def,n){if(!n)return '予定どおり';if(n===21)return '1周期見送り（約21日）';return def.kind==='move'?Math.abs(n)+'日'+(n<0?'前倒し':'後ろへ'):(n>0?'＋':'')+n+'日離乳';}
 function compareOrder(x,y){return (Math.abs(x.offset)===21?1:0)-(Math.abs(y.offset)===21?1:0)||Math.abs(x.offset)-Math.abs(y.offset)||Math.max(0,x.currentRoomExtraDays)-Math.max(0,y.currentRoomExtraDays)||(x.kind==='move'?0:1)-(y.kind==='move'?0:1)||(x.offset>0?1:0)-(y.offset>0?1:0)||Number(x.heatWorse)-Number(y.heatWorse)||x.actionKey.localeCompare(y.actionKey,'ja',{numeric:true});}
 function simulate(f,scope,target,def,n){
@@ -94,18 +94,18 @@ function nextCorrection(f,id,weanDate='',matingDate=''){
   const source=firstFuture(f,id);if(!source)return null;
   const originalPeriods=fixedCycles(f),periods=originalPeriods.map(p=>({...p})),parent=periods.find(p=>p.id===id&&p.actualBirth&&!p.actualWean),n=parent&&F.valid(weanDate)?F.distance(parent.exit,weanDate):F.valid(matingDate)?F.distance(source.mating,matingDate):0;
   const next=n?shifted(source,n):{...source};if(parent&&F.valid(weanDate))parent.exit=weanDate;
-  const scope={periods:[...periods,next],children:f.childStays||[]},occupancies=[...scope.periods.map(span),...scope.children],stay=span(next),days=daysFor(f,occupancies,next.entry,stay.exit),peak=maximum(days,next.entry,stay.exit),heat=F.heat(next.birth),age=parent&&F.valid(weanDate)?F.distance(parent.birth,weanDate):null;
+  const scope={periods:[...periods,next],children:f.childStays||[]},occupancies=[...scope.periods.map(span),...scope.children],stay=span(next),days=daysFor(f,occupancies,next.entry,stay.exit),peak=maximum(days,next.entry,stay.exit),heat=F.heat(next.birth),age=parent&&F.valid(weanDate)?F.distance(parent.birth,weanDate):null,requiredNursingDays=root.TanakaModel.plannedWeanDays(parent);
   const uncertainty=(f.unmodelled||[]).length>0||scope.periods.some(p=>p.uncertain)||(f.rows||[]).some(r=>scope.periods.some(p=>p.id===r.id)&&r.parityUnknown);
   const originalParent=originalPeriods.find(p=>p.key===parent?.key),holdEnd=parent?span(parent).exit:f.day,holdStart=originalParent?span(originalParent).exit:f.day,holdDays=n>0&&holdEnd>holdStart?daysFor(f,occupancies,F.add(holdStart,1),holdEnd).filter(d=>d.count>daysFor(f,[...originalPeriods.map(span),span(source),...scope.children],d.date,d.date)[0].count) :[],hold=F.capacityPeak(holdDays);
   const unavailable=!!matingDate&&originalPeriods.some(p=>p.id===id&&F.add(p.exit,4)>next.mating);
-  const capacity=F.capacityState(Math.max(peak.count,hold.count)),level=capacity.over||heat.avoid?'bad':capacity.attention||heat.caution||uncertainty||unavailable||age!==null&&age<30?'warn':'good';
-  return {capacityDays:days.map(d=>({date:d.date,count:d.count})),peak:peak.count,peakDate:peak.date,level,heat,age,uncertainty,unavailable,holdPeak:hold.count,holdDate:hold.date,mating:next.mating,birth:next.birth,due:next.due,entry:next.entry,exit:stay.exit};
+  const capacity=F.capacityState(Math.max(peak.count,hold.count)),level=capacity.over||heat.avoid?'bad':capacity.attention||heat.caution||uncertainty||unavailable||age!==null&&age<requiredNursingDays?'warn':'good';
+  return {capacityDays:days.map(d=>({date:d.date,count:d.count})),peak:peak.count,peakDate:peak.date,level,heat,age,requiredNursingDays,uncertainty,unavailable,holdPeak:hold.count,holdDate:hold.date,mating:next.mating,birth:next.birth,due:next.due,entry:next.entry,exit:stay.exit};
 }
 function targetForDate(plan,date){return plan.targets.find(t=>t.start<=date&&t.end>=date)||null;}
 function actionsForDate(plan,date){return targetForDate(plan,date)?.context.actions||[];}
 // Guidance reads the existing comparisons; it never adopts or saves an option.
 function guidanceChoice(j,plan){
-  const days=j.capacityDays||[];if(!days.length||j.peak<9||j.uncertain||j.uncertainty||j.unavailable||(j.holdPeak||0)>=9||j.age!=null&&j.age<30)return null;
+  const days=j.capacityDays||[];if(!days.length||j.peak<9||j.uncertain||j.uncertainty||j.unavailable||(j.holdPeak||0)>=9||j.age!=null&&j.age<(j.requiredNursingDays??30))return null;
   const goal=j.peak>=11?10:j.peak===10?9:8,candidates=[];
   for(const t of plan.targets||[])if(t.start<=days.at(-1).date&&t.end>=days[0].date)for(const c of t.contexts)for(const a of c.actions)for(const o of a.options){
     if(!o.offset||!o.effective||o.currentWorse||o.newFullDays.length||o.uncertainty||o.heatWorse)continue;
@@ -121,7 +121,7 @@ function workGuidance(f,x,j,plan={targets:[]}){
   if(!j||j.level==='good')return null;
   const entry=x.type==='分娩舎へ移動',date=j.date||x.date||f.day,md=d=>F.valid(d)?Number(d.slice(5,7))+'/'+Number(d.slice(8,10)):'予定日',uncertain=!!(j.uncertain||j.uncertainty),steps=[];
   const peak=j.peak||0,capacity=F.capacityState(peak),required=capacity.over?capacity.shortage:capacity.full?1:0,deadline=j.peakDate||date,firstProblem=(j.capacityDays||[]).find(d=>F.capacityState(d.count).over)?.date||deadline;
-  const within=!(uncertain||j.heat?.caution||j.unavailable||(j.holdPeak||0)>=9||j.age!=null&&j.age<30),possible=entry?'収容予測上は'+md(date)+'の移入は予定どおり可能です。':'収容予測上、予定どおりでも収容範囲内です。';
+  const within=!(uncertain||j.heat?.caution||j.unavailable||(j.holdPeak||0)>=9||j.age!=null&&j.age<(j.requiredNursingDays??30)),possible=entry?'収容予測上は'+md(date)+'の移入は予定どおり可能です。':'収容予測上、予定どおりでも収容範囲内です。';
   if(capacity.over){
     const start=entry?(j.onDateCount>10?md(date)+'の移入は当日から収容超過の見込みです。そのまま移入せず、受入枠を確認してください。':md(date)+'の移入当日は収容範囲内ですが、'+md(firstProblem)+'から収容超過の見込みです。'):'このままの'+(x.type==='離乳'?'離乳':x.type==='種付け'?'種付け':'予定')+'では、'+md(firstProblem)+'から収容超過の見込みです。';
     steps.push(start+md(deadline)+'までに最低'+required+'室空ける対策を確認してください。');
@@ -134,7 +134,7 @@ function workGuidance(f,x,j,plan={targets:[]}){
   if(j.heat?.caution)steps.push('分娩予測'+md(j.birth)+'は'+(j.heat.avoid?'8月の分娩回避推奨期間':'暑熱注意期間')+'です。1周期見送り案と収容・暑熱予測を比較し、暑熱対策を確認してください。');
   if(uncertain)steps.push('未確定の在室・日付を確認してください。空室を実際に確認してから実施日を判断してください。');
   if(j.unavailable)steps.push('現在の妊娠・授乳記録と種付け予定が重なっています。母豚カードの日付を確認してください。');
-  if(j.age!==null&&j.age!==undefined&&j.age<30)steps.push('基準日では授乳'+j.age+'日です。あと'+(30-j.age)+'日で30日になるため、実分娩日と離乳予定日を確認してください。');
+  if(j.age!==null&&j.age!==undefined&&j.age<(j.requiredNursingDays??30))steps.push('基準日では授乳'+j.age+'日です。あと'+((j.requiredNursingDays??30)-j.age)+'日で'+(j.requiredNursingDays??30)+'日になるため、実分娩日と離乳予定日を確認してください。');
   if(!steps.length)steps.push('予定日の入退室と母豚カードの日付を確認し、年間予測の対象期間で調整案を比較してください。');
   return {steps,required,deadline,firstProblem,proposal:guidanceChoice(j,plan)};
 }

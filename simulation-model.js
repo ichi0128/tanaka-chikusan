@@ -39,14 +39,14 @@ function advance(source,from,to){
   function segment(start,end){
     const f=FF.build(data,start),queue=[],known=new Set();
     // Keep due+7 stable instead of moving an unplaced litter to every new today.
-    for(const row of f.rows){const ps=f.periods.filter(p=>p.id===row.id),first=ps[0];if(first&&!first.actualBirth&&first.uncertain&&valid(first.due)){const birth=add(first.due,7),delta=FF.distance(first.birth,birth);first.birth=birth;first.exit=add(birth,30);first.moveDate=add(birth,60);for(const p of ps.slice(1))for(const key of ['mating','due','birth','entry','exit','moveDate'])if(valid(p[key]))p[key]=add(p[key],delta);}}
+    for(const row of f.rows){const ps=f.periods.filter(p=>p.id===row.id),first=ps[0];if(first&&!first.actualBirth&&first.uncertain&&valid(first.due)){const birth=add(first.due,7),delta=FF.distance(first.birth,birth);first.birth=birth;first.exit=add(birth,M.plannedWeanDays(first));first.moveDate=add(birth,60);for(const p of ps.slice(1))for(const key of ['mating','due','birth','entry','exit','moveDate'])if(valid(p[key]))p[key]=add(p[key],delta);}}
     let cursor=start;
     const enqueue=(kind,date,values)=>{if(!valid(date)||date>end)return;const key=[kind,values.id||'',values.birth||'',values.pigKey||values.roomKey||values.nurseryKey||values.groupKey||'',date].join(':');if(known.has(key))return;known.add(key);queue.push({kind,date:date<cursor?cursor:date,planned:date,...values,key});};
     for(const p of f.periods){
       if(!p.actualBirth){
         if(p.mating>=start)enqueue('mating',p.mating,{id:p.id,birth:p.birth});enqueue('entry',p.entry,{id:p.id,birth:p.birth});enqueue('birth',p.birth,{id:p.id,birth:p.birth});
       }
-      // Actual dates win. Mothers wean at 30 days; their piglets keep the room to 60.
+      // Actual dates win. Mothers use their per-parity weaning plan; piglets keep the room to 60.
       if(!p.actualWean)enqueue('wean',p.exit,{id:p.id,birth:p.birth});
       enqueue('move',p.moveDate,{id:p.id,birth:p.birth});
     }
