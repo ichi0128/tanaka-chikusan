@@ -18,6 +18,29 @@ function inventoryQueuePlanRepair(){
     finally{inventoryPlanRepairQueued=false;}
   });
 }
+let inventoryBoarSyncQueued=false;
+function inventorySyncBoarDraft(month,expected){
+  const cached=inventoryDrafts.get(month);if(!cached||cached.expected!==expected)return;
+  if(!cached.dirty){inventoryDrafts.delete(month);return;}
+  I.syncBoarSnapshot(cached.report,db);cached.expected=JSON.stringify(db.inventoryMonths?.[month]??null);
+  if(db.inventoryMonths?.[month])cached.report.revisions=I.clone(db.inventoryMonths[month].revisions);
+}
+function inventoryQueueBoarSync(){
+  const month=inventoryLocalMonth(),old=db.inventoryMonths?.[month];
+  if(inventoryBoarSyncQueued||!old||JSON.stringify(old.boarSnapshot)===JSON.stringify(I.boarSnapshot(db)))return;
+  const cached=inventoryDrafts.get(month),expected=JSON.stringify(old),session=dataSession;
+  if(cached?.dirty&&cached.expected!==expected)return;
+  inventoryBoarSyncQueued=true;
+  queueMicrotask(()=>{
+    let updated=false;
+    try{
+      if(session!==dataSession||JSON.stringify(db.inventoryMonths?.[month])!==expected)return;
+      const current=inventoryDrafts.get(month);if(current?.dirty&&current.expected!==expected)return;
+      save(d=>I.syncSavedBoars(d,month));inventorySyncBoarDraft(month,expected);updated=true;
+    }catch(err){toast('種豚頭数を保存できませんでした：'+err.message);}
+    finally{inventoryBoarSyncQueued=false;if(updated&&page==='inventory')render();}
+  });
+}
 function inventoryLocalMonth(){return today().slice(0,7);}
 function inventoryContext(){
   const month=inventoryMonth||inventoryLocalMonth();inventoryMonth=month;
@@ -33,9 +56,19 @@ function inventoryContext(){
   }
   return inventoryDrafts.get(month);
 }
+function inventorySyncFinishingWeightDraft(month,key,weight,expected){
+  const cached=inventoryDrafts.get(month);if(!cached)return;
+  // Do not rebase a draft already made stale by a cloud or JSON replacement.
+  if(cached.expected!==expected)return;
+  if(!cached.dirty){inventoryDrafts.delete(month);return;}
+  I.syncFinishingWeight(cached.report,key,weight);
+  cached.expected=JSON.stringify(db.inventoryMonths?.[month]??null);
+  if(db.inventoryMonths?.[month])cached.report.revisions=I.clone(db.inventoryMonths[month].revisions);
+}
 function inventoryStoreSnapshot(c,report){
   // save() renders before returning. Keep this working copy pinned until it has
   // the new persisted revision; a failed write leaves the previous snapshot intact.
+  if(report.month===inventoryLocalMonth())I.syncBoarSnapshot(report,db);
   const wasDirty=c.dirty;c.dirty=true;
   try{save(data=>I.saveReport(data,report,c.expected));}catch(err){c.dirty=wasDirty;throw err;}
   c.report=I.clone(db.inventoryMonths[report.month]);c.expected=JSON.stringify(c.report);
@@ -107,13 +140,15 @@ function inventoryPlan(r,readonly=false){
   const actual=I.actualStock(r),plan=I.plannedStock(r),prior=r.previousYearActual||I.yearActual(db,r.month.slice(0,4));
   const value=x=>x===null||x===undefined?'—':x;
   const input=(name,n,label)=>readonly?value(n):inventoryNumber(name,n,label);
-  return `<div class="inventory-plan-report"><section class="inventory-plan-section"><h3>棚卸</h3><table class="inventory-table inventory-plan-table"><thead><tr><th scope="col">体重</th><th scope="col">前月</th><th scope="col">当月実数</th><th scope="col">当月計画</th></tr></thead><tbody>${INVENTORY_PLAN_STOCK.map(k=>`<tr><th scope="row">${inventoryLabel(k)}</th><td>${value(r.previousStock[k])}</td><td><output data-stock="${k}">${actual[k]}</output></td><td>${input('stock_plan_'+k,plan[k],inventoryLabel(k)+' 当月計画')}</td></tr>`).join('')}</tbody>${inventoryStockTotalRow(r,readonly)}</table><p class="muted">出荷計画の対象は肉豚（候補を含む。正式な育成母豚・母豚は除外）。実数は①・②から自動集計。計画は当月実数をコピーして開始します。一度手入力した後は、計画全体を保持します。110kgは計画上の振り分け先です（実数は0）。</p>${readonly?'':'<button type="button" class="btn secondary" data-inventory="plan-reset">当月実数を計画へコピー</button>'}<p class="muted">前月：${r.carriedFrom?esc(r.carriedFrom)+' 保存時の当月計画':'保存記録なし（—）'}。前月の記録は変更しません。</p></section><div class="inventory-plan-workflow"><section class="inventory-plan-section"><h3>${Number(r.month.slice(5))}月 週別出荷計画</h3><table class="inventory-table inventory-plan-table inventory-weekly-table"><thead><tr><th scope="col">週</th><th scope="col">出荷頭数</th></tr></thead><tbody>${r.weekly.map((n,i)=>`<tr><th scope="row">第${i+1}週</th><td>${input('week_'+i,n,'第'+(i+1)+'週 出荷頭数')}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">合計</th><td><output id="${readonly?'inventory-history-weekly-total':'inventory-weekly-total'}" aria-live="polite">${I.weeklyTotal(r)}頭</output></td></tr></tfoot></table><p class="muted">各週の頭数を手入力してください。自動計算は合計だけです。</p></section><section class="inventory-plan-section"><h3>備考</h3>${readonly?`<p class="history-note">${esc(r.remarks||'—')}</p>`:`<textarea id="inventory-remarks" name="remarks" aria-label="出荷計画の備考" rows="4" placeholder="出荷予定・調整事項など">${esc(r.remarks)}</textarea>`}</section></div><section class="inventory-plan-section"><h3>${r.month.slice(0,4)}年 月別出荷計画</h3><table class="inventory-table inventory-plan-table"><thead><tr><th scope="col">月</th><th scope="col">前年実績</th><th scope="col">今年計画</th><th scope="col">今年実績</th></tr></thead><tbody>${r.monthly.map((x,i)=>`<tr class="${x.month===r.month?'inventory-plan-current':x.month===I.previousMonth(r.month)?'inventory-plan-previous':''}"><th scope="row">${i+1}月${x.month===I.previousMonth(r.month)?'<small class="inventory-month-previous-label">前月</small>':''}</th><td>${value(prior[i])}</td><td>${input('planned_'+i,x.planned,x.month+' 今年計画')}</td><td class="${x.month===I.previousMonth(r.month)?'inventory-month-previous-actual':''}">${input('actual_'+i,x.actual,x.month+' 今年実績'+(x.month===I.previousMonth(r.month)?'（前月・修正できます）':''))}</td></tr>`).join('')}</tbody></table><div class="inventory-monthly-totals" ${readonly?'':'data-inventory-monthly-totals'} aria-live="polite">${inventoryMonthlyTotalSummary(r)}</div><p class="muted">合計は対象月より前の月で「今年実績」が入力済みなら実績を採用し、未入力なら計画を使います。当月以降は計画を使います。未確定の実績は空欄にし、実績0頭が確定した月は0を入力してください。計画と実績は別々に保存します。</p>${readonly?'':`<button type="button" class="btn secondary" data-inventory="shipment-reference">前月（${Number(I.previousMonth(r.month).slice(5))}月）の出荷履歴を確認</button>`}<p class="muted">前年実績は前年の保存済み月次記録から引き継ぎ、年内は固定表示します。記録がない月は「—」です。今年計画と今年実績は別々に保存します。新規作成時、対象月より先の計画は20頭から始めます。</p>${readonly?'':'<details class="inventory-plan-tools"><summary>前月の保存内容を取り込む</summary><p class="muted">同じ年の計画・実績と、棚卸の前月欄を更新します。当月計画と週別入力は保持します。</p><button type="button" class="btn secondary" data-inventory="carry">前月の保存済み計画・実績を取り込む</button></details>'}</section></div>`;
+  return `${inventoryFarmTotals(r)}<div class="inventory-plan-report"><section class="inventory-plan-section"><h3>棚卸</h3><table class="inventory-table inventory-plan-table"><thead><tr><th scope="col">体重</th><th scope="col">前月</th><th scope="col">当月実数</th><th scope="col">当月計画</th></tr></thead><tbody>${INVENTORY_PLAN_STOCK.map(k=>`<tr><th scope="row">${inventoryLabel(k)}</th><td>${value(r.previousStock[k])}</td><td><output data-stock="${k}">${actual[k]}</output></td><td>${input('stock_plan_'+k,plan[k],inventoryLabel(k)+' 当月計画')}</td></tr>`).join('')}</tbody>${inventoryStockTotalRow(r,readonly)}</table><p class="muted">出荷計画の対象は肉豚（候補を含む。正式な育成母豚・母豚・種豚は除外）。実数は①・②から自動集計。計画は当月実数をコピーして開始します。一度手入力した後は、計画全体を保持します。110kgは計画上の振り分け先です（実数は0）。</p>${readonly?'':'<button type="button" class="btn secondary" data-inventory="plan-reset">当月実数を計画へコピー</button>'}<p class="muted">前月：${r.carriedFrom?esc(r.carriedFrom)+' 保存時の当月計画':'保存記録なし（—）'}。前月の記録は変更しません。</p></section><div class="inventory-plan-workflow"><section class="inventory-plan-section"><h3>${Number(r.month.slice(5))}月 週別出荷計画</h3><table class="inventory-table inventory-plan-table inventory-weekly-table"><thead><tr><th scope="col">週</th><th scope="col">出荷頭数</th></tr></thead><tbody>${r.weekly.map((n,i)=>`<tr><th scope="row">第${i+1}週</th><td>${input('week_'+i,n,'第'+(i+1)+'週 出荷頭数')}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">合計</th><td><output id="${readonly?'inventory-history-weekly-total':'inventory-weekly-total'}" aria-live="polite">${I.weeklyTotal(r)}頭</output></td></tr></tfoot></table><p class="muted">各週の頭数を手入力してください。自動計算は合計だけです。</p></section><section class="inventory-plan-section"><h3>備考</h3>${readonly?`<p class="history-note">${esc(r.remarks||'—')}</p>`:`<textarea id="inventory-remarks" name="remarks" aria-label="出荷計画の備考" rows="4" placeholder="出荷予定・調整事項など">${esc(r.remarks)}</textarea>`}</section></div><section class="inventory-plan-section"><h3>${r.month.slice(0,4)}年 月別出荷計画</h3><table class="inventory-table inventory-plan-table"><thead><tr><th scope="col">月</th><th scope="col">前年実績</th><th scope="col">今年計画</th><th scope="col">今年実績</th></tr></thead><tbody>${r.monthly.map((x,i)=>`<tr class="${x.month===r.month?'inventory-plan-current':x.month===I.previousMonth(r.month)?'inventory-plan-previous':''}"><th scope="row">${i+1}月${x.month===I.previousMonth(r.month)?'<small class="inventory-month-previous-label">前月</small>':''}</th><td>${value(prior[i])}</td><td>${input('planned_'+i,x.planned,x.month+' 今年計画')}</td><td class="${x.month===I.previousMonth(r.month)?'inventory-month-previous-actual':''}">${input('actual_'+i,x.actual,x.month+' 今年実績'+(x.month===I.previousMonth(r.month)?'（前月・修正できます）':''))}</td></tr>`).join('')}</tbody></table><div class="inventory-monthly-totals" ${readonly?'':'data-inventory-monthly-totals'} aria-live="polite">${inventoryMonthlyTotalSummary(r)}</div><p class="muted">合計は対象月より前の月で「今年実績」が入力済みなら実績を採用し、未入力なら計画を使います。当月以降は計画を使います。未確定の実績は空欄にし、実績0頭が確定した月は0を入力してください。計画と実績は別々に保存します。</p>${readonly?'':`<button type="button" class="btn secondary" data-inventory="shipment-reference">前月（${Number(I.previousMonth(r.month).slice(5))}月）の出荷履歴を確認</button>`}<p class="muted">前年実績は前年の保存済み月次記録から引き継ぎ、年内は固定表示します。記録がない月は「—」です。今年計画と今年実績は別々に保存します。新規作成時、対象月より先の計画は20頭から始めます。</p>${readonly?'':'<details class="inventory-plan-tools"><summary>前月の保存内容を取り込む</summary><p class="muted">同じ年の計画・実績と、棚卸の前月欄を更新します。当月計画と週別入力は保持します。</p><button type="button" class="btn secondary" data-inventory="carry">前月の保存済み計画・実績を取り込む</button></details>'}</section></div>`;
 }
 
 function inventoryBirthLabel(value){return value?Number(value.slice(5,7))+'/'+Number(value.slice(8,10)):'未入力';}
 function inventoryFarmTotals(r){
-  const s=I.farmSummary(r);return `<div class="inventory-farm-total" data-inventory-farm-total aria-live="polite"><strong>${s.sowCount===null?'確認対象 合計':'農場全体 合計'} ${s.farmTotal}頭${s.unknown?' ＋ 頭数未入力 '+s.unknown+'件':''}</strong><small>肉豚 ${s.total+s.unclassified}頭（うち候補 ${s.candidates}頭） ／ 育成母豚 ${s.gilts}頭${s.sowCount===null?' ／ 母豚頭数は未保存（現在値から補完しません）':' ／ 母豚 '+s.sowCount+'頭'}</small></div>`;
+  const s=I.farmSummary(r),complete=s.sowCount!==null&&s.boarCount!==null;
+  return `<div class="inventory-farm-total" data-inventory-farm-total aria-live="polite"><strong>${complete?'全豚舎の頭数':'確認対象 合計'} ${s.farmTotal}頭${s.unknown?' ＋ 頭数未入力 '+s.unknown+'件':''}</strong><small>${[['farrowing','分娩舎'],['nursery','育成舎'],['finishing','肉豚舎'],['yard','運動場']].map(([area,label])=>label+' '+s.areaTotals[area]+'頭').join(' ／ ')} ／ 種豚 ${s.boarCount===null?'未保存':s.boarCount+'頭'}</small><small>母豚 ${s.sowCount===null?'未保存':s.sowCount+'頭'}は分娩舎・運動場に含みます。種豚は保存時に「在籍」の個体のみ。${s.boarCount===null?' この記録には種豚の在籍情報がないため、現在の頭数で補完していません。':''}</small></div>`;
 }
+
 function inventoryGroupSubtotal(rows){
   const s=I.aggregate(rows);return `<b>小計 ${s.headTotal}頭${s.unknown?' ＋ 頭数未入力 '+s.unknown+'件':''}</b>${s.candidates?`<small>うち育成母豚候補 ${s.candidates}頭</small>`:''}${s.gilts?`<small>うち育成母豚 ${s.gilts}頭</small>`:''}${s.sows?`<small>うち番号登録済み母豚 ${s.sows}頭（母豚台帳と重複させません）</small>`:''}`;
 }
@@ -139,7 +174,7 @@ function inventoryDisplayPlace(row){
 function inventoryFinishingMap(entries){
   const card=(roomNumber,col,pair)=>{
     const key='f'+roomNumber,{row,i}=entries.find(({row})=>row.roomKey===key||row.key==='finishing:'+key),place=finishingPlace(key);
-    return `<article class="inventory-finishing-room" style="grid-column:${col};grid-row:${pair}" aria-label="${esc(place)}の頭数調べ" data-inventory-room="${key}">${I.rowKind(row)!=='肉豚'?`<small class="inventory-gilt-label">${esc(I.rowKind(row))}</small>`:''}<input type="hidden" name="csf_${i}" value="${row.csf===null?'':String(row.csf)}"><label>頭数</label><div class="inventory-counter"><button type="button" data-inventory="step" data-row="${i}" data-delta="-1" aria-label="${esc(place)}の頭数を1減らす">−</button>${inventoryNumber('count_'+i,row.count,place+'の頭数')}<button type="button" data-inventory="step" data-row="${i}" data-delta="1" aria-label="${esc(place)}の頭数を1増やす">＋</button></div><label for="inventory-birth-${i}">誕生日</label><details class="inventory-notebook-birth"><summary id="inventory-birth-label-${i}" aria-label="${esc(place)}の誕生日を変更">${inventoryBirthLabel(row.birthDate)}</summary><input id="inventory-birth-${i}" type="date" name="birth_${i}" value="${esc(row.birthDate)}" aria-label="${esc(place)}の誕生日"></details><label for="inventory-sow-${i}">母豚番号</label>${sowNumberSelect('sow_'+i,row.sowId,{id:'inventory-sow-'+i,label:false,ariaLabel:place+'の母豚番号'})}<label for="inventory-weight-${i}">体重(kg)</label><select id="inventory-weight-${i}" name="category_${i}" aria-label="${esc(place)}の体重区分"><option value="">未入力</option>${I.CATEGORIES.map(k=>`<option value="${k}" ${row.category===k?'selected':''}>${inventoryLabel(k)}</option>`).join('')}</select></article>`;
+    return `<article class="inventory-finishing-room" style="grid-column:${col};grid-row:${pair}" aria-label="${esc(place)}の頭数調べ" data-inventory-room="${key}">${I.rowKind(row)!=='肉豚'?`<small class="inventory-gilt-label">${esc(I.rowKind(row))}</small>`:''}<input type="hidden" name="csf_${i}" value="${row.csf===null?'':String(row.csf)}"><label>頭数</label><div class="inventory-counter"><button type="button" data-inventory="step" data-row="${i}" data-delta="-1" aria-label="${esc(place)}の頭数を1減らす">−</button>${inventoryNumber('count_'+i,row.count,place+'の頭数')}<button type="button" data-inventory="step" data-row="${i}" data-delta="1" aria-label="${esc(place)}の頭数を1増やす">＋</button></div><label for="inventory-birth-${i}">誕生日</label><details class="inventory-notebook-birth"><summary id="inventory-birth-label-${i}" aria-label="${esc(place)}の誕生日を変更">${inventoryBirthLabel(row.birthDate)}</summary><input id="inventory-birth-${i}" type="date" name="birth_${i}" value="${esc(row.birthDate)}" aria-label="${esc(place)}の誕生日"></details><label for="inventory-sow-${i}">母豚番号</label>${sowNumberSelect('sow_'+i,row.sowId,{id:'inventory-sow-'+i,label:false,ariaLabel:place+'の母豚番号'})}<label for="inventory-weight-${i}">体重(kg)</label><select id="inventory-weight-${i}" name="category_${i}" aria-label="${esc(place)}の体重区分"><option value="">${row.registeredWeight!==null&&row.category===''?row.registeredWeight+'kg（区分外）':'未入力'}</option>${I.CATEGORIES.map(k=>`<option value="${k}" ${row.category===k?'selected':''}>${inventoryLabel(k)}</option>`).join('')}</select></article>`;
   };
   return `<div class="inventory-pair-headings"><b>左側</b><span>廊下</span><b>右側</b></div><div class="inventory-finishing-map"><div class="inventory-pair-corridor" aria-hidden="true"></div>${Array.from({length:12},(_,i)=>`<div class="inventory-pair-number" style="grid-column:2;grid-row:${i+1}" aria-label="左右${i+1}番の廊下">${i+1}</div>`).join('')}${FINISHING_DISPLAY_COLUMNS.left.map((n,i)=>card(n,1,i+1)).join('')}${FINISHING_DISPLAY_COLUMNS.right.map((n,i)=>card(n,3,i+1)).join('')}</div>`;
 }
@@ -200,7 +235,7 @@ function inventoryUpdate(target){
   document.querySelectorAll('[data-inventory-monthly-totals]').forEach(el=>el.innerHTML=inventoryMonthlyTotalSummary(c.report));
   document.getElementById('inventory-status').textContent=c.report.month+' · 未保存の変更あり';
   const snapshotStatus=document.getElementById('inventory-snapshot-status');if(snapshotStatus)snapshotStatus.textContent='未保存の変更あり';
-  document.querySelectorAll('#inventory-panel-1 [data-inventory-farm-total]').forEach(el=>el.outerHTML=inventoryFarmTotals(c.report));
+  document.querySelectorAll('#inventory-form [data-inventory-farm-total]').forEach(el=>el.outerHTML=inventoryFarmTotals(c.report));
   document.querySelectorAll('[data-inventory-subtotal]').forEach(el=>el.innerHTML=inventoryGroupSubtotal(c.report.rows.filter(row=>row.area===el.dataset.inventorySubtotal)));
   document.querySelectorAll('[data-inventory-finishing-total]').forEach(el=>el.textContent='合計 '+inventoryHeadcountText(c.report.rows.filter(row=>row.area==='finishing')));
   c.report.rows.forEach((row,i)=>{const label=document.getElementById('inventory-birth-label-'+i);if(label)label.textContent=inventoryBirthLabel(row.birthDate);});
@@ -256,7 +291,7 @@ document.addEventListener('click',e=>{
     if(action==='refresh'){
       if(c.report.month!==inventoryLocalMonth())throw Error('現在データの取り込みは今月を開いて行ってください。');
       if((db.inventoryMonths?.[c.report.month]||c.hasSnapshot!==false||c.dirty)&&!window.confirm(inventoryMonthLabel(c.report.month)+'の①を現在の豚舎データで取り込み直します。①の修正内容と確認日は置き換わります。出荷計画の手入力と保存済み履歴は残ります。取り込み直した内容を下書きとして保存します。よろしいですか？'))return;
-      const report=c.hasSnapshot===false?I.clone(c.report):inventoryRead();report.date=today();report.sowSnapshot={ids:Object.values(state.sows).filter(s=>s.active&&!s.numberPending).map(s=>s.id)};report.rows=I.snapshot(db,state,report.date,roomBirthDate);I.syncPlan(report);report.status='draft';inventoryStoreSnapshot(c,report);c.editing=true;render();toast('現在の豚舎データを取り込み、今月の下書きに保存しました');return;
+      const report=c.hasSnapshot===false?I.clone(c.report):inventoryRead();report.date=today();report.boarSnapshot=I.boarSnapshot(db);report.sowSnapshot={ids:Object.values(state.sows).filter(s=>s.active&&!s.numberPending).map(s=>s.id)};report.rows=I.snapshot(db,state,report.date,roomBirthDate);I.syncPlan(report);report.status='draft';inventoryStoreSnapshot(c,report);c.editing=true;render();toast('現在の豚舎データを取り込み、今月の下書きに保存しました');return;
     }
     if(action==='carry'){
       const previous=db.inventoryMonths?.[I.previousMonth(c.report.month)];if(!previous)throw Error('前月の保存済み記録がありません。先に前月を保存してください。');

@@ -199,3 +199,71 @@ test('annual screen distinguishes first-birth summer preference and keeps season
  assert.equal(vm.runInContext("FF.compare(ffData(),'2','2027-04-10').level",b.context),'good');
  assert.equal(b.storage.getItem('tanaka-db'),saved);
 });
+
+function seedFinishingWeight(b){
+ vm.runInContext(`save(d=>{d.finishingBaseline=F.baseline(d);Object.assign(d.finishingBaseline[0],{state:'occupied',count:7,weight:30,sowId:'149',birthDate:'2026-07-01',csf:true,note:'体重テスト'});});
+ var weightMonth=today().slice(0,7);
+ save(d=>{const r=I.create(d,M.replay(d),weightMonth,today(),roomBirthDate);I.saveReport(d,r,'null');const previous=I.clone(r);previous.month=I.previousMonth(weightMonth);previous.monthly=previous.monthly.map(x=>({...x,month:previous.month.slice(0,4)+x.month.slice(4)}));d.inventoryMonths[previous.month]=previous;});
+ var oldWeightMonth=JSON.stringify(db.inventoryMonths[I.previousMonth(weightMonth)]);
+ go('finishing');`,b.context);
+}
+test('inline weight click saves the formal ledger, syncs this month and keeps the dialog closed',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));seedFinishingWeight(b);
+ let stopped=false;
+ const button={disabled:false,dataset:{action:'fin-weight-inline',id:'f1',delta:'10'},closest:()=>null};
+ const event={target:{closest:selector=>selector==='button'?button:null},stopPropagation(){stopped=true;}};
+ for(const listener of b.listeners.click)listener(event);
+ assert.equal(stopped,true);assert.equal(b.elements.get('dialog').open,undefined);
+ assert.match(b.elements.get('app').innerHTML,/重量の目安 40kg/);
+ const result=vm.runInContext(`JSON.stringify({room:state.finishing[0],report:db.inventoryMonths[weightMonth],past:JSON.stringify(db.inventoryMonths[I.previousMonth(weightMonth)]),old:oldWeightMonth,log:db.logs.at(-1)})`,b.context),x=JSON.parse(result);
+ assert.equal(x.room.weight,40);assert.equal(x.room.count,7);assert.equal(x.room.note,'体重テスト');assert.equal(x.room.csf,true);
+ assert.equal(x.log.type,'肉豚舎更新');assert.equal(x.log.finishingBefore.weight,30);assert.equal(x.log.finishingAfter.weight,40);
+ assert.equal(x.report.rows.find(r=>r.roomKey==='f1').category,'40');assert.equal(x.report.plannedStock['40'],7);assert.equal(x.report.plannedStock['30'],0);
+ assert.equal(x.report.revisions.at(-1).report.rows.find(r=>r.roomKey==='f1').registeredWeight,30);assert.equal(x.past,x.old);
+ assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).logs.at(-1).finishingAfter.weight,40);
+ vm.runInContext(`const reloaded=M.migrate(JSON.parse(localStorage.getItem(KEY)));if(M.replay(reloaded).finishing[0].weight!==40)throw Error('JSON roundtrip');cloudStore.validate(reloaded);`,b.context);
+ const detail={...button,dataset:{action:'fin-detail',id:'f1'}};
+ for(const listener of b.listeners.click)listener({target:{closest:selector=>selector==='button'?detail:null}});
+ assert.equal(b.elements.get('dialog').open,true);
+});
+test('weight changes reach zero, keep dirty monthly edits and preserve manually entered shipping plans',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));seedFinishingWeight(b);
+ vm.runInContext(`inventoryMonth=weightMonth;var cachedWeight=inventoryContext();cachedWeight.dirty=true;cachedWeight.report.remarks='未保存メモ';cachedWeight.report.rows.find(r=>r.roomKey==='f1').count=6;
+ save(d=>{const r=I.clone(d.inventoryMonths[weightMonth]);r.stockPlanEdited=['90'];r.plannedStock['90']=12;I.saveReport(d,r,JSON.stringify(d.inventoryMonths[weightMonth]));});
+ cachedWeight.expected=JSON.stringify(db.inventoryMonths[weightMonth]);
+ finishingUpdate('f1',g=>g.weight=20,false);finishingUpdate('f1',g=>g.weight=10,false);finishingUpdate('f1',g=>g.weight=0,false);
+ var zeroLogs=db.logs.length;finishingUpdate('f1',g=>g.weight=Math.max(0,g.weight-10),false);`,b.context);
+ const x=JSON.parse(vm.runInContext(`JSON.stringify({weight:state.finishing[0].weight,logs:db.logs.length,old:zeroLogs,draft:cachedWeight,expected:JSON.stringify(db.inventoryMonths[weightMonth]),report:db.inventoryMonths[weightMonth],stats:I.aggregate(db.inventoryMonths[weightMonth].rows)})`,b.context));
+ assert.equal(x.weight,0);assert.equal(x.logs,x.old);assert.equal(x.report.rows.find(r=>r.roomKey==='f1').registeredWeight,0);
+ assert.equal(x.stats.unclassified>=7,true);assert.equal(x.draft.report.remarks,'未保存メモ');assert.equal(x.draft.report.rows.find(r=>r.roomKey==='f1').count,6);
+ assert.equal(x.draft.report.rows.find(r=>r.roomKey==='f1').registeredWeight,0);assert.equal(x.draft.expected,x.expected);assert.equal(x.report.plannedStock['90'],12);
+ assert.match(b.elements.get('app').innerHTML,/data-delta="-10"[^>]*disabled/);
+ assert.throws(()=>vm.runInContext(`finishingUpdate('f1',g=>g.weight=-10,false)`,b.context),/0kg/);
+ vm.runInContext(`M.migrate(JSON.parse(localStorage.getItem(KEY)));`,b.context);
+});
+
+test('boar management UI updates local saved totals, keeps dirty edits and leaves past months/history unchanged',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));seedFinishingWeight(b);
+ vm.runInContext(`inventoryMonth=weightMonth;var boarDraft=inventoryContext();boarDraft.dirty=true;boarDraft.report.remarks='未保存の計画メモ';
+ var boarHistoryBefore=JSON.stringify(db.logs),boarPastBefore=JSON.stringify(db.inventoryMonths[I.previousMonth(weightMonth)]);
+ var boarFormContent='',boarSubmit;form=(title,content,label,action)=>{boarFormContent=content;boarSubmit=action;};
+ boarEdit('B1');boarSubmit(new Map([['boarName','B1'],['boarStatus','廃用／退役']]));go('edit');`,b.context);
+ assert.match(b.elements.get('app').innerHTML,/種豚管理 · 在籍 1頭/);
+ let x=JSON.parse(vm.runInContext(`JSON.stringify({count:I.farmSummary(db.inventoryMonths[weightMonth]).boarCount,notes:boarDraft.report.remarks,cached:I.farmSummary(boarDraft.report).boarCount,expected:boarDraft.expected===JSON.stringify(db.inventoryMonths[weightMonth]),logs:JSON.stringify(db.logs)===boarHistoryBefore,past:JSON.stringify(db.inventoryMonths[I.previousMonth(weightMonth)])===boarPastBefore})`,b.context));
+ assert.deepEqual(x,{count:1,notes:'未保存の計画メモ',cached:1,expected:true,logs:true,past:true});
+ const saved=JSON.parse(b.storage.getItem('tanaka-db'));assert.equal(saved.boars.find(b=>b.name==='B1').status,'廃用／退役');
+ assert.equal(saved.inventoryMonths[Object.keys(saved.inventoryMonths).sort().at(-1)].boarSnapshot.boars.find(b=>b.name==='B1').status,'廃用／退役');
+ vm.runInContext(`boarEdit();boarSubmit(new Map([['boarName','B3'],['boarStatus','在籍']]));go('edit');`,b.context);
+ assert.match(b.elements.get('app').innerHTML,/種豚管理 · 在籍 2頭/);assert.match(b.elements.get('app').innerHTML,/B3/);
+ assert.equal(vm.runInContext('M.activeBoars(db).length',b.context),2);
+ const render=vm.runInContext(`inventoryFarmTotals(db.inventoryMonths[weightMonth])`,b.context);assert.match(render,/種豚 2頭/);assert.match(render,/全豚舎の頭数/);
+ for(const script of [`inventoryTotals(db.inventoryMonths[weightMonth])`,`inventoryPlan(db.inventoryMonths[weightMonth])`,`inventoryPrintCount(db.inventoryMonths[weightMonth])`,`inventoryPrintAggregate(db.inventoryMonths[weightMonth])`,`inventoryPrintPlan(db.inventoryMonths[weightMonth])`])assert.match(vm.runInContext(script,b.context),/種豚 2頭/);
+ vm.runInContext(`cloudStore.validate(M.migrate(JSON.parse(localStorage.getItem(KEY))));`,b.context);
+});
+test('an old current-month report gains an archived boar snapshot without rewriting past months',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));seedFinishingWeight(b);
+ vm.runInContext(`save(d=>{delete d.inventoryMonths[weightMonth].boarSnapshot;});`,b.context);
+ await new Promise(resolve=>setImmediate(resolve));
+ const x=JSON.parse(vm.runInContext(`JSON.stringify({now:I.farmSummary(db.inventoryMonths[weightMonth]).boarCount,archived:db.inventoryMonths[weightMonth].revisions.at(-1).report.boarSnapshot??null,past:JSON.stringify(db.inventoryMonths[I.previousMonth(weightMonth)])===oldWeightMonth})`,b.context));
+ assert.deepEqual(x,{now:2,archived:null,past:true});
+});

@@ -17,9 +17,9 @@ function finishing(){
     if(number===null){if(col!==1||row!==1)return '';number='yard';}
     const r=state.finishing.find(r=>r.key===(number==='yard'?'yard':'f'+number)),occupied=r.state==='occupied',disabled=occupied&&finishingMoveMode;
     if(r.key==='yard')return `<button class="fin-card fin-yard ${occupied?'occupied':'vacant'}" style="grid-column:${col};grid-row:${row}" data-action="${occupied?'fin-detail':'fin-empty'}" data-id="yard" ${disabled?'disabled':''}><span class="fin-number">運動場</span>${occupied?`<div class="fin-primary"><strong class="fin-count"><span class="fin-count-number">${r.count}</span><small>頭</small></strong></div><span class="fin-birth">${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生月日 未入力'}</span>`:'<span class="fin-empty-label">空き<br><small>タップして入室・移動</small></span>'}</button>`;
-    return `<button class="fin-card ${occupied?'occupied':'vacant'} ${r.kind==='育成母豚候補'&&occupied?'gilt':''}" style="grid-column:${col};grid-row:${row}" data-action="${occupied?'fin-detail':'fin-empty'}" data-id="${r.key}" ${disabled?'disabled':''} aria-label="${finishingPlace(r.key)} ${occupied?r.kind+' '+r.count+'頭':'空室'}">${occupied?`${simulationGroupBadge('finishing',r.key)}<span class="fin-kind">${esc(r.kind)}</span><div class="fin-primary"><strong class="fin-count"><span class="fin-count-number">${r.count}</span><small>頭</small></strong><strong class="fin-weight" aria-label="重量の目安 ${r.weight}kg">${r.weight}<small>kg</small></strong></div><span class="fin-birth">${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生月日 未入力'}</span><span>母 ${r.mixed?'混成':esc(r.sowId||'未入力')}</span><span class="fin-vaccine ${r.csf?'complete':''}">豚熱 ${r.csf?'済':'未'}</span>${r.note?`<span class="fin-note">${esc(r.note)}</span>`:''}`:`<span class="fin-empty-label">${number==='yard'?'空き':'空室'}<br><small>タップして入室・移動</small></span>`}</button>`;
+    return `<article class="fin-card ${occupied?'occupied':'vacant'} ${r.kind==='育成母豚候補'&&occupied?'gilt':''} ${disabled?'fin-disabled':''}" style="grid-column:${col};grid-row:${row}"><button type="button" class="fin-room-open" data-action="${occupied?'fin-detail':'fin-empty'}" data-id="${r.key}" ${disabled?'disabled':''} aria-label="${finishingPlace(r.key)} ${occupied?r.kind+' '+r.count+'頭 '+r.weight+'kg・詳細を開く':'空室・入室する'}"></button>${occupied?`${simulationGroupBadge('finishing',r.key)}<span class="fin-kind">${esc(r.kind)}</span><div class="fin-primary"><strong class="fin-count"><span class="fin-count-number">${r.count}</span><small>頭</small></strong><div class="fin-inline-weight"><button type="button" data-action="fin-weight-inline" data-id="${r.key}" data-delta="-10" aria-label="${finishingPlace(r.key)}の体重を10kg減らす" ${disabled||r.weight<=0?'disabled':''}>−10</button><strong class="fin-weight" aria-label="重量の目安 ${r.weight}kg">${r.weight}<small>kg</small></strong><button type="button" data-action="fin-weight-inline" data-id="${r.key}" data-delta="10" aria-label="${finishingPlace(r.key)}の体重を10kg増やす" ${disabled?'disabled':''}>＋10</button></div></div><span class="fin-birth">${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生月日 未入力'}</span><span>母 ${r.mixed?'混成':esc(r.sowId||'未入力')}</span><span class="fin-vaccine ${r.csf?'complete':''}">豚熱 ${r.csf?'済':'未'}</span>${r.note?`<span class="fin-note">${esc(r.note)}</span>`:''}`:'<span class="fin-empty-label">空室<br><small>タップして入室・移動</small></span>'}</article>`;
   };
-  return simulationWaitingList('finishing')+`<div class="subhead"><h2>肉豚舎</h2><span class="badge">${occupiedRooms.length} / 24室 · ${heads}頭（運動場含む）</span></div>${candidates?`<p class="fin-gilt-summary">育成母豚候補 ${candidates}頭（上の肉豚頭数に含む・正式な育成母豚は運動場へ移してから）</p>`:''}${gilts.length?`<p class="fin-gilt-summary">育成母豚：${gilts.map(r=>(r.key==='yard'?'運動場':finishingRoomLabel(r.key)+'番')+' '+r.count+'頭').join(' ／ ')}</p>`:''}<button class="btn secondary" data-action="page" data-id="shipments">出荷履歴</button><button class="btn secondary" data-action="fin-mode">${finishingMoveMode?'移動先選択を終了':'移動先を選ぶ'}</button><p class="muted">${finishingMoveMode?'移動先の空室をタップしてください。使用中の部屋は選択できません。':'使用中の部屋は詳細を表示。空室は移動するグループを選べます。'}</p><section class="fin-yard-separate fin-yard-individuals" aria-label="運動場">${finishingYardList()}</section><div class="fin-east">東 ↑</div><div class="fin-side-headings"><b>左側</b><span>廊下</span><b>右側</b></div><div class="fin-map-wrap"><span class="fin-north">北</span><div class="fin-map fin-map-paired"><div class="fin-corridor" aria-hidden="true"></div>${Array.from({length:12},(_,i)=>`<div class="fin-corridor-number" style="grid-column:2;grid-row:${i+1}" aria-label="左右${i+1}番の廊下">${i+1}</div>`).join('')}${left.map((n,i)=>card(n,1,i+1)).join('')}${right.map((n,i)=>card(n,3,i+1)).join('')}</div><span class="fin-south">南</span></div><div class="fin-west">↓ 西</div>`;
+  return simulationWaitingList('finishing')+`<div class="subhead"><h2>肉豚舎</h2><span class="badge">${occupiedRooms.length} / 24室 · ${heads}頭（運動場含む）</span></div>${candidates?`<p class="fin-gilt-summary">育成母豚候補 ${candidates}頭（上の肉豚頭数に含む・正式な育成母豚は運動場へ移してから）</p>`:''}${gilts.length?`<p class="fin-gilt-summary">育成母豚：${gilts.map(r=>(r.key==='yard'?'運動場':finishingRoomLabel(r.key)+'番')+' '+r.count+'頭').join(' ／ ')}</p>`:''}<button class="btn secondary" data-action="page" data-id="shipments">出荷履歴</button><button class="btn secondary" data-action="fin-mode">${finishingMoveMode?'移動先選択を終了':'移動先を選ぶ'}</button><p class="muted">${finishingMoveMode?'移動先の空室をタップしてください。使用中の部屋は選択できません。':'体重は±10で変更。部屋をタップすると詳細を表示します。'}</p><section class="fin-yard-separate fin-yard-individuals" aria-label="運動場">${finishingYardList()}</section><div class="fin-east">東 ↑</div><div class="fin-side-headings"><b>左側</b><span>廊下</span><b>右側</b></div><div class="fin-map-wrap"><span class="fin-north">北</span><div class="fin-map fin-map-paired"><div class="fin-corridor" aria-hidden="true"></div>${Array.from({length:12},(_,i)=>`<div class="fin-corridor-number" style="grid-column:2;grid-row:${i+1}" aria-label="左右${i+1}番の廊下">${i+1}</div>`).join('')}${left.map((n,i)=>card(n,1,i+1)).join('')}${right.map((n,i)=>card(n,3,i+1)).join('')}</div><span class="fin-south">南</span></div><div class="fin-west">↓ 西</div>`;
 }
 // Shared native selectors for the live yard and its detached monthly snapshot.
 function yardQuickFields(weight,birthMonth,attrs,label='運動場'){
@@ -98,13 +98,21 @@ function finishingTransfer(key,area,sourceKey,pigKey=''){
 function finishingDetail(key){
   const r=state.finishing.find(x=>x.key===key);if(!r||r.state!=='occupied')return finishingEmpty(key);
   if(key==='yard'){modal.innerHTML=`<h2>運動場</h2>${finishingYardList()}<button class="btn secondary" data-action="close">閉じる</button>`;if(!dlg.open)dlg.showModal();return;}
-  modal.innerHTML=`<h2>${finishingPlace(key)} <span class="badge ${r.kind==='育成母豚候補'?'orange':''}">${esc(r.kind)}</span></h2><p class="fin-detail-count">${r.count}頭</p><p>誕生月日：${r.birthDate?esc(r.birthDate.replaceAll('-','/')):'未入力'}<br>母豚番号：${r.mixed?'混成':esc(r.sowId||'未入力')}</p><div class="fin-detail-controls"><div><p>重量の目安</p><div class="fin-weight-controls"><button data-action="fin-weight" data-id="${key}" data-delta="-10" ${r.weight<=30?'disabled':''}>−10kg</button><b>${r.weight}kg</b><button data-action="fin-weight" data-id="${key}" data-delta="10">＋10kg</button></div></div><button class="btn secondary" data-action="fin-csf" data-id="${key}" aria-pressed="${r.csf}">豚熱ワクチン　${r.csf?'✓ 済 → 未':'未 → 済'}</button><button class="btn secondary ${r.kind==='育成母豚候補'?'fin-preferred':''}" data-action="fin-kind" data-id="${key}">区分　${esc(r.kind)} → ${r.kind==='肉豚'?'育成母豚候補':'肉豚'}</button></div><p class="history-note">メモ：${esc(r.note||'なし')}</p><button class="btn" data-action="fin-edit" data-id="${key}">頭数・誕生月日・母豚・メモを編集</button><button class="btn secondary" data-action="fin-ship" data-id="${key}">出荷</button><button class="btn secondary" data-action="fin-from" data-id="${key}">このグループを別の空室へ移動</button><button class="btn secondary" data-action="close">閉じる</button>`;
+  modal.innerHTML=`<h2>${finishingPlace(key)} <span class="badge ${r.kind==='育成母豚候補'?'orange':''}">${esc(r.kind)}</span></h2><p class="fin-detail-count">${r.count}頭</p><p>誕生月日：${r.birthDate?esc(r.birthDate.replaceAll('-','/')):'未入力'}<br>母豚番号：${r.mixed?'混成':esc(r.sowId||'未入力')}</p><div class="fin-detail-controls"><div><p>重量の目安</p><div class="fin-weight-controls"><button data-action="fin-weight" data-id="${key}" data-delta="-10" ${r.weight<=0?'disabled':''}>−10kg</button><b>${r.weight}kg</b><button data-action="fin-weight" data-id="${key}" data-delta="10">＋10kg</button></div></div><button class="btn secondary" data-action="fin-csf" data-id="${key}" aria-pressed="${r.csf}">豚熱ワクチン　${r.csf?'✓ 済 → 未':'未 → 済'}</button><button class="btn secondary ${r.kind==='育成母豚候補'?'fin-preferred':''}" data-action="fin-kind" data-id="${key}">区分　${esc(r.kind)} → ${r.kind==='肉豚'?'育成母豚候補':'肉豚'}</button></div><p class="history-note">メモ：${esc(r.note||'なし')}</p><button class="btn" data-action="fin-edit" data-id="${key}">頭数・誕生月日・母豚・メモを編集</button><button class="btn secondary" data-action="fin-ship" data-id="${key}">出荷</button><button class="btn secondary" data-action="fin-from" data-id="${key}">このグループを別の空室へ移動</button><button class="btn secondary" data-action="close">閉じる</button>`;
   if(!dlg.open)dlg.showModal();
 }
-function finishingUpdate(key,fn){
+function finishingSaveUpdate(key,before,after){
+  const month=today().slice(0,7),expected=JSON.stringify(db.inventoryMonths?.[month]??null);
+  save(d=>{
+    d.logs.push({...makeLog('肉豚舎更新',after.sowId),finishingKey:key,finishingBefore:before,finishingAfter:after,simpleYard:1});
+    if(before.weight!==after.weight)I.syncSavedFinishingWeight(d,month,key,after.weight);
+  });
+  if(before.weight!==after.weight)inventorySyncFinishingWeightDraft(month,key,after.weight,expected);
+}
+function finishingUpdate(key,fn,openDetail=true){
   const r=state.finishing.find(x=>x.key===key);if(!r||r.state!=='occupied')throw Error('グループが見つかりません。');
   const before=F.group(r),after=M.clone(before);fn(after);
-  F.validGroup(after);save(d=>d.logs.push({...makeLog('肉豚舎更新',after.sowId),finishingKey:key,finishingBefore:before,finishingAfter:after,simpleYard:1}));finishingDetail(key);
+  F.validGroup(after);if(JSON.stringify(before)===JSON.stringify(after))return;finishingSaveUpdate(key,before,after);if(openDetail)finishingDetail(key);
 }
 function finishingEdit(key,pigKey=''){
   if(key==='yard')return finishingYardEdit(pigKey);
@@ -114,9 +122,9 @@ function finishingEdit(key,pigKey=''){
   form(finishingPlace(key)+' · 情報編集',`${field('birthDate','誕生月日（不明なら空欄）',g.birthDate,'date')}${field('count','現在の頭数',g.count,'number',true)}<p class="muted">0頭で保存すると空室になります。</p><label for="mixed">グループ</label><select id="mixed" name="mixed"><option value="single">同じ母豚の子</option><option value="mixed" ${g.mixed?'selected':''}>混成</option></select>${sowNumberSelect('sowId',g.sowId,{label:'母豚番号（不明なら未選択）'})}<label for="csf">豚熱ワクチン</label><select id="csf" name="csf"><option value="false">未</option><option value="true" ${g.csf?'selected':''}>済</option></select><label for="kind">区分</label><select id="kind" name="kind"><option>肉豚</option><option ${g.kind==='育成母豚候補'?'selected':''}>育成母豚候補</option></select>${field('weight','重量の目安（kg・10kg単位）',g.weight,'number',true)}${notes(g.note)}`,'保存する',f=>{
     const mixed=f.get('mixed')==='mixed',after={birthDate:f.get('birthDate'),count:Number(f.get('count')),sowId:mixed?'':String(f.get('sowId')||'').trim(),mixed,csf:f.get('csf')==='true',kind:f.get('kind'),weight:Number(f.get('weight')),note:f.get('note')};
     if(after.count===0&&!window.confirm('0頭で保存し、この部屋を空室にしますか？'))throw Error('空室化を取り消しました。');
-    F.validGroup(after);save(d=>d.logs.push({...makeLog('肉豚舎更新',after.sowId),finishingKey:key,finishingBefore:before,finishingAfter:after,simpleYard:1}));
+    F.validGroup(after);finishingSaveUpdate(key,before,after);
   });
-  document.getElementById('weight').min='30';document.getElementById('weight').step='10';document.getElementById('count').min='0';
+  document.getElementById('weight').min='0';document.getElementById('weight').step='10';document.getElementById('count').min='0';
   const select=document.getElementById('mixed'),change=()=>document.getElementById('sowId').disabled=select.value==='mixed';select.onchange=change;change();
 }
 function finishingShip(key,pigKey=''){
@@ -135,7 +143,7 @@ function finishingRecord(l){
 }
 document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||fatal)return;
-  const a=b.dataset.action,key=b.dataset.id;if(!a?.startsWith('fin-'))return;
+  const a=b.dataset.action,key=b.dataset.id;if(!a?.startsWith('fin-')||b.disabled)return;
   try{
     if(a==='fin-shipment-add')shipmentAdd();
     if(a==='fin-shipment-delete')shipmentDelete(b.dataset.source,key);
@@ -148,7 +156,17 @@ document.addEventListener('click',e=>{
     if(a==='fin-source')finishingTransfer(key,b.dataset.area,b.dataset.source,b.dataset.pig||finishingPreferredPig);
     if(a==='fin-register'||a==='fin-edit')finishingEdit(key,b.dataset.pig);
     if(a==='fin-ship')finishingShip(key,b.dataset.pig);
-    if(a==='fin-weight')finishingUpdate(key,g=>g.weight+=Number(b.dataset.delta));
+    if(a==='fin-weight'||a==='fin-weight-inline'){
+      e.stopPropagation();
+      if(a==='fin-weight-inline'&&finishingMoveMode)return;
+      const delta=Number(b.dataset.delta);if(![-10,10].includes(delta))return;
+      finishingUpdate(key,g=>g.weight=Math.max(0,g.weight+delta),a==='fin-weight');
+      if(a==='fin-weight-inline'){
+        const next=app.querySelector(`button[data-action="fin-weight-inline"][data-id="${key}"][data-delta="${delta}"]`);
+        const focusTarget=next?.disabled?app.querySelector(`button[data-action="fin-weight-inline"][data-id="${key}"][data-delta="10"]`):next;
+        focusTarget?.focus({preventScroll:true});
+      }
+    }
     if(a==='fin-csf')finishingUpdate(key,g=>g.csf=!g.csf);
     if(a==='fin-kind')finishingUpdate(key,g=>g.kind=g.kind==='肉豚'?'育成母豚候補':'肉豚');
     if(a==='fin-from'){finishingMoveMode=true;finishingPreferred=key;finishingPreferredPig=b.dataset.pig||'';dlg.close();go('finishing');toast('移動先の空室をタップしてください');}
@@ -165,10 +183,12 @@ document.addEventListener('click',e=>{
     const canvas=document.createElement('canvas'),measure=canvas.getContext('2d');
     if(!measure)return;
     main.querySelectorAll('.fin-primary .fin-count-number').forEach(number=>{
-      const width=number.parentElement.getBoundingClientRect().width-2;
+      const unit=number.parentElement.querySelector('small');
+      const width=number.parentElement.getBoundingClientRect().width-(number.closest('.fin-yard')?2:(unit?.getBoundingClientRect().width||16)+8);
       if(width<=0)return;
+      number.style.fontSize='';
       const style=getComputedStyle(number),digits=number.textContent;
-      let lo=12,hi=124;
+      let lo=12,hi=number.closest('.fin-yard')?124:parseFloat(style.fontSize);
       for(let i=0;i<12;i++){
         const mid=(lo+hi)/2;measure.font='850 '+mid+'px '+style.fontFamily;
         if(measure.measureText(digits).width<=width)lo=mid;else hi=mid;

@@ -61,7 +61,7 @@
   function validGroup(g){
     if(!Number.isInteger(g.count)||g.count<0)throw Error('頭数は0以上の整数で入力してください。');
     if(typeof g.sowId!=='string'||typeof g.note!=='string'||typeof g.csf!=='boolean'||typeof g.mixed!=='boolean'||!['肉豚','育成母豚','育成母豚候補'].includes(g.kind))throw Error('肉豚舎の情報を確認してください。');
-    if(!Number.isInteger(g.weight)||g.weight<30||g.weight%10!==0)throw Error('重量は30kg以上・10kg単位で入力してください。');
+    if(!Number.isSafeInteger(g.weight)||g.weight<0||g.weight%10!==0)throw Error('重量は0kg以上・10kg単位で入力してください。');
     if(g.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(g.birthDate)||!Number.isFinite(Date.parse(g.birthDate))||new Date(g.birthDate).toISOString().slice(0,10)!==g.birthDate))throw Error('誕生月日を確認してください。');
     if(g.mixed&&g.sowId)throw Error('混成の母豚番号は空欄にしてください。');
   }

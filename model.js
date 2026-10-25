@@ -20,16 +20,44 @@
   function nurseryBaseline(){return Array.from({length:5},(_,i)=>({key:'n'+(i+1),mixed:false,state:'unknown',sowId:'',count:null,entered:'',birthDate:''}));}
   function checkNursery(rs){if(rs.length!==5||new Set(rs.map(r=>r.key)).size!==5)throw Error('育成舎は5枠で管理します。');for(const r of rs){if(!/^n[1-5]$/.test(r.key)||!['unknown','empty','occupied'].includes(r.state)||typeof r.sowId!=='string'||(r.mixed!==undefined&&typeof r.mixed!=='boolean')||(r.mixed&&(r.state!=='occupied'||r.sowId))||(r.count!==null&&(!Number.isInteger(r.count)||r.count<0))||(r.state!=='occupied'&&(r.sowId||r.count!==null||r.entered))||(r.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.birthDate)||!Number.isFinite(Date.parse(r.birthDate))||new Date(r.birthDate).toISOString().slice(0,10)!==r.birthDate))||(r.entered&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.entered)||!Number.isFinite(Date.parse(r.entered))||new Date(r.entered).toISOString().slice(0,10)!==r.entered)))throw Error('育成舎の状態・頭数・入室日を確認してください。');}}
   function uid(){return root.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);}
+  const BOAR_STATUSES=['在籍','廃用／退役','未確認'];
+  // Only the explicitly confirmed current B1/B2 are seeded for old backups.
+  // An existing registry (including an empty one) is never inferred from mating history.
+  function boarRecords(data){return data.boars===undefined?[{id:'B1',name:'B1',status:'在籍'},{id:'B2',name:'B2',status:'在籍'}]:clone(data.boars);}
+  function activeBoars(data){return boarRecords(data).filter(b=>b.status==='在籍');}
+  function validateBoars(data){
+    if(data.boars===undefined)return;
+    if(!Array.isArray(data.boars))throw Error('種豚台帳の形式を確認してください。');
+    const ids=new Set(),names=new Set();
+    for(const b of data.boars){
+      if(!b||typeof b.id!=='string'||!b.id.trim()||typeof b.name!=='string'||!b.name.trim()||b.name!==b.name.trim()||b.name.length>60||!(b.status===undefined||BOAR_STATUSES.includes(b.status))||ids.has(b.id)||names.has(b.name.normalize('NFKC').toLowerCase()))throw Error('種豚の名前・在籍状態・重複を確認してください。');
+      ids.add(b.id);names.add(b.name.normalize('NFKC').toLowerCase());
+    }
+  }
+  function initializeBoars(data){
+    validateBoars(data);data.boars=boarRecords(data).map(b=>({...b,status:b.status||'未確認'}));
+  }
+  function setBoar(data,record,expected){
+    if(JSON.stringify(boarRecords(data))!==expected)throw Error('種豚台帳が変更されました。開き直してください。');
+    initializeBoars(data);
+    const i=data.boars.findIndex(b=>b.id===record.id);
+    if(i>=0&&data.boars[i].name!==record.name)throw Error('登録済みの種豚名は履歴を残すため変更できません。新しい種豚として追加してください。');
+    if(!BOAR_STATUSES.includes(record.status))throw Error('種豚の在籍状態を選んでください。');
+    const next={...(i>=0?data.boars[i]:{}),...clone(record)};
+    if(i>=0)data.boars[i]=next;else data.boars.push(next);
+    validateBoars(data);
+  }
   function migrate(raw){
-    if(raw?.version===3){validate(raw);const data=restoreProfiles(clone(raw));validate(data);return data;}
+    if(raw?.version===3){validate(raw);const data=restoreProfiles(clone(raw));initializeBoars(data);validate(data);return data;}
     if(raw?.version!=null)throw Error('この更新版では読み込めないデータのバージョンです。');
     if(raw!=null && (typeof raw!=='object'||Array.isArray(raw)||!Array.isArray(raw.logs)))throw Error('保存済みデータの形式を確認できません。上書きせず停止しました。');
     const old=raw||{logs:[]};
     const data={...clone(old),version:3,sows:IDS.map(id=>({id,breed:'',birthDate:'',note:''})),plans:clone(PLANS),baseline:baseline(),logs:(old.logs||[]).map(x=>({...x,key:uid(),legacy:true})).reverse()};
-    restoreProfiles(data);validate(data);return data;
+    restoreProfiles(data);initializeBoars(data);validate(data);return data;
   }
   function validate(data){
     if(data.version!==3||!Array.isArray(data.sows)||!Array.isArray(data.logs)||!Array.isArray(data.baseline)||data.baseline.length!==10)throw Error('データの形式が正しくありません。');
+    validateBoars(data);
     const ids=data.sows.map(s=>s.id);if(data.sows.some(s=>typeof s.id!=='string'||!(s.numberPending===true?/^gilt-[a-zA-Z0-9-]+$/.test(s.id):/^\d+$/.test(s.id)))||new Set(ids).size!==ids.length)throw Error('母豚番号は重複のない数字で入力してください。');
     const keys=data.logs.map(l=>l.key);if(keys.some(k=>typeof k!=='string'||!k)||new Set(keys).size!==keys.length)throw Error('記録の識別番号が不正です。');
     data.logs.forEach(l=>{if(!l.legacy && (!TYPES.includes(l.type)||!/^\d{4}-\d{2}-\d{2}$/.test(l.date)||!Number.isFinite(Date.parse(l.date))||new Date(l.date).toISOString().slice(0,10)!==l.date))throw Error('記録の種類または日付が不正です。');});
@@ -110,8 +138,8 @@
     }
     return {sows,rooms,nursery,finishing:fin?fin.current(finishing):finishing};
   }
-  function commit(data,fn){const next=clone(data);fn(next);validate(next);return next;}
-  root.TanakaModel={IDS,STATES,TYPES,PLANS,clone,uid,migrate,validate,replay,commit,baseline};
+  function commit(data,fn){const next=clone(data);fn(next);initializeBoars(next);validate(next);return next;}
+  root.TanakaModel={BOAR_STATUSES,boarRecords,activeBoars,validateBoars,initializeBoars,setBoar,IDS,STATES,TYPES,PLANS,clone,uid,migrate,validate,replay,commit,baseline};
   if(typeof module!=='undefined')module.exports=root.TanakaModel;
 })(typeof globalThis!=='undefined'?globalThis:this);
 

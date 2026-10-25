@@ -1,6 +1,6 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.2.1';
+const APP_VERSION='1.3.0';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
@@ -21,7 +21,7 @@ function save(fn){if(simulation){const before=db;db=M.commit(db,fn);TanakaSimula
 try{
   const stored=localStorage.getItem(KEY),raw=stored===null?null:JSON.parse(stored);
   db=M.migrate(raw);state=M.replay(db);
-  if(raw?.version!==3||raw?.cardRestoration!==db.cardRestoration||raw?.roomCountRestoration!==db.roomCountRestoration){if(stored!==null)localStorage.setItem(raw?.version===3?'tanaka-db-before-card-restoration':'tanaka-db-before-v3',stored);localStorage.setItem(KEY,JSON.stringify(db));}
+  if(raw?.version!==3||raw?.cardRestoration!==db.cardRestoration||raw?.roomCountRestoration!==db.roomCountRestoration||JSON.stringify(raw?.boars)!==JSON.stringify(db.boars)){if(stored!==null)localStorage.setItem(raw?.version===3?(raw.boars===undefined?'tanaka-db-before-boar-registry':'tanaka-db-before-card-restoration'):'tanaka-db-before-v3',stored);localStorage.setItem(KEY,JSON.stringify(db));}
 }catch(e){fatal=e.message;}
 function sowButton(id){return `<button type="button" class="sowlink" data-action="detail" data-id="${esc(id)}" aria-label="母豚 ${esc(id)}のカードを開く">${esc(id)}</button>`;}
 function cardLink(title,value,sub,target,hint='',vacancy='',counts=[]){
@@ -73,7 +73,22 @@ function detail(){const s=state.sows[selected];if(!s)return sowList();const r=st
 function rooms(){return `<h2 style="margin-top:0">分娩舎 · 10室</h2><button class="btn secondary ff-entry-button" data-action="page" data-id="forecast">年間予測 · 混雑と暑熱を見る</button><div class="grid rooms-grid" style="margin-top:16px">${sortedFarrowRooms(state.rooms).map(r=>`<section class="card room"><h3><span class="badge ${r.state==='family'?'green':r.state==='piglets'?'orange':'gray'}">${names[r.state]}</span></h3>${feedBoxCard(r)}${pigletCareCard(r)}${r.state==='empty'?`<button class="btn secondary" data-action="room-edit" data-id="${r.key}">編集</button>`:''}${r.state==='waiting'?`<button class="btn" data-action="room-birth" data-id="${r.key}">分娩</button><button class="btn secondary" data-action="waiting-cancel" data-id="${r.key}">移動を取り消す</button>`:r.state!=='empty'?`<button class="btn" data-action="room-record" data-id="${r.key}">${r.state==='family'?'離乳':'育成舎へ移動'}</button>`:`<button class="btn" data-action="room-birth" data-id="${r.key}">分娩・入室</button>`}</section>`).join('')}</div>`;}
 function recordWorkspace(){return `<h2>記録の編集・過去記録</h2><p class="muted">記録をタップして日付・母豚・内容を修正できます。分娩・離乳・子豚移動の修正は、在室状態にも反映します。</p><div class="toolbar"><button class="btn" data-action="record" data-id="追記">＋ 記録を追記</button><button class="btn secondary" data-action="export">データ保存</button><button class="btn secondary" data-action="import">データ読込</button><button class="btn secondary" data-action="recovery-export">以前の保存データを取り出す</button></div><label for="filter">母豚番号・記録内容で絞り込み</label><input id="filter" type="search" placeholder="例：512 / 離乳"><div class="card" id="histories" style="margin-top:15px">${history(db.logs)}</div><div class="notice">データはこの端末・このブラウザに保存されます。定期的に「データ保存」で控えを残してください。記録の日付を変更しても、状態への反映順は登録順です。</div>`;}
 function records(){return recordWorkspace();}
-function edit(){return `<h2 style="margin-top:0">設定</h2>${simulationSettings()}${typeof cloudSettings==='function'?cloudSettings():''}${sowNotebookImportControls()}${recurringRemindersSettings()}${maternalSettings()}<h2>画面の色</h2><div class="card theme-picker" role="group" aria-label="画面の色">${Object.entries(THEMES).map(([key,label])=>`<button class="theme-choice" data-action="theme" data-id="${key}" aria-pressed="${theme===key}"><span class="theme-swatch swatch-${key}" aria-hidden="true"></span>${label}${theme===key?' ✓':''}</button>`).join('')}</div>${recordWorkspace()}<p class="app-version" aria-label="アプリのバージョン">クロブタアプリ<br><span>Version ${esc(APP_VERSION)}</span></p>`;}
+function edit(){return `<h2 style="margin-top:0">設定</h2>${simulationSettings()}${typeof cloudSettings==='function'?cloudSettings():''}${sowNotebookImportControls()}${recurringRemindersSettings()}${maternalSettings()}${boarSettings()}<h2>画面の色</h2><div class="card theme-picker" role="group" aria-label="画面の色">${Object.entries(THEMES).map(([key,label])=>`<button class="theme-choice" data-action="theme" data-id="${key}" aria-pressed="${theme===key}"><span class="theme-swatch swatch-${key}" aria-hidden="true"></span>${label}${theme===key?' ✓':''}</button>`).join('')}</div>${recordWorkspace()}<p class="app-version" aria-label="アプリのバージョン">クロブタアプリ<br><span>Version ${esc(APP_VERSION)}</span></p>`;}
+function boarSettings(){
+  const boars=M.boarRecords(db);
+  return `<details class="card boar-settings"><summary>種豚管理 · 在籍 ${M.activeBoars(db).length}頭</summary><p class="muted">在籍の種豚だけを全頭数に含めます。廃用・退役後も種付け履歴の名前は残ります。</p>${boars.map(b=>`<div class="row"><div><b>${esc(b.name)}</b><p class="muted">${esc(b.status||'未確認')} ${b.status==='在籍'?'（頭数に含む）':'（頭数に含めない）'}</p></div><button type="button" class="sowlink" data-action="boar-edit" data-id="${esc(b.id)}" aria-label="種豚 ${esc(b.name)}の在籍状態を変更">状態を変更</button></div>`).join('')||'<p>種豚の登録はありません。</p>'}<button type="button" class="btn secondary" data-action="boar-add">種豚を追加</button></details>`;
+}
+function boarEdit(id=''){
+  const existing=id?M.boarRecords(db).find(b=>b.id===id):null;
+  if(id&&!existing)throw Error('種豚が見つかりません。');
+  const expected=JSON.stringify(M.boarRecords(db)),month=today().slice(0,7),monthExpected=JSON.stringify(db.inventoryMonths?.[month]??null);
+  form(existing?'種豚 '+existing.name+'の在籍状態':'種豚を追加',`${field('boarName','種豚名（例：B3）',existing?.name||'','text',true)}<label for="boarStatus">在籍状態</label><select id="boarStatus" name="boarStatus" required><option value="">選択してください</option>${M.BOAR_STATUSES.map(status=>`<option value="${status}" ${existing?.status===status?'selected':''}>${status}</option>`).join('')}</select><p class="muted">頭数に含むのは「在籍」だけです。登録済みの名前は履歴を残すため変更できません。</p>`,'保存する',f=>{
+    const record={id:existing?.id||M.uid(),name:String(f.get('boarName')||'').trim(),status:String(f.get('boarStatus')||'')};
+    save(d=>{M.setBoar(d,record,expected);I.syncSavedBoars(d,month);});
+    inventorySyncBoarDraft(month,monthExpected);
+  });
+  document.getElementById('boarName').readOnly=!!existing;
+}
 function render(){
   updateSimulationBanner();
   openPigletCare=page==='rooms'?new Set([...document.querySelectorAll('details.piglet-care[open]')].map(el=>el.dataset.careRoom)):new Set();
@@ -81,6 +96,7 @@ function render(){
   app.innerHTML=simulationProgressSummary()+({home,sows:sowList,detail,rooms,nursery,finishing,shipments:shipmentHistory,forecast:farrowingForecastPage,records,edit,schedules,updates,inventory:inventoryPage}[page]||home)()+`<footer>田中畜産<br>確認できていない情報は未入力で表示</footer>`;
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.page===(page==='detail'?'sows':page==='shipments'?'finishing':page==='forecast'?'rooms':page)?'page':'false'));
   inventoryQueuePlanRepair();
+  inventoryQueueBoarSync();
   queueRemindersInitialization();
   queueMaternalInitialization();
 }
@@ -139,10 +155,10 @@ function quickMating(id){
   const sow=state.sows[id];
   if(!sow?.active||sow.numberPending||!yardSowList().some(s=>s.id===id))throw Error('運動場の母豚を選んでください。');
   const basis=db;
-  form('母豚 '+sowIdentityLabel(id)+'・種付',`<details class="quick-mating-date"><summary id="quick-mating-date-label">日付 ${esc(sowCardDate(today()))}（変更）</summary>${field('date','種付け日',today(),'date',true)}</details><div id="quick-mating-previous" role="status"></div><fieldset class="quick-mating-boars"><legend>使用した種雄</legend>${['B1','B2'].map(boar=>`<label><input type="radio" name="boar" value="${boar}" required><span>${boar}</span></label>`).join('')}</fieldset><p id="quick-mating-kind" class="muted"></p>`,'保存',f=>{
+  form('母豚 '+sowIdentityLabel(id)+'・種付',`<details class="quick-mating-date"><summary id="quick-mating-date-label">日付 ${esc(sowCardDate(today()))}（変更）</summary>${field('date','種付け日',today(),'date',true)}</details><div id="quick-mating-previous" role="status"></div><fieldset class="quick-mating-boars"><legend>使用した種雄</legend>${M.activeBoars(db).map(boar=>`<label><input type="radio" name="boar" value="${esc(boar.name)}" required><span>${esc(boar.name)}</span></label>`).join('')||'<p>在籍中の種豚がいません。設定の種豚管理から登録してください。</p>'}</fieldset><p id="quick-mating-kind" class="muted"></p>`,'保存',f=>{
     const date=String(f.get('date')||''),boar=String(f.get('boar')||'');
     if(!TanakaForecast.valid(date))throw Error('種付け日を確認してください。');
-    if(!['B1','B2'].includes(boar))throw Error('使用した種雄を選んでください。');
+    if(!M.activeBoars(db).some(b=>b.name===boar))throw Error('使用した種雄を選んでください。');
     if(db!==basis)throw Error('記録が更新されました。開き直してください。');
     save(d=>{const l={...makeLog('種付け',id),date,boar,remating:false};TanakaSowParity.beforeRecord(d,id,l);d.logs.push(l);});
   });
@@ -231,6 +247,7 @@ document.addEventListener('click',e=>{
   if(fatal)return;
   if(a==='page')go(id);if(a==='detail')go('detail',id);if(a==='add')profile();if(a==='profile')profile(id);if(a==='card-edit')editOriginalCard(id);
   if(a==='quick-mating')quickMating(id);
+  if(a==='boar-add'||a==='boar-edit'){try{boarEdit(a==='boar-edit'?id:'');}catch(err){toast(err.message);}return;}
   if(a==='record')record(id);if(a==='sow-record'){form('母豚 '+id+'の作業',`<label for="type">記録内容</label><select id="type" name="type">${['種付け','分娩','離乳','子豚移動','再発情確認','再種付け','スイムジェン 実施','バイコックス 実施','レシュピシュア 実施','フォステラ 実施','追記'].map(t=>`<option>${t}</option>`).join('')}</select>`,'次へ',f=>{setTimeout(()=>record(f.get('type'),id),0);});}
   if(a==='cancel-scheduled')cancelScheduled(id);
   if(a==='scheduled-record'){if(b.dataset.type==='分娩舎へ移動')enterWaiting(id);else record(b.dataset.type,id);}
