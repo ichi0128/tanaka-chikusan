@@ -267,3 +267,24 @@ test('an old current-month report gains an archived boar snapshot without rewrit
  const x=JSON.parse(vm.runInContext(`JSON.stringify({now:I.farmSummary(db.inventoryMonths[weightMonth]).boarCount,archived:db.inventoryMonths[weightMonth].revisions.at(-1).report.boarSnapshot??null,past:JSON.stringify(db.inventoryMonths[I.previousMonth(weightMonth)])===oldWeightMonth})`,b.context));
  assert.deepEqual(x,{now:2,archived:null,past:true});
 });
+
+test('print output keeps all four report sections, values and final notes without changing saved data',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));seedFinishingWeight(b);
+ const raw=b.storage.getItem('tanaka-db');
+ vm.runInContext(`var printReport=I.clone(db.inventoryMonths[weightMonth]);printReport.remarks='印刷確認用の備考';printReport.weekly=[3,4,5,6,7];`,b.context);
+ const html=vm.runInContext(`inventoryPrintDocument(printReport,'all')`,b.context);
+ assert.equal((html.match(/<section class="sheet /g)||[]).length,4);
+ for(const [mode,pages] of [[1,2],[2,1],[3,1]]){
+   const part=vm.runInContext(`inventoryPrintDocument(printReport,${mode})`,b.context);
+   assert.equal((part.match(/<section class="sheet /g)||[]).length,pages);
+ }
+ assert.match(html,/印刷確認用の備考/);assert.match(html,/25頭/);assert.match(html,/種豚 2頭/);
+ assert.match(html,/単位：頭（体重はkg）。/);assert.match(html,/年間見込は過去月の入力済み実績を優先/);
+ assert.ok(html.indexOf('<script>')<html.indexOf('</head>'));
+ const body=html.slice(html.indexOf('<body>'));assert.ok(body.endsWith('</section></body></html>'));
+ assert.throws(()=>vm.runInContext(`inventoryPrintDocument(printReport,9)`,b.context),/帳票を選んで/);
+ assert.equal(b.storage.getItem('tanaka-db'),raw);
+ vm.runInContext(`inventoryMonth=weightMonth;inventoryCanEdit=()=>false;var printWritten='';var printOpened={opener:window,document:{open(){},write(html){printWritten=html;},close(){}}};window.open=()=>printOpened;inventoryPrint('all');`,b.context);
+ assert.equal(vm.runInContext('printOpened.opener',b.context),null);assert.match(vm.runInContext('printWritten',b.context),/印刷する \/ PDFに保存/);
+ assert.equal(b.storage.getItem('tanaka-db'),raw);
+});
