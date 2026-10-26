@@ -301,3 +301,24 @@ test('sow card list and detail retain previous results during pregnancy and swit
  const born=vm.runInContext(`sowCardMarkup(state.sows['912'])`,b.context);assert.match(born,/11－/);assert.doesNotMatch(born,/9－9|10\/21/);
  assert.match(vm.runInContext(`sowHistoryTable(state.sows['912'])`,b.context),/2026-10-21/);
 });
+
+test('quick and standard mating supplement preserve 132 date; explicit new mating and table edits share schedules',()=>{
+ const b=boot();
+ vm.runInContext(`let matingSubmit,matingHtml;form=(title,body,label,submit)=>{matingSubmit=submit;matingHtml=body;};quickMating('132');`,b.context);
+ assert.match(vm.runInContext('matingHtml',b.context),/種豚を追加（日付を保持）/);
+ assert.equal(b.elements.get('date').value,'2026-10-11');
+ b.context.formValues=new Map([['matingMode','supplement'],['boar','B1'],['id','132']]);
+ vm.runInContext('matingSubmit(formValues);',b.context);
+ assert.equal(vm.runInContext("TanakaSowParity.pages(db,'132')[0].card.mating",b.context),'10/11');
+ assert.equal(vm.runInContext("db.logs.filter(l=>l.id==='132'&&l.type==='種付け').length",b.context),0);
+ vm.runInContext("record('種付け','132');matingSubmit(formValues);",b.context);
+ assert.equal(vm.runInContext("TanakaSowParity.pages(db,'132')[0].card.mating",b.context),'10/11');
+ b.context.formValues=new Map([['matingMode','new'],['id','132'],['date','2026-10-26'],['boar','B2'],['matingKind','normal'],['note','']]);
+ vm.runInContext("record('種付け','132');matingSubmit(formValues);",b.context);
+ assert.equal(vm.runInContext("TanakaSowParity.pages(db,'132')[0].card.mating",b.context),'2026-10-26');
+ vm.runInContext("editSowHistoryCell('132',TanakaSowParity.pages(db,'132')[0].key,'mating');",b.context);
+ b.context.formValues=new Map([['historyValue','10/11']]);vm.runInContext('matingSubmit(formValues);',b.context);
+ assert.equal(vm.runInContext("TanakaSowParity.pages(db,'132')[0].card.due",b.context),'2027-02-02');
+ assert.equal(vm.runInContext("M.schedules(db,today()).find(p=>p.id==='132'&&p.type==='分娩').date",b.context),'2027-02-02');
+ assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).sows.find(s=>s.id==='132').parityCards.current.card.matingDateOverride,'2026-10-11');
+});

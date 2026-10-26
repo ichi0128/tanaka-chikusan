@@ -38,17 +38,33 @@
     }
     return set;
   }
+  // Month/day-only legacy cards use their known cycle year (initial cards: 2026).
+  function matingDate(value,anchor='2026-01-01'){
+    const text=String(value||'').trim(),full=/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(text),md=/^(\d{1,2})\/(\d{1,2})$/.exec(text);
+    if(!full&&!md)throw Error('種付け日は 10/11 または 2026-10-11 の形で入力してください。');
+    const year=full?full[1]:String(anchor||'2026').slice(0,4),month=Number(full?full[2]:md[1]),day=Number(full?full[3]:md[2]);
+    const date=year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    if(!Number.isFinite(Date.parse(date))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date)throw Error('存在する種付け日を入力してください。');
+    return date;
+  }
+  function recalculateMating(card,date){
+    card.reheat=addDays(date,21);card.due=addDays(date,114);
+    // A completed dose is a fact, not a future appointment.
+    if(!String(card.swimgen||'').includes('済'))card.swimgen=addDays(date,100);
+    return card;
+  }
+  M.matingDate=matingDate;M.recalculateMating=recalculateMating;
   function setMatingDates(card,set){
     card.matingSet=[...new Map(set.map(l=>[JSON.stringify([l.date,String(l.boar||'').trim()]),{key:l.key,date:l.date,boar:l.boar||''}])).values()];
     card.mating=set[0].date;card.boar=set.at(-1).boar||'';
-    card.reheat=addDays(card.mating,21);card.due=addDays(card.mating,114);card.swimgen=addDays(card.mating,100);
+    card.swimgen='';recalculateMating(card,card.mating);
   }
   function reconcileMating(card,logs){
-    if(card.reheatPending||card.cycleCompleted)return card;
+    if(card.reheatPending||card.cycleCompleted||card.matingDateOverride)return card;
     const set=matingSet(logs),matches=l=>card.mating===l.date||card.mating===Number(l.date.slice(5,7))+'/'+Number(l.date.slice(8,10));
     // Repair older captured projections without changing any saved log or manual date.
     if(set.length>1&&set.some(matches)){
-      const swim=card.swimgen;setMatingDates(card,set);
+      const swim=card.swimgen,boar=card.matingBoarOverride;setMatingDates(card,set);if(boar){card.boar=boar;delete card.matingSet;}
       if(String(swim||'').includes('済'))card.swimgen=swim;
     }
     return card;
@@ -70,6 +86,7 @@
       card.reproductionStatus='再種付け待ち';
       card.reheat='';card.due='';card.swimgen='';
     }else if(log.type==='種付け'){
+      delete card.matingDateOverride;delete card.matingBoarOverride;
       // Older remating-only records still count; a confirmed return counts once.
       const prior=card.matingSet||[],last=prior.at(-1),consecutive=!card.reheatPending&&last&&log.date>=last.date&&log.date<=addDays(last.date,1);
       if(log.remating&&!card.reheatPending&&!log.reheatConfirmationKey&&!consecutive)card.reheatCount=(Number(card.reheatCount)||0)+1;
@@ -88,7 +105,9 @@
       if(!sow.active||sow.numberPending)continue;
       const logs=data.logs.filter(l=>!l.legacy&&l.id===sow.id);
       const last=type=>logs.filter(l=>l.type===type).sort((a,b)=>a.date.localeCompare(b.date)||data.logs.indexOf(a)-data.logs.indexOf(b)).at(-1);
-      const latestMating=last('種付け'),birth=last('分娩'),set=matingSet(logs.filter(l=>latestMating&&(l.date<latestMating.date||l.date===latestMating.date&&data.logs.indexOf(l)<=data.logs.indexOf(latestMating)))),mating=set[0]||latestMating;
+      const latestMating=last('種付け'),birth=last('分娩'),set=matingSet(logs.filter(l=>latestMating&&(l.date<latestMating.date||l.date===latestMating.date&&data.logs.indexOf(l)<=data.logs.indexOf(latestMating)))),recordedMating=set[0]||latestMating;
+      const current=globalThis.TanakaSowParity?.pages(data,sow.id)[0]?.card;
+      const mating=current?.matingDateOverride?{...(recordedMating||{}),key:recordedMating?.key||'card',date:current.matingDateOverride}:recordedMating;
       if(M.isReheatPending(data,sow.id)||globalThis.TanakaSowParity?.pages(data,sow.id)[0]?.awaitingMating)continue;
       function add(base,days,label,type){
         const date=addDays(base.date,days);
@@ -147,7 +166,7 @@ function sowCard(data,id){
   const page=globalThis.TanakaSowParity?.pages(data,id)[0],current=page?.card;
   if(page?.awaitingMating)Object.assign(c,M.clone(current));
   if(current){for(const name of ['reheatCount','reheatPending','lastReheatDate','lastReheatKey','failedMating','reproductionStatus'])if(name in current)c[name]=M.clone(current[name]);if(current.reheatPending){c.due='';c.reheat='';c.swimgen='';}}
-  if(current)for(const name of ['mating','boar','reheat','due','swimgen','matingSet','plannedWeanDays'])if(name in current)c[name]=M.clone(current[name]);
+  if(current)for(const name of ['mating','boar','reheat','due','swimgen','matingSet','plannedWeanDays','matingDateOverride','matingBoarOverride'])if(name in current)c[name]=M.clone(current[name]);
   reconcileMating(c,logs);
   resetSwimgenAfterBirth(c,logs);
   for(const name of ['mating','reheat','due','swimgen'])c[name]=String(c[name]??'').replace(/^(\d{4}-\d{2}-\d{2})(.*)$/,(_,date,suffix)=>md(date)+suffix);

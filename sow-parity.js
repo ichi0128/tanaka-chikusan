@@ -154,11 +154,39 @@ function beforeRecord(data,id,log){
     if(current.card.plannedWeanDays!==undefined)card.plannedWeanDays=current.card.plannedWeanDays;
   }
 }
-function edit(data,id,key,card,expected){
+function edit(data,id,key,card,expected,matingEdited=false){
   const list=pages(data,id),old=list.find(p=>p.key===key);if(!old||JSON.stringify(old)!==expected)throw Error('カードが更新されました。開き直してください。');
   const store=ensure(data,id),target=store.current.key===key?store.current:store.history.find(p=>p.key===key);
-  target.revisions=[...(target.revisions||[]),{savedAt:new Date().toISOString(),card:clone(old.card)}];target.card=clone(card);target.parity=number(card.parity);target.updatedAt=new Date().toISOString();
+  const next=clone(card);
+  if(old===list[0]&&!old.card.birthDateActual&&!next.birthDateActual&&(matingEdited||String(next.mating||'')!==String(old.card.mating||''))){
+    if(next.mating){const anchor=old.card.matingDateOverride||events(data,id).filter(l=>l.type==='種付け').at(-1)?.date||(/^\d{4}/.test(old.card.mating||'')?old.card.mating:'2026-01-01');next.matingDateOverride=M.matingDate(next.mating,anchor);M.recalculateMating(next,next.matingDateOverride);delete next.matingSet;}
+    else{delete next.matingDateOverride;delete next.matingSet;next.reheat='';next.due='';if(!String(next.swimgen||'').includes('済'))next.swimgen='';}
+  }
+  if(old===list[0]&&next.boar!==old.card.boar){next.matingBoarOverride=next.boar;delete next.matingSet;}
+  target.revisions=[...(target.revisions||[]),{savedAt:new Date().toISOString(),card:clone(old.card)}];target.card=next;target.parity=number(next.parity);target.updatedAt=new Date().toISOString();
   if(target===store.current)target.capturedKeys=events(data,id).map(l=>l.key);
+}
+// Supplementary boar entry edits this pregnancy, never inserts a new mating fact.
+function matingInput(data,id){
+  const p=pages(data,id)[0],c=p?.card;
+  if(!c||p.awaitingMating||c.reheatPending||c.cycleCompleted||c.birthDateActual||!c.mating)return '';
+  try{return M.matingDate(c.mating,c.matingDateOverride||events(data,id).filter(l=>l.type==='種付け').at(-1)?.date||'2026-01-01');}catch{return '';}
+}
+function addBoar(data,id,boar){
+  if(!matingInput(data,id))throw Error('現在の種付け日を確認してください。');
+  const p=pages(data,id)[0],names=String(boar||'').trim();if(!names)throw Error('使用した種雄を入力してください。');
+  const previous=p.card.matingSet?.length?p.card.matingSet.map(l=>l.boar).join('・'):p.card.boar;
+  const joined=[...new Set((String(previous||'')+'・'+names).split(/[・,、\s]+/).filter(x=>x&&!['未入力','未確認'].includes(x)))].join('・');
+  edit(data,id,p.key,M.recalculateMating({...clone(p.card),boar:joined,matingBoarOverride:joined,matingSet:undefined},matingInput(data,id)),JSON.stringify(p));
+}
+function afterMatingEdit(data,old,log){
+  if(old.type!=='種付け'||log.type!=='種付け'||old.id!==log.id)return;
+  const store=data.sows.find(s=>s.id===log.id)?.parityCards;
+  if(!store||!store.current.capturedKeys.includes(old.key)||store.current.card.birthDateActual)return;
+  const c=store.current.card,set=M.matingSet(events(data,log.id));
+  if(!set.some(l=>l.key===log.key)||!(c.matingSet?.some(l=>l.key===old.key)||c.mating===old.date||c.mating===Number(old.date.slice(5,7))+'/'+Number(old.date.slice(8))))return;
+  const date=set[0].date;
+  edit(data,log.id,store.current.key,{...clone(c),mating:date,matingDateOverride:date,boar:[...new Set(set.map(l=>l.boar).filter(Boolean))].join('・'),matingSet:undefined},JSON.stringify(pages(data,log.id)[0]));
 }
 function setWeanDays(data,{id,roomKey,birthDate,days,expectedDays}){
   if(!Number.isInteger(days)||days<1||days>365)throw Error('離乳日数は1〜365日の整数で設定してください。');
@@ -198,12 +226,12 @@ function editHistory(data,id,key,patch,expected){
   }
   if('birthCount' in patch||'weanCount' in patch)card.result=(card.birthCount??'')+'－'+(card.weanCount??'');
   if('weanDateActual' in patch&&(card.weanDateActual||card.wean===old.card.weanDateActual))card.wean=card.weanDateActual;
-  edit(data,id,key,card,expected);
+  edit(data,id,key,card,expected,'mating' in patch);
 }
 const validate=M.validate;
 M.validate=function(data){validate(data);for(const s of data.sows){if(!s.parityCards)continue;const p=s.parityCards;if(p.version!==1||!Array.isArray(p.history)||!p.current)throw Error('母豚の産次カード形式を確認してください。');const keys=new Set();for(const x of [...p.history,p.current]){if(x?.card?.plannedWeanDays!==undefined&&(!Number.isInteger(x.card.plannedWeanDays)||x.card.plannedWeanDays<1||x.card.plannedWeanDays>365))throw Error('産次ごとの離乳日数を確認してください。');if(!x||typeof x.key!=='string'||keys.has(x.key)||!x.card||typeof x.card!=='object'||(x.parity!==null&&number(x.parity)===null)||!Array.isArray(x.revisions))throw Error('母豚の産次カードを確認してください。');keys.add(x.key);}if(!Array.isArray(p.current.capturedKeys))throw Error('母豚カードの履歴を確認してください。');}};
 const migrate=M.migrate,commit=M.commit;
 M.migrate=function(raw){const data=migrate(raw);M.validate(data);return data;};
 M.commit=function(data,fn){const next=commit(data,fn);M.validate(next);return next;};
-root.TanakaSowParity={performance,cardPerformance,pages,start,edit,beforeRecord,historyRows,editHistory,matingReturnKey,setWeanDays};
+root.TanakaSowParity={matingInput,addBoar,afterMatingEdit,performance,cardPerformance,pages,start,edit,beforeRecord,historyRows,editHistory,matingReturnKey,setWeanDays};
 })(typeof globalThis!=='undefined'?globalThis:this);
