@@ -288,3 +288,16 @@ test('print output keeps all four report sections, values and final notes withou
  assert.equal(vm.runInContext('printOpened.opener',b.context),null);assert.match(vm.runInContext('printWritten',b.context),/印刷する \/ PDFに保存/);
  assert.equal(b.storage.getItem('tanaka-db'),raw);
 });
+
+test('sow card list and detail retain previous results during pregnancy and switch only at actual birth',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));
+ vm.runInContext(`save(d=>{d.logs=[];d.baseline.forEach(r=>Object.assign(r,{state:'empty',sowId:'',count:null,birthDate:''}));const s=d.sows.find(s=>s.id==='912');s.cardBaseline={parity:3,mating:'2026-05-29',birthDateActual:'2026-09-21',birthCount:9,result:'7→6'};Object.assign(d.baseline[0],{state:'family',sowId:'912',birthDate:'2026-09-21',birthCount:9,count:9});});
+ save(d=>{const l=TanakaWeaning.createLog(d,{id:'912',roomKey:'r1',date:'2026-10-21',operator:'担当者',count:9});TanakaSowParity.beforeRecord(d,'912',l);d.logs.push(l);});
+ save(d=>{const l={key:'ui-mate',type:'種付け',id:'912',date:'2026-10-26',boar:'B2'};TanakaSowParity.beforeRecord(d,'912',l);d.logs.push(l);});`,b.context);
+ const raw=b.storage.getItem('tanaka-db'),card=vm.runInContext(`sowCardMarkup(state.sows['912'])`,b.context),detail=vm.runInContext(`sowParityCard(state.sows['912'])`,b.context);
+ for(const html of [card,detail]){assert.match(html,/9－9/);assert.match(html,/10\/21/);assert.match(html,/10\/26/);}
+ assert.equal(b.storage.getItem('tanaka-db'),raw);
+ vm.runInContext(`save(d=>{const l={key:'ui-next-birth',type:'分娩',id:'912',date:'2027-02-17',roomKey:'r2',count:11};TanakaSowParity.beforeRecord(d,'912',l);d.logs.push(l);});`,b.context);
+ const born=vm.runInContext(`sowCardMarkup(state.sows['912'])`,b.context);assert.match(born,/11－/);assert.doesNotMatch(born,/9－9|10\/21/);
+ assert.match(vm.runInContext(`sowHistoryTable(state.sows['912'])`,b.context),/2026-10-21/);
+});

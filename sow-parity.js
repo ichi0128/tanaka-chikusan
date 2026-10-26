@@ -7,7 +7,7 @@ const number=v=>v!==''&&v!==null&&v!==undefined&&Number.isSafeInteger(Number(v))
 function apply(card,events){
   for(const l of events){
     M.applyReproductionEvent(card,l);
-    if(l.type==='分娩'){card.birthDateActual=l.date;card.birthTime=l.birthTime||'';card.birthCount=l.count??null;card.stillborn=l.stillborn??null;card.birthNote=l.note||'';card.result=(l.count??'')+'－';}
+    if(l.type==='分娩'){card.wean='';card.weanDateActual='';card.weanCount=null;card.weanNote='';card.weanOperator='';card.nursingDays=null;card.birthDateActual=l.date;card.birthTime=l.birthTime||'';card.birthCount=l.count??null;card.stillborn=l.stillborn??null;card.birthNote=l.note||'';card.result=(l.count??'')+'－';}
     if(l.type==='離乳'){
       if(!card.birthDateActual&&l.birthDate)card.birthDateActual=l.birthDate;
       if(card.birthCount==null&&Number.isInteger(l.sourceRoom?.birthCount))card.birthCount=l.sourceRoom.birthCount;
@@ -74,6 +74,38 @@ function pages(data,id){
   const completed={...current,card:apply(clone(current.card),[last]),completedAt:last.date,completionLogKey:last.key};
   return [waitingPage(s,completed,logs),completed,...all.slice(1)];
 }
+// Display previous results during pregnancy without copying those results into
+// the new parity's actual birth fields, forecast inputs or editable history rows.
+function cardPerformance(card){
+  let born=number(card.birthCount),weaned=number(card.weanCount);
+  // Older cards stored both counts only in the result string. Use that saved
+  // pair only when it agrees with every explicit count; never carry a stale pair
+  // into a different birth or replace an explicit zero.
+  const pair=/^\s*(\d+)\s*(?:→|－|―|-)\s*(\d+)\s*$/.exec(String(card.result||''));
+  if(pair&&(born===null||born===number(pair[1]))&&(weaned===null||weaned===number(pair[2]))){born=born??number(pair[1]);weaned=weaned??number(pair[2]);}
+  const result=born!==null||weaned!==null?(born??'')+'－'+(weaned??''):String(card.result||'');
+  return {birthCount:born,weanCount:weaned,wean:card.weanDateActual||card.wean||'',result};
+}
+function performance(data,id,key){
+  const all=pages(data,id),current=all[0],selected=key?all.find(p=>p.key===key):current;
+  if(!selected)return cardPerformance({});
+  const card=selected.card;
+  if(selected!==current||card.birthDateActual)return cardPerformance(card);
+  const prior=all.slice(1).filter(p=>
+    (current.completedKey===p.key||number(p.parity)!==null&&number(current.parity)!==null&&number(p.parity)<number(current.parity))&&
+    (p.card.weanDateActual||p.card.wean)&&
+    (number(p.card.birthCount)!==null||number(p.card.weanCount)!==null||p.card.result)
+  ).sort((a,b)=>(number(b.parity)??-1)-(number(a.parity)??-1));
+  if(prior.length)return {...cardPerformance(prior[0].card),previous:true,sourceKey:prior[0].key};
+  // Legacy cards may have no detached history yet. Recover only recorded facts
+  // from the latest weaning and its source room; never manufacture a count.
+  const logs=events(data,id),wean=logs.filter(l=>l.type==='離乳').at(-1);
+  if(wean){
+    const birth=logs.filter(l=>l.type==='分娩'&&l.date<=wean.date).at(-1);
+    return {...cardPerformance({birthCount:wean.sourceRoom?.birthCount??birth?.count??null,weanCount:wean.count??null,weanDateActual:wean.date}),previous:true,sourceKey:wean.key};
+  }
+  return cardPerformance(card);
+}
 function ensure(data,id){
   const s=data.sows.find(s=>s.id===id);if(!s)throw Error('母豚が見つかりません。');
   const all=pages(data,id),current=all[0];
@@ -104,6 +136,7 @@ function beforeRecord(data,id,log){
     const store=ensure(data,id),completed={...clone(current),card:apply(clone(current.card),[log]),completedAt:log.date,completionLogKey:log.key,savedAt:new Date().toISOString()};delete completed.capturedKeys;
     store.history.push(completed);store.current=waitingPage(data.sows.find(s=>s.id===id),completed,[...events(data,id),log]);return;
   }
+  if(log.type==='分娩'&&current.awaitingMating){start(data,id);return;}
   if(log.type==='種付け'&&current.awaitingMating){start(data,id);log.remating=false;delete log.reheatConfirmationKey;return;}
   if(log.type==='再発情確認'){
     if(current.card.reheatPending)throw Error('既に再種付け待ちです。実際に種付けしたときに記録してください。');
@@ -172,5 +205,5 @@ M.validate=function(data){validate(data);for(const s of data.sows){if(!s.parityC
 const migrate=M.migrate,commit=M.commit;
 M.migrate=function(raw){const data=migrate(raw);M.validate(data);return data;};
 M.commit=function(data,fn){const next=commit(data,fn);M.validate(next);return next;};
-root.TanakaSowParity={pages,start,edit,beforeRecord,historyRows,editHistory,matingReturnKey,setWeanDays};
+root.TanakaSowParity={performance,cardPerformance,pages,start,edit,beforeRecord,historyRows,editHistory,matingReturnKey,setWeanDays};
 })(typeof globalThis!=='undefined'?globalThis:this);
