@@ -139,7 +139,7 @@ function weeklyTotal(report){return report.weekly.reduce((sum,n)=>sum+(n??0),0);
 function create(data,state,month,date,roomBirthDate){
   if(!validMonth(month))fail('対象月を選んでください。');
   const prev=data.inventoryMonths?.[previousMonth(month)],year=month.slice(0,4);
-  const report={month,date,status:'draft',boarSnapshot:boarSnapshot(data),sowSnapshot:{ids:Object.values(state.sows).filter(s=>s.active&&!s.numberPending).map(s=>s.id)},rows:snapshot(data,state,date,roomBirthDate),shipping110:0,stock10:0,
+  const report={month,date,status:'draft',boarSnapshot:boarSnapshot(data),sowSnapshot:{ids:Object.values(state.sows).filter(s=>s.active&&!s.numberPending&&!root.TanakaGilts?.isGilt(s)).map(s=>s.id)},rows:snapshot(data,state,date,roomBirthDate),shipping110:0,stock10:0,
     previousStock:prev?plannedStock(prev):Object.fromEntries(STOCK.map(k=>[k,null])),
     carriedFrom:prev?prev.month:'',previousConfirmed:prev?.status==='confirmed',
     monthly:Array.from({length:12},(_,i)=>{const key=year+'-'+String(i+1).padStart(2,'0'),old=prev?.monthly.find(x=>x.month===key);return old?clone(old):{month:key,planned:key>month?20:null,actual:null};}),

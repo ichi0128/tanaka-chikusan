@@ -3,8 +3,10 @@
 'use strict';
 const M=root.TanakaModel,clone=M.clone;
 const pending=s=>s?.numberPending===true;
+const isGilt=s=>pending(s)||!!(s?.giltRegistration?.confirmed&&!s.giltMated);
+const replay=M.replay;M.replay=function(data){const state=replay(data);for(const s of Object.values(state.sows))if(s.giltRegistration?.confirmed)s.giltMated=data.logs.some(l=>l.id===s.id&&!l.legacy&&['種付け','分娩'].includes(l.type));return state;};
 function linkedSow(pig,state){return Object.values(state.sows).find(s=>s.giltRegistration?.yardPigKey===(pig.pigKey||pig.key))||null;}
-function yardKind(pig,state){const s=linkedSow(pig,state);return s?(pending(s)?'育成母豚':'母豚'):['育成母豚','育成母豚候補'].includes(pig.kind)?'育成母豚':'肉豚';}
+function yardKind(pig,state){const s=linkedSow(pig,state);return s?(isGilt(s)?'育成母豚':'母豚'):['育成母豚','育成母豚候補'].includes(pig.kind)?'育成母豚':'肉豚';}
 function validate(data){
   const keys=new Set(),yard=new Set();
   for(const s of data.sows){
@@ -45,6 +47,41 @@ function assign(data,id,number,date){
   note(data,number,'育成母豚に母豚番号 '+number+' を登録',date,{profileBefore:before,profileAfter:clone(s)});
   return number;
 }
+// Prepare is read-only. Commit rechecks the complete input snapshot before mutation.
+function prepareConfirmation(data,roomKey,values,date){
+  const F=root.TanakaFinishing,I=root.TanakaInventory,state=M.replay(data),number=String(values.number||'').trim();
+  if(!/^\d+$/.test(number))throw Error('新しい母豚番号を数字で入力してください。');
+  if(Object.values(state.sows).some(s=>s.active&&Number(s.id)===Number(number))||state.finishing.filter(r=>r.key==='yard').flatMap(r=>F.yardState(r).individuals).some(p=>p.officialNumber&&Number(p.officialNumber)===Number(number)))throw Error('母豚番号 '+number+' はすでに使用されています');
+  // The existing ledger retains retired identities; never overwrite their history.
+  if(data.sows.some(s=>s.id===number))throw Error('母豚番号 '+number+' は履歴に登録されています。別の番号を入力してください。');
+  const room=state.finishing.find(r=>r.key===roomKey);
+  if(!room||roomKey==='yard'||room.state!=='occupied'||room.kind!=='育成母豚候補'||!Number.isSafeInteger(room.count)||room.count<1)throw Error('育成母豚候補の部屋を選び直してください。');
+  if(!I.validDate(values.birthDate)||values.birthDate>date)throw Error('誕生日を確認してください。');
+  const report=I.create(data,state,date.slice(0,7),date,r=>r.birthDate||'');
+  return {roomKey,number,birthDate:values.birthDate,date,before:F.group(room),total:I.farmSummary(report).farmTotal,expected:JSON.stringify(data)};
+}
+function confirmCandidate(data,plan){
+  if(JSON.stringify(data)!==plan.expected)throw Error('確認中にデータが変更されました。入力画面から確認し直してください。');
+  const checked=prepareConfirmation(data,plan.roomKey,plan,plan.date),F=root.TanakaFinishing,I=root.TanakaInventory,before=checked.before;
+  const key=M.uid(),yard=F.group(M.replay(data).finishing.find(r=>r.key==='yard'));
+  data.logs.push({key,origin:'operator',type:'肉豚舎へ移動',id:before.sowId,date:plan.date,t:new Date().toISOString(),finishingKey:'yard',sourceArea:'finishing',sourceKey:plan.roomKey,sourceBefore:before,sourceTotal:before.count,count:1,yardIndividuals:1,yardBefore:yard,yardPigKeys:[],simpleYard:1,note:'育成母豚 '+plan.number+' を確定',movement:{from:{name:'肉豚舎 '+plan.roomKey.slice(1)+'室'},to:{name:'運動場'}}});
+  let state=M.replay(data),remaining=F.group(state.finishing.find(r=>r.key===plan.roomKey));
+  if(remaining.count)data.logs.push({key:M.uid(),origin:'operator',type:'肉豚舎更新',id:before.sowId,date:plan.date,finishingKey:plan.roomKey,finishingBefore:remaining,finishingAfter:{...remaining,kind:'肉豚'}});
+  const pigKey=key+':pig:1',yardBefore=F.group(state.finishing.find(r=>r.key==='yard'));
+  data.logs.push({key:M.uid(),origin:'operator',type:'肉豚舎更新',id:'',date:plan.date,finishingKey:'yard',yardIndividuals:1,finishingBefore:yardBefore,finishingAfter:F.yardState({individuals:yardBefore.individuals.map(p=>p.key===pigKey?{...p,birthDate:plan.birthDate,officialNumber:plan.number,kind:'育成母豚'}:p)})});
+  const id=create(data,{birthDate:plan.birthDate,mother:before.sowId},plan.date,pigKey),s=data.sows.find(s=>s.id===id);
+  s.id=plan.number;s.numberPending=false;s.giltRegistration.confirmed=true;s.giltRegistration.assignedAt=new Date().toISOString();s.location={area:'yard',key:pigKey,name:'運動場'};
+  data.logs.forEach(l=>{if(l.id===id)l.id=plan.number;});
+  state=M.replay(data);const fresh=I.create(data,state,plan.date.slice(0,7),plan.date,r=>r.birthDate||'');
+  if(I.farmSummary(fresh).farmTotal!==checked.total)throw Error('全豚舎総頭数が一致しないため確定できません。');
+  const old=data.inventoryMonths?.[fresh.month];
+  if(old){const report=clone(old),rows=I.snapshot(data,state,report.date,r=>r.birthDate||'');const roomRow=report.rows.find(r=>r.area==='finishing'&&r.roomKey===plan.roomKey);if(!roomRow||!Number.isSafeInteger(roomRow.count)||roomRow.count<1)throw Error('今月の頭数調べの移動元頭数を確認してから確定してください。');roomRow.count--;roomRow.kind='肉豚';roomRow.state=roomRow.count?'occupied':'empty';report.rows.push(rows.find(r=>r.sourcePigKey===pigKey));report.status='draft';I.saveReport(data,report,JSON.stringify(old));}
+  return {key,number:plan.number,pigKey};
+}
+function restoreConfirmation(data,before,expected){
+  if(JSON.stringify(data)!==expected)throw Error('確定後に別の変更があります。元に戻す前に現在の記録を確認してください。');
+  Object.keys(data).forEach(k=>delete data[k]);Object.assign(data,clone(before));
+}
 const previous=M.validate;M.validate=function(data){previous(data);validate(data);};
-root.TanakaGilts={pending,linkedSow,yardKind,create,update,assign,validate};
+root.TanakaGilts={pending,isGilt,prepareConfirmation,confirmCandidate,restoreConfirmation,linkedSow,yardKind,create,update,assign,validate};
 })(typeof globalThis!=='undefined'?globalThis:this);

@@ -1,6 +1,6 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.5.0';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
@@ -44,7 +44,7 @@ function homeFarmReminders(){return M.farmReminders(today(),db).map(x=>`<section
 function homeSummary(label,target){return `<button class="card home-summary" data-action="page" data-id="${target}"><span>${label}</span><span class="chev" aria-hidden="true">›</span></button>`;}
 function home(){
   const inFarrowing=new Set(state.rooms.filter(r=>['family','waiting'].includes(r.state)).map(r=>r.sowId).filter(Boolean));
-  const yardSows=Object.values(state.sows).filter(s=>s.active&&!s.numberPending&&!inFarrowing.has(s.id)).length;
+  const yardSows=Object.values(state.sows).filter(s=>s.active&&!s.numberPending&&!TanakaGilts.isGilt(s)&&!inFarrowing.has(s.id)).length;
   const farrowingSows=inFarrowing.size,yardGilts=TanakaInventory.gilts(state);
   const empty=state.nursery.filter(n=>n.state==='empty').length;
   const headcount=(groups,unknown=0)=>{const total=groups.reduce((sum,r)=>sum+(r.count??0),0),missing=unknown+groups.filter(r=>r.count==null).length;return missing?(total?total+'頭＋?':'—頭'):total+'頭';};
@@ -58,7 +58,7 @@ function schedules(){return '<button class="back" data-action="page" data-id="ho
 function yardSowList(){
   const present=new Set(state.rooms.filter(r=>['family','waiting'].includes(r.state)).map(r=>r.sowId));
   const due=new Map();for(const plan of M.schedules(db,today())){if(plan.type==='分娩'&&!plan.completedKey&&!due.has(plan.id))due.set(plan.id,plan.date);}
-  return Object.values(state.sows).filter(s=>s.active&&!s.numberPending&&!present.has(s.id)).sort((a,b)=>(due.get(a.id)||'9999-12-31').localeCompare(due.get(b.id)||'9999-12-31')||a.id.localeCompare(b.id,'ja',{numeric:true}));
+  return Object.values(state.sows).filter(s=>s.active&&!s.numberPending&&!TanakaGilts.isGilt(s)&&!present.has(s.id)).sort((a,b)=>(due.get(a.id)||'9999-12-31').localeCompare(due.get(b.id)||'9999-12-31')||a.id.localeCompare(b.id,'ja',{numeric:true}));
 }
 function sowList(){
   const yardSows=yardSowList(),card=(s,quick=false)=>quick?`<div class="sow-yard-item">${simulationSowBadge(s.id)}${sowCardMarkup(s,null,null,false,true)}<button type="button" class="sow-card-open" data-action="detail" data-id="${esc(s.id)}" aria-label="母豚 ${esc(s.id)}の詳細"></button></div>`:`<button type="button" class="sow-card-link" data-action="detail" data-id="${esc(s.id)}" aria-label="母豚 ${esc(s.id)}の詳細">${simulationSowBadge(s.id)}${sowCardMarkup(s)}</button>`;

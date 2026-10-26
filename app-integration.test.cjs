@@ -340,3 +340,51 @@ test('full barn is explicit and single vacancy is labelled and selected; direct 
  const target={closest:s=>s.includes('swimgen-toggle')?{dataset:{action:'swimgen-toggle',id:'21'}}:null};for(const fn of b.listeners.click)fn({target});
  assert.equal(vm.runInContext("TanakaSowWork.swimgenDone(TanakaSowParity.pages(db,'21')[0].card)",b.context),true);assert.match(b.elements.get('work-feedback').innerHTML,/スイムジェンを「済」/);
 });
+
+function seedCandidate(b,count=5){
+  vm.runInContext(`save(d=>{d.finishingBaseline=F.baseline(d);Object.assign(d.finishingBaseline.find(r=>r.key==='f3'),{state:'occupied',kind:'育成母豚候補',count:${count},sowId:'46',birthDate:'2026-03-01',weight:70});});`,b.context);
+}
+test('candidate confirmation is read-only, duplicate guarded, atomic, reversible and headcount neutral',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));seedCandidate(b);
+  vm.runInContext(`const initialCandidate=M.clone(db);const candidatePlan=TanakaGilts.prepareConfirmation(db,'f3',{number:'777',birthDate:'2026-03-01'},today());`,b.context);
+  assert.equal(b.storage.getItem('tanaka-db'),vm.runInContext('JSON.stringify(initialCandidate)',b.context));
+  assert.throws(()=>vm.runInContext("TanakaGilts.prepareConfirmation(db,'f3',{number:'46',birthDate:'2026-03-01'},today())",b.context),/母豚番号 46 はすでに使用されています/);
+  vm.runInContext("save(d=>TanakaGilts.confirmCandidate(d,candidatePlan));const candidateAfter=JSON.stringify(db);",b.context);
+  assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').count",b.context),4);
+  assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').kind",b.context),'肉豚');
+  assert.equal(vm.runInContext("I.gilts(state)",b.context),1);
+  assert.equal(vm.runInContext("state.sows['777'].location.area",b.context),'yard');
+  assert.equal(vm.runInContext("TanakaGilts.yardKind(F.yardState(state.finishing.find(r=>r.key==='yard')).individuals[0],state)",b.context),'育成母豚');
+  assert.equal(vm.runInContext("I.farmSummary(I.create(db,state,today().slice(0,7),today(),r=>r.birthDate||'')).farmTotal",b.context),vm.runInContext('candidatePlan.total',b.context));
+  assert.throws(()=>vm.runInContext("save(d=>TanakaGilts.confirmCandidate(d,candidatePlan))",b.context),/変更/);
+  vm.runInContext("save(d=>TanakaGilts.restoreConfirmation(d,initialCandidate,candidateAfter));",b.context);
+  assert.equal(b.storage.getItem('tanaka-db'),vm.runInContext('JSON.stringify(initialCandidate)',b.context));
+});
+test('candidate local storage failure leaves every ledger unchanged; one-head room becomes empty',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));seedCandidate(b,1);
+  vm.runInContext("const originalCandidate=JSON.stringify(db);const singlePlan=TanakaGilts.prepareConfirmation(db,'f3',{number:'778',birthDate:'2026-03-01'},today());",b.context);
+  const set=b.storage.setItem;b.storage.setItem=()=>{throw Error('storage full');};
+  assert.throws(()=>vm.runInContext("save(d=>TanakaGilts.confirmCandidate(d,singlePlan))",b.context),/storage full/);
+  assert.equal(vm.runInContext('JSON.stringify(db)',b.context),vm.runInContext('originalCandidate',b.context));
+  b.storage.setItem=set;vm.runInContext("save(d=>TanakaGilts.confirmCandidate(d,singlePlan));",b.context);
+  assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').state",b.context),'empty');
+});
+test('candidate review back and repeated confirm perform at most one save',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));seedCandidate(b);
+  vm.runInContext("const reviewBefore=JSON.stringify(db);const reviewValues={number:'779',birthDate:'2026-03-01'};const reviewPlan=TanakaGilts.prepareConfirmation(db,'f3',reviewValues,today());finishingGiltReview(reviewPlan,reviewValues,dataSession);",b.context);
+  assert.match(b.elements.get('modal').innerHTML,/全豚舎総頭数：変更なし/);
+  b.elements.get('gilt-back').onclick();
+  assert.equal(vm.runInContext('JSON.stringify(db)',b.context),vm.runInContext('reviewBefore',b.context));
+  vm.runInContext('finishingGiltReview(reviewPlan,reviewValues,dataSession);',b.context);
+  const confirm=b.elements.get('gilt-confirm').onclick;confirm();confirm();
+  assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').count",b.context),4);
+  const undo=b.elements.get('gilt-undo').onclick;undo();undo();
+  assert.equal(vm.runInContext('JSON.stringify(db)',b.context),vm.runInContext('reviewBefore',b.context));
+});
+test('candidate confirmation updates only affected current monthly rows and preserves previous months and plans',async()=>{
+  const b=boot();await new Promise(resolve=>setImmediate(resolve));seedCandidate(b);
+  vm.runInContext("save(d=>{const report=I.create(d,M.replay(d),today().slice(0,7),today(),r=>r.birthDate||'');I.saveReport(d,report,JSON.stringify(d.inventoryMonths?.[report.month]??null));});const monthlyBefore=M.clone(db.inventoryMonths);const monthlyPlan=TanakaGilts.prepareConfirmation(db,'f3',{number:'780',birthDate:'2026-03-01'},today());save(d=>TanakaGilts.confirmCandidate(d,monthlyPlan));",b.context);
+  assert.equal(vm.runInContext("db.inventoryMonths[today().slice(0,7)].rows.find(r=>r.area==='finishing'&&r.roomKey==='f3').count",b.context),4);
+  assert.equal(vm.runInContext("I.aggregate(db.inventoryMonths[today().slice(0,7)].rows).gilts",b.context),1);
+  assert.equal(vm.runInContext("I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal",b.context),vm.runInContext('monthlyPlan.total',b.context));
+});
