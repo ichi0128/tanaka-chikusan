@@ -557,3 +557,8 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 #work-feedback{position:fixed;z-index:9000;bottom:96px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:700px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:14px;border:2px solid var(--accent);border-radius:14px;background:var(--surface);color:var(--text);box-shadow:0 4px 18px #0003;font-size:14px}
 #work-feedback>span{flex:1;min-width:150px}#work-feedback button{min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:9px;background:var(--soft);color:var(--softtext);font:inherit;font-weight:700;cursor:pointer}
 #work-feedback .work-feedback-close{padding:8px;min-width:40px}
+
+.individual-confirm{display:flex;gap:10px;align-items:flex-start;line-height:1.6;margin:18px 0;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--soft);color:var(--softtext)}
+.individual-confirm input{width:22px;height:22px;min-width:22px;margin:2px 0 0;accent-color:var(--accent)}
+.nursery-identified{margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:13px}.nursery-identified p{margin:8px 0}.nursery-individual-card h3{overflow-wrap:anywhere}
+#work-feedback small{display:block;margin-top:6px;line-height:1.5;color:var(--muted)}

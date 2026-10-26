@@ -14,6 +14,7 @@ function yardOrigin(sow){
 function stamp(type,id,options={}){return {key:options.key||M.uid(),type,id,date:options.date,t:options.t||new Date().toISOString(),origin:options.origin||'operator',note:options.note||''};}
 function entry(data,{id,roomKey,expectedRoom,...options}){
   const state=M.replay(data),sow=state.sows[id],room=state.rooms.find(r=>r.key===roomKey);
+  if(root.TanakaNurseryYard?.inNursery(state,id))throw Error('この母豚は育成舎にいます。先に対象個体の移動を確認してください。');
   if(!sow?.active||sow.numberPending)throw Error('移動できる現役母豚を選んでください。');
   if(state.rooms.some(r=>['waiting','family'].includes(r.state)&&r.sowId===id))throw Error('この母豚は既に分娩舎にいます。');
   if(!room||room.state!=='empty')throw Error('選択した部屋は空いていません。移動先を選び直してください。');

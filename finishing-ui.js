@@ -28,7 +28,7 @@ function yardQuickFields(weight,birthMonth,attrs,label='運動場'){
 }
 function finishingYardList(){
   const yard=F.yardState(state.finishing.find(r=>r.key==='yard'));
-  return `<div class="fin-yard-heading"><h3>運動場 <span class="badge">${yard.count?yard.count+'頭':'空き'}</span></h3><button type="button" class="btn secondary" data-action="fin-empty" data-id="yard">豚を移動して追加</button></div>${yard.count?`<div class="yard-quick-grid">${yard.individuals.map((p,i)=>`<article class="yard-quick-card" data-yard-pig="${esc(p.key)}"><small>1頭${TanakaGilts.yardKind(p,state)==='肉豚'?'':' · '+TanakaGilts.yardKind(p,state)}</small>${yardQuickFields(p.weight,F.yardBirthMonth(p),{weight:`data-yard-field="weight" data-pig="${esc(p.key)}"`,month:`data-yard-field="birthMonth" data-pig="${esc(p.key)}"`},'運動場 '+(i+1)+'頭目')}${TanakaGilts.yardKind(p,state)!=='肉豚'?giltYardAction(p):''}<details class="yard-quick-actions"><summary>移動・出荷など</summary>${TanakaGilts.yardKind(p,state)==='肉豚'?giltYardAction(p):''}${TanakaGilts.yardKind(p,state)!=='母豚'?`<button type="button" class="btn secondary" data-action="fin-from" data-id="yard" data-pig="${esc(p.key)}">この個体を移動</button><button type="button" class="btn secondary" data-action="fin-ship" data-id="yard" data-pig="${esc(p.key)}">出荷</button>`:''}<button type="button" class="btn secondary" data-action="fin-yard-remove" data-pig="${esc(p.key)}">この個体を削除</button></details></article>`).join('')}</div>`:'<p class="empty">空き</p>'}<button type="button" class="btn secondary" data-action="fin-yard-add">1頭分を追加</button><p class="muted">枠内の体重・誕生月をタッチして選択すると保存します。</p>`;
+  return `<div class="fin-yard-heading"><h3>運動場 <span class="badge">${yard.count?yard.count+'頭':'空き'}</span></h3><button type="button" class="btn secondary" data-action="fin-empty" data-id="yard">豚を移動して追加</button></div>${yard.count?`<div class="yard-quick-grid">${yard.individuals.map((p,i)=>`<article class="yard-quick-card" data-yard-pig="${esc(p.key)}"><small>1頭${TanakaGilts.yardKind(p,state)==='肉豚'?'':' · '+TanakaGilts.yardKind(p,state)}</small>${yardQuickFields(p.weight,F.yardBirthMonth(p),{weight:`data-yard-field="weight" data-pig="${esc(p.key)}"`,month:`data-yard-field="birthMonth" data-pig="${esc(p.key)}"`},'運動場 '+(i+1)+'頭目')}${TanakaGilts.yardKind(p,state)!=='肉豚'?giltYardAction(p):''}<details class="yard-quick-actions"><summary>移動・出荷など</summary><button type="button" class="btn secondary" data-action="nursery-individual-in" data-pig="${esc(p.key)}">育成舎へ戻す</button>${TanakaGilts.yardKind(p,state)==='肉豚'?giltYardAction(p):''}${TanakaGilts.yardKind(p,state)!=='母豚'?`<button type="button" class="btn secondary" data-action="fin-from" data-id="yard" data-pig="${esc(p.key)}">この個体を移動</button><button type="button" class="btn secondary" data-action="fin-ship" data-id="yard" data-pig="${esc(p.key)}">出荷</button>`:''}<button type="button" class="btn secondary" data-action="fin-yard-remove" data-pig="${esc(p.key)}">この個体を削除</button></details></article>`).join('')}</div>`:'<p class="empty">空き</p>'}<button type="button" class="btn secondary" data-action="fin-yard-add">1頭分を追加</button><p class="muted">枠内の体重・誕生月をタッチして選択すると保存します。</p>`;
 }
 function finishingYardWrite(before,individuals){
   const after=F.yardState({individuals});F.validIndividuals(after);
@@ -81,6 +81,7 @@ function finishingEmpty(key){
   if(!dlg.open)dlg.showModal();
 }
 function finishingTransfer(key,area,sourceKey,pigKey=''){
+  if(key==='yard'&&area==='nursery'){nurseryToYard(sourceKey);return;}
   const source=(area==='nursery'?state.nursery:state.finishing).find(r=>r.key===sourceKey),dest=state.finishing.find(r=>r.key===key);
   if(!source||source.state!=='occupied'||!dest||key!=='yard'&&dest.state!=='empty'||key==='yard'&&sourceKey==='yard'){toast('移動元・移動先の状態が変わりました');return;}
   const before=F.group(source),fromYard=sourceKey==='yard',pig=fromYard?before.individuals.find(p=>p.key===pigKey):null,g=fromYard?pig:before;
@@ -98,16 +99,22 @@ function finishingTransfer(key,area,sourceKey,pigKey=''){
 function finishingDetail(key){
   const r=state.finishing.find(x=>x.key===key);if(!r||r.state!=='occupied')return finishingEmpty(key);
   if(key==='yard'){modal.innerHTML=`<h2>運動場</h2>${finishingYardList()}<button class="btn secondary" data-action="close">閉じる</button>`;if(!dlg.open)dlg.showModal();return;}
-  modal.innerHTML=`<h2>${finishingPlace(key)} <span class="badge ${r.kind==='育成母豚候補'?'orange':''}">${esc(r.kind)}</span></h2><p class="fin-detail-count">${r.count}頭</p><p>誕生月日：${r.birthDate?esc(r.birthDate.replaceAll('-','/')):'未入力'}<br>母豚番号：${r.mixed?'混成':esc(r.sowId||'未入力')}</p><div class="fin-detail-controls"><div><p>重量の目安</p><div class="fin-weight-controls"><button data-action="fin-weight" data-id="${key}" data-delta="-10" ${r.weight<=0?'disabled':''}>−10kg</button><b>${r.weight}kg</b><button data-action="fin-weight" data-id="${key}" data-delta="10">＋10kg</button></div></div><button class="btn secondary" data-action="fin-csf" data-id="${key}" aria-pressed="${r.csf}">豚熱ワクチン　${r.csf?'✓ 済 → 未':'未 → 済'}</button><button class="btn secondary ${r.kind==='育成母豚候補'?'fin-preferred':''}" data-action="fin-kind" data-id="${key}">区分　${esc(r.kind)} → ${r.kind==='肉豚'?'育成母豚候補':'肉豚'}</button></div>${r.kind==='育成母豚候補'?`<button class="btn" data-action="fin-gilt-confirm" data-id="${key}">育成母豚を確定</button>`:''}<p class="history-note">メモ：${esc(r.note||'なし')}</p><button class="btn" data-action="fin-edit" data-id="${key}">頭数・誕生月日・母豚・メモを編集</button><button class="btn secondary" data-action="fin-ship" data-id="${key}">出荷</button><button class="btn secondary" data-action="fin-from" data-id="${key}">このグループを別の空室へ移動</button><button class="btn secondary" data-action="close">閉じる</button>`;
+  modal.innerHTML=`<h2>${finishingPlace(key)} <span class="badge ${r.kind==='育成母豚候補'?'orange':''}">${esc(r.kind)}</span></h2><p class="fin-detail-count">${r.count}頭</p><p>誕生月日：${r.birthDate?esc(r.birthDate.replaceAll('-','/')):'未入力'}<br>母豚番号：${r.mixed?'混成':esc(r.sowId||'未入力')}</p><div class="fin-detail-controls"><div><p>重量の目安</p><div class="fin-weight-controls"><button data-action="fin-weight" data-id="${key}" data-delta="-10" ${r.weight<=0?'disabled':''}>−10kg</button><b>${r.weight}kg</b><button data-action="fin-weight" data-id="${key}" data-delta="10">＋10kg</button></div></div><button class="btn secondary" data-action="fin-csf" data-id="${key}" aria-pressed="${r.csf}">豚熱ワクチン　${r.csf?'✓ 済 → 未':'未 → 済'}</button><button class="btn secondary ${r.kind==='育成母豚候補'?'fin-preferred':''}" data-action="fin-kind" data-id="${key}">${r.kind==='育成母豚候補'?'候補を解除して肉豚へ':'区分　肉豚 → 育成母豚候補'}</button></div>${r.kind==='育成母豚候補'?`<button class="btn" data-action="fin-gilt-confirm" data-id="${key}">育成母豚を確定</button>`:''}<p class="history-note">メモ：${esc(r.note||'なし')}</p><button class="btn" data-action="fin-edit" data-id="${key}">頭数・誕生月日・母豚・メモを編集</button><button class="btn secondary" data-action="fin-ship" data-id="${key}">出荷</button><button class="btn secondary" data-action="fin-from" data-id="${key}">このグループを別の空室へ移動</button><button class="btn secondary" data-action="close">閉じる</button>`;
   if(!dlg.open)dlg.showModal();
+}
+function finishingClearCandidate(key){
+ const room=state.finishing.find(r=>r.key===key),basis=db;if(!room||room.kind!=='育成母豚候補')throw Error('候補の部屋を選んでください。');
+ form('候補指定を解除',`<p>${esc(finishingPlace(key))} · 残り${room.count}頭</p><p>頭数と現在場所を保ち、区分を「肉豚」へ変更します。</p>`,'候補を解除する',()=>{if(db!==basis)throw Error('記録が更新されました。部屋を確認し直してください。');finishingUpdate(key,g=>g.kind='肉豚');});
 }
 function finishingSaveUpdate(key,before,after){
   const month=today().slice(0,7),expected=JSON.stringify(db.inventoryMonths?.[month]??null);
   save(d=>{
-    d.logs.push({...makeLog('肉豚舎更新',after.sowId),finishingKey:key,finishingBefore:before,finishingAfter:after,simpleYard:1});
+    d.logs.push({...makeLog('肉豚舎更新',after.sowId,before.kind!==after.kind?(after.kind==='肉豚'?'候補指定を解除':'候補指定を登録'):''),finishingKey:key,finishingBefore:before,finishingAfter:after,simpleYard:1});
     if(before.weight!==after.weight)I.syncSavedFinishingWeight(d,month,key,after.weight);
+    if(before.kind!==after.kind&&d.inventoryMonths?.[month]){const old=d.inventoryMonths[month],report=I.clone(old),row=report.rows.find(r=>r.area==='finishing'&&r.roomKey===key);if(row){row.kind=F.roomKind(after.kind);report.status='draft';I.syncPlan(report);I.saveReport(d,report,JSON.stringify(old));}}
   });
   if(before.weight!==after.weight)inventorySyncFinishingWeightDraft(month,key,after.weight,expected);
+  if(before.kind!==after.kind&&!inventoryDrafts.get(month)?.dirty)inventoryDrafts.delete(month);
 }
 function finishingUpdate(key,fn,openDetail=true){
   const r=state.finishing.find(x=>x.key===key);if(!r||r.state!=='occupied')throw Error('グループが見つかりません。');
@@ -169,7 +176,7 @@ document.addEventListener('click',e=>{
     }
     if(a==='fin-gilt-confirm')finishingConfirmGilt(key);
     if(a==='fin-csf')finishingUpdate(key,g=>g.csf=!g.csf);
-    if(a==='fin-kind')finishingUpdate(key,g=>g.kind=g.kind==='肉豚'?'育成母豚候補':'肉豚');
+    if(a==='fin-kind'){const room=state.finishing.find(r=>r.key===key);if(room?.kind==='育成母豚候補')finishingClearCandidate(key);else finishingUpdate(key,g=>g.kind='育成母豚候補');}
     if(a==='fin-from'){finishingMoveMode=true;finishingPreferred=key;finishingPreferredPig=b.dataset.pig||'';dlg.close();go('finishing');toast('移動先の空室をタップしてください');}
   }catch(err){toast(err.message);}
 });
@@ -222,20 +229,26 @@ function shipmentDelete(source,key){
 function finishingConfirmGilt(key,values={}){
   const room=state.finishing.find(r=>r.key===key),session=dataSession;
   if(!room||room.kind!=='育成母豚候補')throw Error('育成母豚候補の部屋を選んでください。');
-  modal.innerHTML=`<h2>育成母豚を確定</h2><form id="gilt-input"><p>移動元：${esc(finishingPlace(key))}<br>親母豚：${esc(room.sowId||'未入力')}<br>現在頭数：${room.count}頭</p>${field('gilt-number','新しい母豚番号',values.number||'','text',true)}${field('gilt-birth','誕生日',values.birthDate||room.birthDate||'','date',true)}<p>運動場へ移動：1頭<br>残りは肉豚に戻します。</p><p class="error" id="gilt-error" role="alert"></p><button class="btn" type="submit">確認画面へ</button><button class="btn secondary" type="button" data-action="close">閉じる</button></form>`;
+  let individuals=values.individuals?M.clone(values.individuals):[{number:values.number||'',birthDate:values.birthDate||room.birthDate||''}],shown=individuals.length;
+  modal.innerHTML=`<h2>育成母豚を確定</h2><form id="gilt-input"><p>移動元：${esc(finishingPlace(key))}<br>親母豚：${esc(room.sowId||'未入力')}<br>現在頭数：${room.count}頭</p>${field('gilt-count','運動場へ移す頭数',values.count||individuals.length,'number',true)}<div id="gilt-individual-inputs"></div><p class="muted">選んだ個体だけを移動します。残りは「育成母豚候補」のままです。候補の解除は別操作で行えます。</p><p class="error" id="gilt-error" role="alert"></p><button class="btn" type="submit">確認画面へ</button><button class="btn secondary" type="button" data-action="close">閉じる</button></form>`;
+  const suffix=i=>i?'-'+(i+1):'',read=()=>Array.from({length:shown},(_,i)=>({number:String(document.getElementById('gilt-number'+suffix(i)).value||'').trim(),birthDate:document.getElementById('gilt-birth'+suffix(i)).value||''}));
+  const renderInputs=count=>{shown=count;document.getElementById('gilt-individual-inputs').innerHTML=Array.from({length:count},(_,i)=>`<fieldset class="gilt-individual-input"><legend>${i+1}頭目</legend>${field('gilt-number'+suffix(i),'新しい母豚番号',individuals[i]?.number||'','text',true)}${field('gilt-birth'+suffix(i),'誕生日',individuals[i]?.birthDate||room.birthDate||'','date',true)}</fieldset>`).join('');for(let i=0;i<count;i++){document.getElementById('gilt-number'+suffix(i)).value=individuals[i]?.number||'';document.getElementById('gilt-birth'+suffix(i)).value=individuals[i]?.birthDate||room.birthDate||'';}};
+  const countInput=document.getElementById('gilt-count');countInput.min='1';countInput.max=String(room.count);countInput.step='1';countInput.value=String(values.count||individuals.length);
+  countInput.addEventListener('change',()=>{const count=Number(countInput.value);if(!Number.isSafeInteger(count)||count<1||count>room.count){document.getElementById('gilt-error').textContent='移動頭数は1〜'+room.count+'頭で入力してください。';return;}individuals=read();renderInputs(count);document.getElementById('gilt-error').textContent='';});
+  renderInputs(Number(countInput.value));
   document.getElementById('gilt-input').onsubmit=e=>{
     e.preventDefault();try{
       if(session!==dataSession)throw Error('モードが切り替わりました。画面を開き直してください。');
-      const values={number:document.getElementById('gilt-number').value.trim(),birthDate:document.getElementById('gilt-birth').value};
-      const plan=TanakaGilts.prepareConfirmation(db,key,values,today());
-      finishingGiltReview(plan,values,session);
+      const count=Number(countInput.value);if(count!==shown)throw Error('移動頭数を確定して、各個体の情報を確認してください。');
+      const values={count,individuals:read()};
+      const plan=TanakaGilts.prepareConfirmation(db,key,values,today());finishingGiltReview(plan,values,session);
     }catch(err){document.getElementById('gilt-error').textContent=err.message;}
   };
   if(!dlg.open)dlg.showModal();
 }
 function finishingGiltReview(plan,values,session){
   let busy=false,done=false;
-  modal.innerHTML=`<h2>育成母豚の確定</h2><section class="card"><p>移動元：${esc(finishingPlace(plan.roomKey))}<br>親母豚：${esc(plan.before.sowId||'未入力')}<br>現在頭数：${plan.before.count}頭</p></section><section class="card"><p>運動場へ移動：<b>1頭</b><br>新しい母豚番号：<b>${esc(plan.number)}</b><br>誕生日：${esc(plan.birthDate.replaceAll('-','/'))}<br>区分：育成母豚</p></section><section class="card"><p>移動後の肉豚舎：<br>残り<b>${plan.before.count-1}頭</b><br>区分：肉豚${plan.before.count===1?'（空室）':''}</p></section><p><b>全豚舎総頭数：変更なし（${plan.total}頭）</b></p><p class="error" id="gilt-error" role="alert"></p><button class="btn" id="gilt-confirm" type="button">確定する</button><button class="btn secondary" id="gilt-back" type="button">戻る</button>`;
+  modal.innerHTML=`<h2>育成母豚の確定</h2><section class="card"><p>移動元：${esc(finishingPlace(plan.roomKey))}<br>親母豚：${esc(plan.before.sowId||'未入力')}<br>現在頭数：${plan.before.count}頭</p></section><section class="card"><p>運動場へ移動：<b>${plan.count||1}頭</b><br>区分：育成母豚</p>${(plan.individuals||[{number:plan.number,birthDate:plan.birthDate}]).map((p,i)=>`<p>${i+1}頭目 · 新しい母豚番号：<b>${esc(p.number)}</b><br>誕生日：${esc(p.birthDate.replaceAll('-','/'))}`).join('</p>')}</p></section><section class="card"><p>移動後の肉豚舎：<br>残り<b>${plan.before.count-(plan.count||1)}頭</b><br>区分：${plan.before.count===(plan.count||1)?'空室':plan.remainingKind||'育成母豚候補'}</p></section><p><b>全豚舎総頭数：変更なし（${plan.total}頭）</b></p><p class="error" id="gilt-error" role="alert"></p><button class="btn" id="gilt-confirm" type="button">確定する</button><button class="btn secondary" id="gilt-back" type="button">戻る</button>`;
   document.getElementById('gilt-back').onclick=()=>{if(!busy&&!done)finishingConfirmGilt(plan.roomKey,values);};
   document.getElementById('gilt-confirm').onclick=()=>{
     if(busy||done)return;busy=true;
@@ -251,7 +264,7 @@ function finishingGiltReview(plan,values,session){
 }
 function finishingGiltComplete(plan,before,expected,session){
   let busy=false,done=false;
-  modal.innerHTML=`<h2>移動しました</h2><p>${esc(plan.number)}を${esc(finishingPlace(plan.roomKey))}から運動場へ移動しました</p><p class="muted">${simulation?'仮データを変更しました（本番保存なし）':'端末へ一括保存しました。クラウドの保存状況は画面上部で確認できます。'}</p><p class="error" id="gilt-error" role="alert"></p><button class="btn secondary" id="gilt-undo" type="button">元に戻す</button><button class="btn secondary" type="button" data-action="close">閉じる</button>`;
+  modal.innerHTML=`<h2>移動しました</h2><p>${esc((plan.individuals||[{number:plan.number}]).map(p=>p.number).join('・'))}（${plan.count||1}頭）を${esc(finishingPlace(plan.roomKey))}から運動場へ移動しました</p><p class="muted">${simulation?'仮データを変更しました（本番保存なし）':'端末へ一括保存しました。クラウドの保存状況は画面上部で確認できます。'}</p><p class="error" id="gilt-error" role="alert"></p><button class="btn secondary" id="gilt-undo" type="button">元に戻す</button><button class="btn secondary" type="button" data-action="close">閉じる</button>`;
   document.getElementById('gilt-undo').onclick=()=>{
     if(busy||done)return;busy=true;const button=document.getElementById('gilt-undo');button.disabled=true;
     try{

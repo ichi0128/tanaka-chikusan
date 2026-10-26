@@ -341,6 +341,20 @@ test('full barn is explicit and single vacancy is labelled and selected; direct 
  assert.equal(vm.runInContext("TanakaSowWork.swimgenDone(TanakaSowParity.pages(db,'21')[0].card)",b.context),true);assert.match(b.elements.get('work-feedback').innerHTML,/スイムジェンを「済」/);
 });
 
+test('nursery one-head UI requires individual confirmation, creates no sow card, saves invariant totals and uses common undo',()=>{
+ const b=boot();vm.runInContext(`save(d=>{d.nurseryBaseline=M.replay(d).nursery.map(n=>({...n,state:'empty',count:null,sowId:'',birthDate:''}));Object.assign(d.nurseryBaseline[0],{state:'occupied',count:2,sowId:'46',birthDate:'2026-05-01',weight:30});const r=I.create(d,M.replay(d),today().slice(0,7),today(),()=> '');I.saveReport(d,r,'null');});let nurserySubmit,nurseryHtml;form=(title,body,label,submit)=>{nurserySubmit=submit;nurseryHtml=body;};var motherCards=JSON.stringify(db.sows),totalBefore=I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal;nurseryToYard('n1');`,b.context);
+ assert.match(vm.runInContext('nurseryHtml',b.context),/対象個体|個体の番号/);assert.match(vm.runInContext('nurseryHtml',b.context),/移動頭数：1頭/);assert.doesNotMatch(vm.runInContext('nurseryHtml',b.context),/value="all"/);
+ b.context.individualForm=new Map([['individualNumber','9001'],['individualLabel','青耳標'],['individualBirth','2026-05-01'],['individualMother','46'],['identifiedConfirmed','yes']]);vm.runInContext('nurserySubmit(individualForm);',b.context);
+ assert.equal(vm.runInContext('state.nursery[0].count',b.context),1);assert.equal(vm.runInContext('JSON.stringify(db.sows)===motherCards',b.context),true);assert.equal(vm.runInContext('I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal===totalBefore',b.context),true);assert.match(b.elements.get('work-feedback').innerHTML,/元に戻す/);
+ vm.runInContext("go('sows');",b.context);assert.match(b.elements.get('app').innerHTML,/個体 9001/);assert.match(b.elements.get('app').innerHTML,/現在場所：運動場/);
+ const key=vm.runInContext('db.logs.at(-1).key',b.context),target={closest:s=>s.includes('work-undo')?{dataset:{action:'work-undo',id:key}}:null};for(const fn of b.listeners.click)fn({target});
+ assert.equal(vm.runInContext('state.nursery[0].count',b.context),2);assert.equal(vm.runInContext('state.nursery[0].identifiedIndividuals.length',b.context),1);assert.equal(vm.runInContext('N.pigs(state).length',b.context),0);assert.equal(vm.runInContext('db.logs.at(-1).undoOf',b.context),key);assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).logs.at(-1).type,'育成舎個体移動取消');
+});
+test('legacy group-to-yard UI redirects to identified one-head transfer; no-origin sow return requires explicit nursery destination',()=>{
+ const b=boot();vm.runInContext(`save(d=>{d.nurseryBaseline=M.replay(d).nursery.map(n=>({...n,state:'empty',count:null,sowId:'',birthDate:''}));Object.assign(d.nurseryBaseline[0],{state:'occupied',count:2,sowId:'46',birthDate:'2026-05-01',weight:30});});let nurserySubmit,nurseryHtml;form=(title,body,label,submit)=>{nurserySubmit=submit;nurseryHtml=body;};finishingTransfer('yard','nursery','n1');`,b.context);
+ assert.match(vm.runInContext('nurseryHtml',b.context),/移動頭数：1頭/);vm.runInContext("nurseryFromYard('','21');",b.context);assert.match(vm.runInContext('nurseryHtml',b.context),/元の育成舎が記録されていない/);assert.match(vm.runInContext('nurseryHtml',b.context),/value="">選択してください/);
+ b.context.returnForm=new Map([['nurseryKey','n2'],['returnConfirmed','yes']]);vm.runInContext('nurserySubmit(returnForm);',b.context);assert.equal(vm.runInContext("!!N.inNursery(state,'21')",b.context),true);assert.equal(vm.runInContext("yardSowList().some(s=>s.id==='21')",b.context),false);vm.runInContext("go('detail','21');",b.context);assert.match(b.elements.get('app').innerHTML,/現在場所：育成舎 2号室/);
+});
 function seedCandidate(b,count=5){
   vm.runInContext(`save(d=>{d.finishingBaseline=F.baseline(d);Object.assign(d.finishingBaseline.find(r=>r.key==='f3'),{state:'occupied',kind:'育成母豚候補',count:${count},sowId:'46',birthDate:'2026-03-01',weight:70});});`,b.context);
 }
@@ -351,7 +365,7 @@ test('candidate confirmation is read-only, duplicate guarded, atomic, reversible
   assert.throws(()=>vm.runInContext("TanakaGilts.prepareConfirmation(db,'f3',{number:'46',birthDate:'2026-03-01'},today())",b.context),/母豚番号 46 はすでに使用されています/);
   vm.runInContext("save(d=>TanakaGilts.confirmCandidate(d,candidatePlan));const candidateAfter=JSON.stringify(db);",b.context);
   assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').count",b.context),4);
-  assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').kind",b.context),'肉豚');
+  assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').kind",b.context),'育成母豚候補');
   assert.equal(vm.runInContext("I.gilts(state)",b.context),1);
   assert.equal(vm.runInContext("state.sows['777'].location.area",b.context),'yard');
   assert.equal(vm.runInContext("TanakaGilts.yardKind(F.yardState(state.finishing.find(r=>r.key==='yard')).individuals[0],state)",b.context),'育成母豚');
@@ -387,4 +401,10 @@ test('candidate confirmation updates only affected current monthly rows and pres
   assert.equal(vm.runInContext("db.inventoryMonths[today().slice(0,7)].rows.find(r=>r.area==='finishing'&&r.roomKey==='f3').count",b.context),4);
   assert.equal(vm.runInContext("I.aggregate(db.inventoryMonths[today().slice(0,7)].rows).gilts",b.context),1);
   assert.equal(vm.runInContext("I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal",b.context),vm.runInContext('monthlyPlan.total',b.context));
+});
+
+test('multi-head candidate review preserves the rest; clearing remaining candidate status is a separate confirmed action',()=>{
+ const b=boot();seedCandidate(b,4);vm.runInContext(`const splitPlan=TanakaGilts.prepareConfirmation(db,'f3',{count:2,individuals:[{number:'881',birthDate:'2026-03-01'},{number:'882',birthDate:'2026-03-02'}]},today());finishingGiltReview(splitPlan,{count:2,individuals:splitPlan.individuals},dataSession);`,b.context);
+ assert.match(b.elements.get('modal').innerHTML,/運動場へ移動：<b>2頭/);assert.match(b.elements.get('modal').innerHTML,/残り<b>2頭/);assert.match(b.elements.get('modal').innerHTML,/区分：育成母豚候補/);b.elements.get('gilt-confirm').onclick();assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').kind",b.context),'育成母豚候補');
+ vm.runInContext(`let clearCandidateAction;form=(title,body,label,action)=>{clearCandidateAction=action;};const beforeClear=JSON.stringify(db);finishingClearCandidate('f3');`,b.context);assert.equal(vm.runInContext('JSON.stringify(db)===beforeClear',b.context),true);vm.runInContext('clearCandidateAction();',b.context);assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').count",b.context),2);assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').kind",b.context),'肉豚');assert.equal(vm.runInContext('I.gilts(state)',b.context),2);
 });

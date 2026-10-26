@@ -35,7 +35,7 @@ function snapshot(data,state,date,roomBirthDate){
     const birthDate=area==='farrowing'?roomBirthDate(r):r.birthDate||'';
     const inactive=r.state==='empty'||r.state==='waiting';
     return {key:area+':'+r.key,area,roomKey:area==='yard'?'yard':r.key,place:area==='farrowing'?'分娩舎 '+(r.label||r.key.slice(1))+'室':area==='nursery'?'育成舎 管理枠'+r.key.slice(1):area==='yard'?'運動場':'肉豚舎 '+r.key.slice(1)+'番',
-      state:r.state,count:inactive?0:r.count??null,birthDate,...(area==='yard'?{birthMonth:r.birthMonth!==undefined?r.birthMonth:validDate(birthDate)?Number(birthDate.slice(5,7)):null}:{}),sowId:r.mixed?'混成':r.sowId||'',csf:typeof r.csf==='boolean'?r.csf:null,
+      state:r.state,count:inactive?0:r.count??null,birthDate,...(area==='nursery'&&root.TanakaNurseryYard?{registeredSowIds:(r.identifiedIndividuals||[]).map(p=>root.TanakaNurseryYard.registered(p,state)).filter(Boolean)}:{}),...(area==='yard'?{birthMonth:r.birthMonth!==undefined?r.birthMonth:validDate(birthDate)?Number(birthDate.slice(5,7)):null}:{}),sowId:r.mixed?'混成':r.sowId||'',csf:typeof r.csf==='boolean'?r.csf:null,
       category:category(area,r,date,birthDate),autoCategory:area==='farrowing'||area==='nursery',registeredWeight:r.weight??null,kind:area==='yard'?(root.TanakaGilts?.yardKind(r,state)||r.kind||'肉豚'):rowKind({area,kind:r.kind||'肉豚'}),...(area==='yard'&&root.TanakaGilts?.linkedSow(r,state)?.numberPending===false?{registeredSowId:root.TanakaGilts.linkedSow(r,state).id}:{})};
   };
   return individualYardRows([...state.rooms.map(r=>make('farrowing',r)),...state.nursery.map(r=>make('nursery',r)),...state.finishing.flatMap(r=>{
@@ -48,9 +48,9 @@ function snapshot(data,state,date,roomBirthDate){
 function rowKind(row){if(row.area==='yard'&&row.kind==='育成母豚候補')return '育成母豚';return row.kind==='育成母豚'&&row.area!=='yard'?'育成母豚候補':row.kind;}
 function aggregate(rows){
   const totals=Object.fromEntries(CATEGORIES.map(k=>[k,0]));let gilts=0,candidates=0,sows=0,unclassified=0,unknown=0,headTotal=0;
-  for(const r of rows){if(r.count===null){unknown++;continue;}headTotal+=r.count;const kind=rowKind(r);
-    if(kind==='育成母豚候補')candidates+=r.count;if(kind==='育成母豚'){gilts+=r.count;continue;}if(kind==='母豚'){sows+=r.count;continue;}
-    if(!r.count)continue;if(CATEGORIES.includes(r.category))totals[r.category]+=r.count;else unclassified+=r.count;
+  for(const r of rows){if(r.count===null){unknown++;continue;}headTotal+=r.count;const kind=rowKind(r),registered=r.area==='nursery'?(r.registeredSowIds||[]).length:0,effective=r.count-registered;sows+=registered;
+    if(kind==='育成母豚候補')candidates+=effective;if(kind==='育成母豚'){gilts+=r.count;continue;}if(kind==='母豚'){sows+=r.count;continue;}
+    if(!effective)continue;if(CATEGORIES.includes(r.category))totals[r.category]+=effective;else unclassified+=effective;
   }
   return {totals,gilts,candidates,sows,unclassified,unknown,headTotal,total:Object.values(totals).reduce((a,b)=>a+b,0)};
 }
@@ -60,7 +60,7 @@ function farmSummary(report){
   const areaTotals=Object.fromEntries(['farrowing','nursery','finishing','yard'].map(area=>[area,report.rows.filter(r=>r.area===area).reduce((sum,r)=>sum+(r.count??0),0)]));
   // Rows record piglets in farrowing. Assign the mothers to their physical
   // location once; a linked mother already recorded in yard is not added again.
-  const counted=new Set();
+  const counted=new Set(report.rows.filter(r=>r.area==='nursery'&&r.count).flatMap(r=>r.registeredSowIds||[]));
   for(const row of report.rows){
     if(rowKind(row)!=='母豚'||!ids?.includes(row.registeredSowId)||!row.count)continue;
     if(counted.has(row.registeredSowId))areaTotals[row.area]-=row.count;
@@ -160,6 +160,7 @@ function validateReport(r,month,history=false){
   const keys=new Set();
   for(const row of r.rows){
     if(!row||typeof row.key!=='string'||keys.has(row.key)||!['farrowing','nursery','finishing','yard'].includes(row.area)||typeof row.place!=='string'||typeof row.sowId!=='string'||!count(row.count)||!['肉豚','育成母豚','育成母豚候補','母豚'].includes(row.kind)||!(row.csf===null||typeof row.csf==='boolean')||!(row.birthDate===''||validDate(row.birthDate))||!(row.category===''||CATEGORIES.includes(row.category)))fail('頭数調べの明細を確認してください。');
+    if(row.registeredSowIds!==undefined&&(!Array.isArray(row.registeredSowIds)||row.registeredSowIds.length>(row.count??0)||new Set(row.registeredSowIds).size!==row.registeredSowIds.length||row.registeredSowIds.some(id=>typeof id!=='string'||!/^\d+$/.test(id))))fail('育成舎の母豚個体情報を確認してください。');
     if(row.kind==='母豚'&&(row.area!=='yard'||typeof row.registeredSowId!=='string'||!/^\d+$/.test(row.registeredSowId)))fail('運動場の母豚番号を確認してください。');
     if(row.area==='yard'&&row.birthMonth!==undefined&&row.birthMonth!==null&&(!Number.isInteger(row.birthMonth)||row.birthMonth<1||row.birthMonth>12))fail('運動場の誕生月は1〜12月から選択してください。');
     if(row.area==='yard'&&row.yardIndividual===1&&row.count!==null&&row.count>1)fail('運動場は1頭につき1行で入力してください。');
