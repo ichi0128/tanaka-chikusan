@@ -16,6 +16,9 @@
   const TYPES=['分娩舎へ移動','移動取り消し','分娩舎内移動','育成舎修正','育成舎から移動','種付け','分娩','離乳','子豚移動','スイムジェン 実施','追記','分娩舎修正','廃豚','現役復帰'];
   const PLANS=[['10月16日',['21','47'],'スイムジェン'],['10月20日',['88'],'分娩予定'],['10月24日',['18'],'スイムジェン'],['10月26日',['51'],'スイムジェン'],['10月28日',['98'],'スイムジェン'],['10月30日',['38'],'スイムジェン']];
   const clone=x=>JSON.parse(JSON.stringify(x));
+  // JSON objects may return with a different key order after cloud storage.
+  const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
+  const sameData=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
   function baseline(){return Array.from({length:10},(_,i)=>({key:'r'+(i+1),label:'',state:i<3?'family':i<5?'piglets':'empty',sowId:['512','912','106','812','132'][i]||'',count:null}));}
   function nurseryBaseline(){return Array.from({length:5},(_,i)=>({key:'n'+(i+1),mixed:false,state:'unknown',sowId:'',count:null,entered:'',birthDate:''}));}
   function checkNursery(rs){if(rs.length!==5||new Set(rs.map(r=>r.key)).size!==5)throw Error('育成舎は5枠で管理します。');for(const r of rs){if(!/^n[1-5]$/.test(r.key)||!['unknown','empty','occupied'].includes(r.state)||typeof r.sowId!=='string'||(r.mixed!==undefined&&typeof r.mixed!=='boolean')||(r.mixed&&(r.state!=='occupied'||r.sowId))||(r.count!==null&&(!Number.isInteger(r.count)||r.count<0))||(r.state!=='occupied'&&(r.sowId||r.count!==null||r.entered))||(r.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.birthDate)||!Number.isFinite(Date.parse(r.birthDate))||new Date(r.birthDate).toISOString().slice(0,10)!==r.birthDate))||(r.entered&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.entered)||!Number.isFinite(Date.parse(r.entered))||new Date(r.entered).toISOString().slice(0,10)!==r.entered)))throw Error('育成舎の状態・頭数・入室日を確認してください。');}}
@@ -94,8 +97,17 @@
       if(sow?.numberPending&&['種付け','分娩','離乳','分娩舎へ移動'].includes(l.type))throw Error('先に正式な母豚番号を登録してください。');
       if(['分娩舎へ移動','移動取り消し'].includes(l.type)){
         if(!sow||!sow.active||!room)throw Error('移動対象の母豚・管理枠を確認してください。');
-        if(l.type==='分娩舎へ移動'){if(room.state!=='empty'||rooms.some(r=>['family','waiting'].includes(r.state)&&r.sowId===l.id))throw Error('母豚は既に入室しているか、空き枠がありません。');Object.assign(room,{state:'waiting',sowId:l.id,mixed:false,count:null,birthDate:'',entryKey:l.key});}
-        else{if(room.state!=='waiting'||room.sowId!==l.id)throw Error('出産前の分娩待ちだけ取り消せます。');Object.assign(room,{state:'empty',sowId:'',mixed:false,count:null,birthDate:'',entryKey:''});}
+        if(l.type==='分娩舎へ移動'){if(room.state!=='empty'||rooms.some(r=>['family','waiting'].includes(r.state)&&r.sowId===l.id))throw Error('母豚は既に入室しているか、空き枠がありません。');Object.assign(room,{state:'waiting',sowId:l.id,mixed:false,count:null,birthDate:'',entryKey:l.key});if(l.movement?.to)sow.location=clone(l.movement.to);}
+        else{if(room.state!=='waiting'||room.sowId!==l.id)throw Error('出産前の分娩待ちだけ取り消せます。');
+          const original=l.undoOf?data.logs.slice(0,data.logs.indexOf(l)).find(x=>x.key===l.undoOf&&x.type==='分娩舎へ移動'&&x.id===l.id&&x.roomKey===l.roomKey):null;
+          if(l.undoOf&&(!original||room.entryKey!==original.key))throw Error('取り消す移動記録が現在の部屋と一致しません。');
+          const receipt=original?.action;
+          if(receipt?.after?.room&&!sameData(room,receipt.after.room))throw Error('移動後の部屋が変更されています。');
+          if(receipt?.before?.room){const before=receipt.before.room;if(before.key!==room.key||before.state!=='empty')throw Error('移動前の部屋情報を確認してください。');for(const k of Object.keys(room))delete room[k];Object.assign(room,clone(before));}
+          else Object.assign(room,{state:'empty',sowId:'',mixed:false,count:null,birthDate:'',entryKey:''});
+          if(l.movement?.to)sow.location=clone(original?.movement?.from||l.movement.to);
+          if(receipt?.before?.hadYardLocation)sow.yardLocation=clone(receipt.before.yardLocation);else if(receipt?.before&&Object.hasOwn(receipt.before,'hadYardLocation'))delete sow.yardLocation;
+        }
       }else if(l.type==='分娩舎内移動'){
         const dest=rooms.find(r=>r.key===l.targetRoomKey);
         if(!room||room.state!=='piglets'||!dest||dest===room||!['empty','piglets'].includes(dest.state))throw Error('離乳後の子豚だけを別の枠へ移動できます。');
@@ -139,7 +151,7 @@
     return {sows,rooms,nursery,finishing:fin?fin.current(finishing):finishing};
   }
   function commit(data,fn){const next=clone(data);fn(next);initializeBoars(next);validate(next);return next;}
-  root.TanakaModel={BOAR_STATUSES,boarRecords,activeBoars,validateBoars,initializeBoars,setBoar,IDS,STATES,TYPES,PLANS,clone,uid,migrate,validate,replay,commit,baseline};
+  root.TanakaModel={BOAR_STATUSES,boarRecords,activeBoars,validateBoars,initializeBoars,setBoar,IDS,STATES,TYPES,PLANS,clone,sameData,uid,migrate,validate,replay,commit,baseline};
   if(typeof module!=='undefined')module.exports=root.TanakaModel;
 })(typeof globalThis!=='undefined'?globalThis:this);
 

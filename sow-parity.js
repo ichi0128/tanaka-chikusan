@@ -15,7 +15,7 @@ function apply(card,events){
       if(l.nursingDays!==undefined)card.nursingDays=l.nursingDays;
       if(l.operator)card.weanOperator=l.operator;
     }
-    if(l.type==='スイムジェン 実施')card.swimgen=l.date+' 済';
+    if(l.type==='スイムジェン 実施'){card.swimgen=l.date+' 済';card.swimgenDone=true;}
   }
   return card;
 }

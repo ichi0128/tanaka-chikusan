@@ -4,6 +4,7 @@ function simulationSettings(){
 }
 function simulationViews(){return {inventoryDrafts,inventoryMonth,inventoryStep,lastSowNotebookImport};}
 function resetSimulationViews(saved=null){
+  hideWorkAction();
   inventoryDrafts=saved?.inventoryDrafts||new Map();inventoryMonth=saved?.inventoryMonth||'';inventoryStep=saved?.inventoryStep||1;lastSowNotebookImport=saved?.lastSowNotebookImport||null;
   finishingMoveMode=false;finishingPreferred='';finishingPreferredPig='';sowParitySelection.clear();farrowingForecastCache=null;ffActionCache=null;ffTimelineExpanded=false;openPigletCare.clear();
 }

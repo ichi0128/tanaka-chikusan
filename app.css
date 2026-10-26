@@ -536,3 +536,24 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 }
 
 .boar-settings>summary{font-weight:750;cursor:pointer}.boar-settings .row>div{overflow-wrap:anywhere}.boar-settings .sowlink{flex-shrink:0;font-size:13px}.boar-settings .row p{line-height:1.6}
+
+/* Yard controls stay above the detail-card overlay, with separate touch targets. */
+.sow-mating-row{position:relative}
+.sow-move-button{position:absolute;right:12px;top:18px;z-index:2;min-height:44px;padding:9px 12px;border:1px solid var(--accent);border-radius:10px;background:var(--soft);color:var(--softtext);font:inherit;font-size:14px;font-weight:750;cursor:pointer}
+.sow-care-status{position:relative;z-index:2;min-width:48px;min-height:44px;padding:6px 12px;border:1px solid var(--border);border-radius:9px;background:var(--soft);color:var(--softtext);font:inherit;font-weight:750;cursor:pointer}
+.sow-care-status.done{background:var(--accent);color:var(--surface)}
+.farrowing-room-number{font-size:17px}
+.farrowing-room-picker{margin:16px 0;border:0;padding:0;min-width:0}
+.farrowing-room-picker legend{font-weight:750;margin-bottom:10px}
+.farrowing-room-picker>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.farrowing-room-choice{display:flex;align-items:center;gap:8px;min-height:72px;margin:0;padding:10px;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);cursor:pointer}
+.farrowing-room-choice input{width:18px;min-width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.farrowing-room-choice b,.farrowing-room-choice small{display:block;overflow-wrap:anywhere}
+.farrowing-room-choice b{font-size:17px}.farrowing-room-choice small{font-size:12px;line-height:1.5;margin-top:4px}
+.farrowing-room-choice.is-empty{border-color:var(--accent);background:var(--soft);color:var(--softtext)}
+.farrowing-room-choice:has(input:checked){box-shadow:0 0 0 2px var(--accent)}
+.farrowing-room-choice.is-occupied{cursor:default;background:var(--bg);color:var(--muted);border-style:dashed}
+#work-feedback[hidden]{display:none}
+#work-feedback{position:fixed;z-index:9000;bottom:96px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:700px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:14px;border:2px solid var(--accent);border-radius:14px;background:var(--surface);color:var(--text);box-shadow:0 4px 18px #0003;font-size:14px}
+#work-feedback>span{flex:1;min-width:150px}#work-feedback button{min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:9px;background:var(--soft);color:var(--softtext);font:inherit;font-weight:700;cursor:pointer}
+#work-feedback .work-feedback-close{padding:8px;min-width:40px}

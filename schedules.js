@@ -81,7 +81,7 @@
   function applyReproductionEvent(card,log){
     if(log.type==='再発情確認'){
       card.reheatCount=(Number(card.reheatCount)||0)+1;
-      card.reheatPending=true;card.lastReheatDate=log.date;card.lastReheatKey=log.key;card.matingSet=[];
+      card.swimgenDone=false;card.reheatPending=true;card.lastReheatDate=log.date;card.lastReheatKey=log.key;card.matingSet=[];
       card.failedMating=log.failedMating||{date:card.mating||'',boar:card.boar||'',due:card.due||''};
       card.reproductionStatus='再種付け待ち';
       card.reheat='';card.due='';card.swimgen='';
@@ -90,10 +90,10 @@
       // Older remating-only records still count; a confirmed return counts once.
       const prior=card.matingSet||[],last=prior.at(-1),consecutive=!card.reheatPending&&last&&log.date>=last.date&&log.date<=addDays(last.date,1);
       if(log.remating&&!card.reheatPending&&!log.reheatConfirmationKey&&!consecutive)card.reheatCount=(Number(card.reheatCount)||0)+1;
-      card.reheatPending=false;card.reproductionStatus='種付け済み';
+      if(!consecutive)delete card.swimgenDone;card.reheatPending=false;card.reproductionStatus='種付け済み';
       setMatingDates(card,consecutive?[...prior,log]:[log]);
     }else if(log.type==='分娩'){
-      card.reheatPending=false;card.reproductionStatus='分娩済み';card.swimgen='';
+      card.swimgenDone=false;card.reheatPending=false;card.reproductionStatus='分娩済み';card.swimgen='';
     }
     return card;
   }
@@ -111,7 +111,8 @@
       if(M.isReheatPending(data,sow.id)||globalThis.TanakaSowParity?.pages(data,sow.id)[0]?.awaitingMating)continue;
       function add(base,days,label,type){
         const date=addDays(base.date,days);
-        const complete=logs.filter(l=>l.type===type&&l.date>=base.date&&data.logs.indexOf(l)>data.logs.indexOf(base)).at(-1);
+        if(type==='スイムジェン 実施'&&current?.swimgenDone===true)return;
+        const complete=type==='スイムジェン 実施'&&current?.swimgenDone===false?null:logs.filter(l=>l.type===type&&l.date>=base.date&&data.logs.indexOf(l)>data.logs.indexOf(base)).at(-1);
         if(!complete||date>=day)out.push({id:sow.id,date,label,type,baseKey:base.key,completedKey:complete?.key||''});
       }
       if(mating&&(!birth||birth.date<mating.date)){
@@ -128,8 +129,8 @@
           const dueDate=year+'-'+String(due[0]).padStart(2,'0')+'-'+String(due[1]).padStart(2,'0');
           const seeds=[[dueDate,'分娩予定','分娩'],[addDays(dueDate,-14),'スイムジェン','スイムジェン 実施']];
           for(const [date,label,type] of seeds){
-            if(birth&&type!=='分娩')continue;
-            const complete=logs.filter(l=>l.type===type&&l.date>=confirmedFrom).at(-1);
+            if(birth&&type!=='分娩'||type==='スイムジェン 実施'&&current?.swimgenDone===true)continue;
+            const complete=type==='スイムジェン 実施'&&current?.swimgenDone===false?null:logs.filter(l=>l.type===type&&l.date>=confirmedFrom).at(-1);
             if(date>=confirmedFrom&&(!complete||date>=day))out.push({id:sow.id,date,label,type,baseKey:'card',completedKey:complete?.key||''});
           }
         }
@@ -166,7 +167,7 @@ function sowCard(data,id){
   const page=globalThis.TanakaSowParity?.pages(data,id)[0],current=page?.card;
   if(page?.awaitingMating)Object.assign(c,M.clone(current));
   if(current){for(const name of ['reheatCount','reheatPending','lastReheatDate','lastReheatKey','failedMating','reproductionStatus'])if(name in current)c[name]=M.clone(current[name]);if(current.reheatPending){c.due='';c.reheat='';c.swimgen='';}}
-  if(current)for(const name of ['mating','boar','reheat','due','swimgen','matingSet','plannedWeanDays','matingDateOverride','matingBoarOverride'])if(name in current)c[name]=M.clone(current[name]);
+  if(current)for(const name of ['mating','boar','reheat','due','swimgen','matingSet','plannedWeanDays','matingDateOverride','matingBoarOverride','swimgenDone'])if(name in current)c[name]=M.clone(current[name]);
   reconcileMating(c,logs);
   resetSwimgenAfterBirth(c,logs);
   for(const name of ['mating','reheat','due','swimgen'])c[name]=String(c[name]??'').replace(/^(\d{4}-\d{2}-\d{2})(.*)$/,(_,date,suffix)=>md(date)+suffix);

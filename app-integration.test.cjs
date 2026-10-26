@@ -322,3 +322,21 @@ test('quick and standard mating supplement preserve 132 date; explicit new matin
  assert.equal(vm.runInContext("M.schedules(db,today()).find(p=>p.id==='132'&&p.type==='分娩').date",b.context),'2027-02-02');
  assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).sows.find(s=>s.id==='132').parityCards.current.card.matingDateOverride,'2026-10-11');
 });
+
+test('yard move button, ten explicit rooms, occupied guards and undo feedback use the real save and append-only history',()=>{
+ const b=boot();vm.runInContext(`let workSubmit,workHtml;form=(title,body,label,submit)=>{workSubmit=submit;workHtml=body;};go('sows');`,b.context);
+ assert.match(b.elements.get('app').innerHTML,/aria-label="母豚 21を分娩舎へ"/);
+ vm.runInContext(`enterWaiting('21');`,b.context);const html=vm.runInContext('workHtml',b.context);
+ assert.equal((html.match(/class="farrowing-room-choice /g)||[]).length,10);assert.match(html,/1号室/);assert.match(html,/使用中：512/);assert.match(html,/子豚6頭/);assert.equal((html.match(/disabled/g)||[]).length,5);assert.doesNotMatch(html,/checked|自動で入/);
+ b.context.moveValues=new Map([['roomKey','r8']]);vm.runInContext('workSubmit(moveValues);',b.context);
+ assert.equal(vm.runInContext("state.rooms.find(r=>r.key==='r8').sowId",b.context),'21');assert.match(b.elements.get('work-feedback').innerHTML,/21を分娩舎8号室へ移動しました/);assert.match(b.elements.get('work-feedback').innerHTML,/取り消す/);
+ const key=vm.runInContext('db.logs.at(-1).key',b.context),target={closest:s=>s.includes('work-undo')?{dataset:{action:'work-undo',id:key}}:null};for(const fn of b.listeners.click)fn({target});
+ assert.equal(vm.runInContext("state.rooms.find(r=>r.key==='r8').state",b.context),'empty');assert.equal(vm.runInContext('db.logs.at(-1).undoOf',b.context),key);assert.equal(vm.runInContext('db.logs.at(-1).type',b.context),'移動取り消し');assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).logs.length,2);
+});
+test('full barn is explicit and single vacancy is labelled and selected; direct swimgen toggle has no date form',()=>{
+ const b=boot();vm.runInContext(`let workSubmit,workHtml;form=(title,body,label,submit)=>{workSubmit=submit;workHtml=body;};save(d=>{const ids=d.sows.map(s=>s.id).filter(id=>id!=='21');d.baseline.forEach((r,i)=>Object.assign(r,{state:i===8?'empty':'waiting',sowId:i===8?'':ids[i],count:null}));});enterWaiting('21');`,b.context);
+ assert.equal((vm.runInContext('workHtml',b.context).match(/checked/g)||[]).length,1);assert.match(vm.runInContext('workHtml',b.context),/9号室へ移動します/);
+ vm.runInContext(`save(d=>{Object.assign(d.baseline[8],{state:'waiting',sowId:'18',count:null});});enterWaiting('21');`,b.context);assert.match(vm.runInContext('workHtml',b.context),/分娩舎に空きがありません/);assert.doesNotMatch(vm.runInContext('workHtml',b.context),/checked/);
+ const target={closest:s=>s.includes('swimgen-toggle')?{dataset:{action:'swimgen-toggle',id:'21'}}:null};for(const fn of b.listeners.click)fn({target});
+ assert.equal(vm.runInContext("TanakaSowWork.swimgenDone(TanakaSowParity.pages(db,'21')[0].card)",b.context),true);assert.match(b.elements.get('work-feedback').innerHTML,/スイムジェンを「済」/);
+});
