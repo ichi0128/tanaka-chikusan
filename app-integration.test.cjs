@@ -330,7 +330,7 @@ test('yard move button, ten explicit rooms, occupied guards and undo feedback us
  assert.equal((html.match(/class="farrowing-room-choice /g)||[]).length,10);assert.match(html,/1号室/);assert.match(html,/使用中：512/);assert.match(html,/子豚6頭/);assert.equal((html.match(/disabled/g)||[]).length,5);assert.doesNotMatch(html,/checked|自動で入/);
  b.context.moveValues=new Map([['roomKey','r8']]);vm.runInContext('workSubmit(moveValues);',b.context);
  assert.equal(vm.runInContext("state.rooms.find(r=>r.key==='r8').sowId",b.context),'21');assert.match(b.elements.get('work-feedback').innerHTML,/21を分娩舎8号室へ移動しました/);assert.match(b.elements.get('work-feedback').innerHTML,/取り消す/);
- const key=vm.runInContext('db.logs.at(-1).key',b.context),target={closest:s=>s.includes('work-undo')?{dataset:{action:'work-undo',id:key}}:null};for(const fn of b.listeners.click)fn({target});
+ const key=vm.runInContext("db.logs.at(-1).key",b.context),target={closest:s=>s.includes('work-undo')?{dataset:{action:'work-undo',id:key}}:null};for(const fn of b.listeners.click)fn({target});
  assert.equal(vm.runInContext("state.rooms.find(r=>r.key==='r8').state",b.context),'empty');assert.equal(vm.runInContext('db.logs.at(-1).undoOf',b.context),key);assert.equal(vm.runInContext('db.logs.at(-1).type',b.context),'移動取り消し');assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).logs.length,2);
 });
 test('full barn is explicit and single vacancy is labelled and selected; direct swimgen toggle has no date form',()=>{
@@ -341,13 +341,13 @@ test('full barn is explicit and single vacancy is labelled and selected; direct 
  assert.equal(vm.runInContext("TanakaSowWork.swimgenDone(TanakaSowParity.pages(db,'21')[0].card)",b.context),true);assert.match(b.elements.get('work-feedback').innerHTML,/スイムジェンを「済」/);
 });
 
-test('nursery one-head UI requires individual confirmation, creates no sow card, saves invariant totals and uses common undo',()=>{
+test('nursery one-head UI requires individual confirmation, creates a pending gilt card, saves invariant totals and uses common undo',()=>{
  const b=boot();vm.runInContext(`save(d=>{d.nurseryBaseline=M.replay(d).nursery.map(n=>({...n,state:'empty',count:null,sowId:'',birthDate:''}));Object.assign(d.nurseryBaseline[0],{state:'occupied',count:2,sowId:'46',birthDate:'2026-05-01',weight:30});const r=I.create(d,M.replay(d),today().slice(0,7),today(),()=> '');I.saveReport(d,r,'null');});let nurserySubmit,nurseryHtml;form=(title,body,label,submit)=>{nurserySubmit=submit;nurseryHtml=body;};var motherCards=JSON.stringify(db.sows),totalBefore=I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal;nurseryToYard('n1');`,b.context);
  assert.match(vm.runInContext('nurseryHtml',b.context),/対象個体|個体の番号/);assert.match(vm.runInContext('nurseryHtml',b.context),/移動頭数：1頭/);assert.doesNotMatch(vm.runInContext('nurseryHtml',b.context),/value="all"/);
  b.context.individualForm=new Map([['individualNumber','9001'],['individualLabel','青耳標'],['individualBirth','2026-05-01'],['individualMother','46'],['identifiedConfirmed','yes']]);vm.runInContext('nurserySubmit(individualForm);',b.context);
- assert.equal(vm.runInContext('state.nursery[0].count',b.context),1);assert.equal(vm.runInContext('JSON.stringify(db.sows)===motherCards',b.context),true);assert.equal(vm.runInContext('I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal===totalBefore',b.context),true);assert.match(b.elements.get('work-feedback').innerHTML,/元に戻す/);
- vm.runInContext("go('sows');",b.context);assert.match(b.elements.get('app').innerHTML,/個体 9001/);assert.match(b.elements.get('app').innerHTML,/現在場所：運動場/);
- const key=vm.runInContext('db.logs.at(-1).key',b.context),target={closest:s=>s.includes('work-undo')?{dataset:{action:'work-undo',id:key}}:null};for(const fn of b.listeners.click)fn({target});
+ assert.equal(vm.runInContext('state.nursery[0].count',b.context),1);assert.equal(vm.runInContext('JSON.stringify(db.sows.filter(s=>!s.numberPending))===motherCards',b.context),true);assert.equal(vm.runInContext('yardGiltList()[0].giltRegistration.label',b.context),'育母01');assert.equal(vm.runInContext('I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal===totalBefore',b.context),true);assert.match(b.elements.get('work-feedback').innerHTML,/元に戻す/);
+ vm.runInContext("go('sows');",b.context);assert.match(b.elements.get('app').innerHTML,/育母01/);assert.match(b.elements.get('app').innerHTML,/育成母豚は右端/);
+ const key=vm.runInContext("db.logs.filter(l=>l.type===N.TYPES[0]).at(-1).key",b.context),target={closest:s=>s.includes('work-undo')?{dataset:{action:'work-undo',id:key}}:null};for(const fn of b.listeners.click)fn({target});
  assert.equal(vm.runInContext('state.nursery[0].count',b.context),2);assert.equal(vm.runInContext('state.nursery[0].identifiedIndividuals.length',b.context),1);assert.equal(vm.runInContext('N.pigs(state).length',b.context),0);assert.equal(vm.runInContext('db.logs.at(-1).undoOf',b.context),key);assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).logs.at(-1).type,'育成舎個体移動取消');
 });
 test('legacy group-to-yard UI redirects to identified one-head transfer; no-origin sow return requires explicit nursery destination',()=>{
@@ -367,7 +367,7 @@ test('candidate confirmation is read-only, duplicate guarded, atomic, reversible
   assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').count",b.context),4);
   assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').kind",b.context),'育成母豚候補');
   assert.equal(vm.runInContext("I.gilts(state)",b.context),1);
-  assert.equal(vm.runInContext("state.sows['777'].location.area",b.context),'yard');
+  assert.equal(vm.runInContext("Object.values(state.sows).find(s=>s.numberPending).location.area",b.context),'yard');
   assert.equal(vm.runInContext("TanakaGilts.yardKind(F.yardState(state.finishing.find(r=>r.key==='yard')).individuals[0],state)",b.context),'育成母豚');
   assert.equal(vm.runInContext("I.farmSummary(I.create(db,state,today().slice(0,7),today(),r=>r.birthDate||'')).farmTotal",b.context),vm.runInContext('candidatePlan.total',b.context));
   assert.throws(()=>vm.runInContext("save(d=>TanakaGilts.confirmCandidate(d,candidatePlan))",b.context),/変更/);
@@ -407,4 +407,18 @@ test('multi-head candidate review preserves the rest; clearing remaining candida
  const b=boot();seedCandidate(b,4);vm.runInContext(`const splitPlan=TanakaGilts.prepareConfirmation(db,'f3',{count:2,individuals:[{number:'881',birthDate:'2026-03-01'},{number:'882',birthDate:'2026-03-02'}]},today());finishingGiltReview(splitPlan,{count:2,individuals:splitPlan.individuals},dataSession);`,b.context);
  assert.match(b.elements.get('modal').innerHTML,/運動場へ移動：<b>2頭/);assert.match(b.elements.get('modal').innerHTML,/残り<b>2頭/);assert.match(b.elements.get('modal').innerHTML,/区分：育成母豚候補/);b.elements.get('gilt-confirm').onclick();assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').kind",b.context),'育成母豚候補');
  vm.runInContext(`let clearCandidateAction;form=(title,body,label,action)=>{clearCandidateAction=action;};const beforeClear=JSON.stringify(db);finishingClearCandidate('f3');`,b.context);assert.equal(vm.runInContext('JSON.stringify(db)===beforeClear',b.context),true);vm.runInContext('clearCandidateAction();',b.context);assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').count",b.context),2);assert.equal(vm.runInContext("state.finishing.find(r=>r.key==='f3').kind",b.context),'肉豚');assert.equal(vm.runInContext('I.gilts(state)',b.context),2);
+});
+
+test('temporary gilt card at right edge receives official number and first mating atomically, without an extra head',()=>{
+ const b=boot();seedCandidate(b,4);
+ vm.runInContext(`const giltPlan=TanakaGilts.prepareConfirmation(db,'f3',{count:2,individuals:[{birthDate:'2026-03-01'},{birthDate:'2026-03-02'}]},today());save(d=>TanakaGilts.confirmCandidate(d,giltPlan));const originalGilt=yardGiltList()[0],otherGilt=yardGiltList()[1],giltId=originalGilt.id,totalGiltBefore=I.farmSummary(I.create(db,state,today().slice(0,7),today(),()=> '')).farmTotal;let giltSubmit,giltHtml;form=(title,body,label,submit)=>{giltSubmit=submit;giltHtml=body;};quickMating(giltId);go('sows');`,b.context);
+ const html=b.elements.get('app').innerHTML;assert.ok(html.indexOf('育母01')>html.indexOf('data-id="21"'));assert.match(html,/育母02/);assert.match(vm.runInContext('giltHtml',b.context),/正式な母豚番号/);assert.doesNotMatch(vm.runInContext('sowCardMarkup(originalGilt)',b.context),/>番号未設定</);
+ b.context.mateForm=new Map([['officialNumber','888'],['date','2026-10-11'],['boar','B1']]);
+ const set=b.storage.setItem;b.storage.setItem=()=>{throw Error('storage full');};assert.throws(()=>vm.runInContext('giltSubmit(mateForm)',b.context),/storage full/);assert.equal(vm.runInContext('state.sows[giltId].numberPending',b.context),true);b.storage.setItem=set;
+ vm.runInContext('giltSubmit(mateForm);',b.context);assert.equal(vm.runInContext("state.sows['888'].numberPending",b.context),false);assert.equal(vm.runInContext("TanakaSowParity.pages(db,'888')[0].parity",b.context),0);assert.equal(vm.runInContext("TanakaSowParity.pages(db,'888')[0].card.due",b.context),'2027-02-02');assert.equal(vm.runInContext("state.sows['888'].birthDate",b.context),'2026-03-01');assert.equal(vm.runInContext("state.sows['888'].cardBaseline.mother",b.context),'46');assert.equal(vm.runInContext("I.farmSummary(I.create(db,state,today().slice(0,7),today(),()=> '')).farmTotal===totalGiltBefore",b.context),true);assert.equal(vm.runInContext("yardGiltList().length",b.context),1);assert.equal(vm.runInContext("yardSowList().some(s=>s.id==='888')",b.context),true);
+});
+test('812 follows its corrected current due date in the yard, with January rollover and unknown dates last',()=>{
+ const b=boot();vm.runInContext(`save(d=>{for(const s of d.sows)s.cardBaseline={...s.cardBaseline,mating:'',due:''};const s=d.sows.find(s=>s.id==='812');s.cardBaseline={...s.cardBaseline,mating:'10/11',due:'2/2'};});const page812=TanakaSowParity.pages(db,'812')[0],previous812=JSON.stringify(page812);save(d=>TanakaSowParity.edit(d,'812',page812.key,{...page812.card,due:'2026-11-01'},previous812));`,b.context);
+ assert.equal(vm.runInContext("M.currentDueDate(db,'812')",b.context),'2026-11-01');assert.equal(vm.runInContext('yardSowList()[0].id',b.context),'812');
+ vm.runInContext(`const corrected812=TanakaSowParity.pages(db,'812')[0];save(d=>TanakaSowParity.edit(d,'812',corrected812.key,{...corrected812.card,due:'1/31'},JSON.stringify(corrected812)));`,b.context);assert.equal(vm.runInContext("M.currentDueDate(db,'812')",b.context),'2027-01-31');assert.equal(vm.runInContext('yardSowList()[0].id',b.context),'812');
 });

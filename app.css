@@ -562,3 +562,6 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 .individual-confirm input{width:22px;height:22px;min-width:22px;margin:2px 0 0;accent-color:var(--accent)}
 .nursery-identified{margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:13px}.nursery-identified p{margin:8px 0}.nursery-individual-card h3{overflow-wrap:anywhere}
 #work-feedback small{display:block;margin-top:6px;line-height:1.5;color:var(--muted)}
+
+/* Temporary identities stay readable beside the existing sow cards. */
+.sow-card-top>.gilt-unassigned-number{font-size:clamp(24px,7vw,38px)!important;white-space:normal;overflow-wrap:anywhere}

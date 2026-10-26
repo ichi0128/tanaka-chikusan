@@ -82,6 +82,7 @@ function finishingEmpty(key){
 }
 function finishingTransfer(key,area,sourceKey,pigKey=''){
   if(key==='yard'&&area==='nursery'){nurseryToYard(sourceKey);return;}
+  if(key==='yard'&&area==='finishing'&&state.finishing.find(r=>r.key===sourceKey)?.kind==='育成母豚候補'){finishingConfirmGilt(sourceKey);return;}
   const source=(area==='nursery'?state.nursery:state.finishing).find(r=>r.key===sourceKey),dest=state.finishing.find(r=>r.key===key);
   if(!source||source.state!=='occupied'||!dest||key!=='yard'&&dest.state!=='empty'||key==='yard'&&sourceKey==='yard'){toast('移動元・移動先の状態が変わりました');return;}
   const before=F.group(source),fromYard=sourceKey==='yard',pig=fromYard?before.individuals.find(p=>p.key===pigKey):null,g=fromYard?pig:before;
@@ -231,8 +232,8 @@ function finishingConfirmGilt(key,values={}){
   if(!room||room.kind!=='育成母豚候補')throw Error('育成母豚候補の部屋を選んでください。');
   let individuals=values.individuals?M.clone(values.individuals):[{number:values.number||'',birthDate:values.birthDate||room.birthDate||''}],shown=individuals.length;
   modal.innerHTML=`<h2>育成母豚を確定</h2><form id="gilt-input"><p>移動元：${esc(finishingPlace(key))}<br>親母豚：${esc(room.sowId||'未入力')}<br>現在頭数：${room.count}頭</p>${field('gilt-count','運動場へ移す頭数',values.count||individuals.length,'number',true)}<div id="gilt-individual-inputs"></div><p class="muted">選んだ個体だけを移動します。残りは「育成母豚候補」のままです。候補の解除は別操作で行えます。</p><p class="error" id="gilt-error" role="alert"></p><button class="btn" type="submit">確認画面へ</button><button class="btn secondary" type="button" data-action="close">閉じる</button></form>`;
-  const suffix=i=>i?'-'+(i+1):'',read=()=>Array.from({length:shown},(_,i)=>({number:String(document.getElementById('gilt-number'+suffix(i)).value||'').trim(),birthDate:document.getElementById('gilt-birth'+suffix(i)).value||''}));
-  const renderInputs=count=>{shown=count;document.getElementById('gilt-individual-inputs').innerHTML=Array.from({length:count},(_,i)=>`<fieldset class="gilt-individual-input"><legend>${i+1}頭目</legend>${field('gilt-number'+suffix(i),'新しい母豚番号',individuals[i]?.number||'','text',true)}${field('gilt-birth'+suffix(i),'誕生日',individuals[i]?.birthDate||room.birthDate||'','date',true)}</fieldset>`).join('');for(let i=0;i<count;i++){document.getElementById('gilt-number'+suffix(i)).value=individuals[i]?.number||'';document.getElementById('gilt-birth'+suffix(i)).value=individuals[i]?.birthDate||room.birthDate||'';}};
+  const suffix=i=>i?'-'+(i+1):'',read=()=>Array.from({length:shown},(_,i)=>({birthDate:document.getElementById('gilt-birth'+suffix(i)).value||''}));
+  const renderInputs=count=>{shown=count;document.getElementById('gilt-individual-inputs').innerHTML=Array.from({length:count},(_,i)=>`<fieldset class="gilt-individual-input"><legend>${i+1}頭目</legend><p>仮番号：<b>${esc(TanakaGilts.nextLabel(db,i))}</b>（正式番号は種付け時に登録）</p>${field('gilt-birth'+suffix(i),'誕生日',individuals[i]?.birthDate||room.birthDate||'','date',true)}</fieldset>`).join('');for(let i=0;i<count;i++){document.getElementById('gilt-birth'+suffix(i)).value=individuals[i]?.birthDate||room.birthDate||'';}};
   const countInput=document.getElementById('gilt-count');countInput.min='1';countInput.max=String(room.count);countInput.step='1';countInput.value=String(values.count||individuals.length);
   countInput.addEventListener('change',()=>{const count=Number(countInput.value);if(!Number.isSafeInteger(count)||count<1||count>room.count){document.getElementById('gilt-error').textContent='移動頭数は1〜'+room.count+'頭で入力してください。';return;}individuals=read();renderInputs(count);document.getElementById('gilt-error').textContent='';});
   renderInputs(Number(countInput.value));
@@ -248,7 +249,7 @@ function finishingConfirmGilt(key,values={}){
 }
 function finishingGiltReview(plan,values,session){
   let busy=false,done=false;
-  modal.innerHTML=`<h2>育成母豚の確定</h2><section class="card"><p>移動元：${esc(finishingPlace(plan.roomKey))}<br>親母豚：${esc(plan.before.sowId||'未入力')}<br>現在頭数：${plan.before.count}頭</p></section><section class="card"><p>運動場へ移動：<b>${plan.count||1}頭</b><br>区分：育成母豚</p>${(plan.individuals||[{number:plan.number,birthDate:plan.birthDate}]).map((p,i)=>`<p>${i+1}頭目 · 新しい母豚番号：<b>${esc(p.number)}</b><br>誕生日：${esc(p.birthDate.replaceAll('-','/'))}`).join('</p>')}</p></section><section class="card"><p>移動後の肉豚舎：<br>残り<b>${plan.before.count-(plan.count||1)}頭</b><br>区分：${plan.before.count===(plan.count||1)?'空室':plan.remainingKind||'育成母豚候補'}</p></section><p><b>全豚舎総頭数：変更なし（${plan.total}頭）</b></p><p class="error" id="gilt-error" role="alert"></p><button class="btn" id="gilt-confirm" type="button">確定する</button><button class="btn secondary" id="gilt-back" type="button">戻る</button>`;
+  modal.innerHTML=`<h2>育成母豚の確定</h2><section class="card"><p>移動元：${esc(finishingPlace(plan.roomKey))}<br>親母豚：${esc(plan.before.sowId||'未入力')}<br>現在頭数：${plan.before.count}頭</p></section><section class="card"><p>運動場へ移動：<b>${plan.count||1}頭</b><br>区分：育成母豚</p>${(plan.individuals||[{number:plan.number,birthDate:plan.birthDate}]).map((p,i)=>`<p>${i+1}頭目 · 仮番号：<b>${esc(p.label||TanakaGilts.nextLabel(db,i))}</b><br>誕生日：${esc(p.birthDate.replaceAll('-','/'))}`).join('</p>')}</p></section><section class="card"><p>移動後の肉豚舎：<br>残り<b>${plan.before.count-(plan.count||1)}頭</b><br>区分：${plan.before.count===(plan.count||1)?'空室':plan.remainingKind||'育成母豚候補'}</p></section><p><b>全豚舎総頭数：変更なし（${plan.total}頭）</b></p><p class="error" id="gilt-error" role="alert"></p><button class="btn" id="gilt-confirm" type="button">確定する</button><button class="btn secondary" id="gilt-back" type="button">戻る</button>`;
   document.getElementById('gilt-back').onclick=()=>{if(!busy&&!done)finishingConfirmGilt(plan.roomKey,values);};
   document.getElementById('gilt-confirm').onclick=()=>{
     if(busy||done)return;busy=true;
@@ -264,7 +265,7 @@ function finishingGiltReview(plan,values,session){
 }
 function finishingGiltComplete(plan,before,expected,session){
   let busy=false,done=false;
-  modal.innerHTML=`<h2>移動しました</h2><p>${esc((plan.individuals||[{number:plan.number}]).map(p=>p.number).join('・'))}（${plan.count||1}頭）を${esc(finishingPlace(plan.roomKey))}から運動場へ移動しました</p><p class="muted">${simulation?'仮データを変更しました（本番保存なし）':'端末へ一括保存しました。クラウドの保存状況は画面上部で確認できます。'}</p><p class="error" id="gilt-error" role="alert"></p><button class="btn secondary" id="gilt-undo" type="button">元に戻す</button><button class="btn secondary" type="button" data-action="close">閉じる</button>`;
+  modal.innerHTML=`<h2>移動しました</h2><p>${esc((plan.individuals||[{number:plan.number}]).map((p,i)=>p.label||TanakaGilts.nextLabel(before,i)).join('・'))}（${plan.count||1}頭）を${esc(finishingPlace(plan.roomKey))}から運動場へ移動しました</p><p class="muted">${simulation?'仮データを変更しました（本番保存なし）':'端末へ一括保存しました。クラウドの保存状況は画面上部で確認できます。'}</p><p class="error" id="gilt-error" role="alert"></p><button class="btn secondary" id="gilt-undo" type="button">元に戻す</button><button class="btn secondary" type="button" data-action="close">閉じる</button>`;
   document.getElementById('gilt-undo').onclick=()=>{
     if(busy||done)return;busy=true;const button=document.getElementById('gilt-undo');button.disabled=true;
     try{

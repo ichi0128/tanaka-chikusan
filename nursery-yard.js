@@ -55,11 +55,11 @@ function prepareOut(data,{nurseryKey,pigKey,individualNumber,label,birthDate,mot
  const known=(n.identifiedIndividuals||[]).find(p=>p.key===pigKey);let individual;
  if(known)individual=clone(known);
  else{
-  if(confirmed!==true||!/^\d+$/.test(String(individualNumber||''))||!String(label||'').trim()||!I.validDate(birthDate)||birthDate>options.date)throw Error('育成母豚1頭の識別・番号・誕生日を確認してください。');
+  if(confirmed!==true||(individualNumber&&!/^\d+$/.test(String(individualNumber)))||!String(label||'').trim()||!I.validDate(birthDate)||birthDate>options.date)throw Error('育成母豚1頭の識別・番号・誕生日を確認してください。');
   if(n.count<=(n.identifiedIndividuals||[]).length)throw Error('未登録の個体として取り出せる頭数がありません。');
-  if(data.sows.some(s=>s.id===individualNumber)||locations(state).some(x=>x.pig.individualNumber===individualNumber)||data.logs.some(l=>TYPES.includes(l.type)&&l.individual?.individualNumber===individualNumber))throw Error('その番号は登録済みです。既存個体を選び、現在場所を確認してください。');
+  if(individualNumber&&(data.sows.some(s=>s.id===individualNumber)||locations(state).some(x=>x.pig.individualNumber===individualNumber)||data.logs.some(l=>TYPES.includes(l.type)&&l.individual?.individualNumber===individualNumber)))throw Error('その番号は登録済みです。既存個体を選び、現在場所を確認してください。');
   if(motherId&&!data.sows.some(s=>s.id===motherId))throw Error('母親番号は登録済みの番号から選んでください。');
-  individual=F.yardPig({individualNumber:String(individualNumber),identityLabel:String(label).trim(),birthDate,sowId:motherId||'',kind:'育成母豚',weight:n.weight??null,csf:n.csf??null,note:options.note||n.groupNote||''},'individual-'+M.uid());
+  individual=F.yardPig({individualNumber:String(individualNumber||''),identityLabel:String(label).trim(),birthDate,sowId:motherId||'',kind:'育成母豚',weight:n.weight??null,csf:n.csf??null,note:options.note||n.groupNote||''},'individual-'+M.uid());
  }
  const after=clone(n);after.count--;after.identifiedIndividuals=(after.identifiedIndividuals||[]).filter(p=>p.key!==individual.key);
  if(!after.count)Object.assign(after,{state:'empty',count:null,sowId:'',mixed:false,entered:'',birthDate:'',csf:false,weight:30,kind:'肉豚',groupNote:''});
@@ -116,7 +116,7 @@ function syncInventory(data,log,before,after){
 }
 function commitLog(data,log){
  const before=M.replay(data);log.action={version:1,kind:'nursery-yard-transfer',before:{location:clone(log.movement.from)},after:{location:clone(log.movement.to)}};
- data.logs.push(log);const after=M.replay(data);validateState(after);syncInventory(data,log,before,after);return log;
+ data.logs.push(log);if(log.direction==='out'&&!log.toImplicitSow){const ids=root.TanakaGilts.ensureYardCards(data,log.date,[log.individual.key]);if(ids[0])log.id=ids[0];}const after=M.replay(data);validateState(after);syncInventory(data,log,before,after);return log;
 }
 function out(data,options){return commitLog(data,prepareOut(data,options));}
 function into(data,options){return commitLog(data,prepareIn(data,options));}

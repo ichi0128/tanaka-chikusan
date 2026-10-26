@@ -18,11 +18,19 @@ function validate(data){
   }
 }
 function note(data,id,text,date,extra={}){data.logs.push({key:M.uid(),origin:'operator',type:'追記',id,date,t:new Date().toISOString(),note:text,...extra});}
+function nextLabel(data,offset=0){
+  const numbers=data.sows.map(s=>/^育母(\d+)$/.exec(s.giltRegistration?.label||'')).filter(Boolean).map(m=>Number(m[1]));
+  return '育母'+String(Math.max(0,...numbers)+1+offset).padStart(2,'0');
+}
+function ensureYardCards(data,date,pigKeys){
+  const state=M.replay(data),pigs=root.TanakaFinishing.yardState(state.finishing.find(r=>r.key==='yard')).individuals;
+  return pigs.filter(p=>pigKeys.includes(p.key)).map(p=>{const linked=linkedSow(p,M.replay(data));if(linked)return linked.id;const id=create(data,{},date,p.key),s=data.sows.find(s=>s.id===id);s.giltRegistration.confirmed=true;s.location={area:'yard',key:p.key,name:'運動場'};return id;});
+}
 function create(data,values,date,yardPigKey=''){
   const source=yardPigKey?root.TanakaFinishing.yardState(M.replay(data).finishing.find(r=>r.key==='yard')).individuals.find(p=>p.key===yardPigKey):null;
   if(yardPigKey&&!source)throw Error('運動場の個体が変わりました。開き直してください。');
   if(yardPigKey&&data.sows.some(s=>s.giltRegistration?.yardPigKey===yardPigKey))throw Error('この個体の母豚カードは作成済みです。');
-  const id='gilt-'+M.uid(),key=M.uid(),label=values.label||'育成'+(data.sows.filter(s=>s.giltRegistration).length+1);
+  const id='gilt-'+M.uid(),key=M.uid(),label=values.label||nextLabel(data);
   const s={id,numberPending:true,giltRegistration:{key,label,yardPigKey,birthMonth:source?root.TanakaFinishing.yardBirthMonth(source):null,weight:source?.weight??null,createdAt:new Date().toISOString(),assignedAt:''},breed:'バークシャー',birthDate:values.birthDate||source?.birthDate||'',note:values.note||source?.note||'',cardBaseline:{parity:0,result:'初',mother:values.mother??((source?.sowId==='混成'?'':source?.sowId)||''),birth:values.birthDate||source?.birthDate||'',csf:source?.csf===true?'済':''}};
   data.sows.push(s);
   if(source&&source.kind!=='育成母豚'){
@@ -40,7 +48,8 @@ function update(data,id,values,date){
 function assign(data,id,number,date){
   const s=data.sows.find(s=>s.id===id);if(!pending(s))throw Error('このカードには母豚番号が登録済みです。');
   if(typeof number!=='string'||!/^\d+$/.test(number))throw Error('正式な母豚番号を数字で入力してください。');
-  if(data.sows.some(x=>x.id===number)||data.maternalLineage?.relationships.some(r=>r.sowId===number))throw Error('その番号は母豚台帳または系譜に登録済みです。別の番号を確認してください。');
+  const canonical=n=>String(n).replace(/^0+(?=\d)/,''),state=M.replay(data),physical=root.TanakaNurseryYard?.locations(state).map(x=>x.pig)||root.TanakaFinishing.yardState(state.finishing.find(r=>r.key==='yard')).individuals;
+  if(data.sows.some(x=>canonical(x.id)===canonical(number))||data.maternalLineage?.relationships.some(r=>canonical(r.sowId)===canonical(number))||physical.some(p=>p.key!==s.giltRegistration.yardPigKey&&[p.officialNumber,p.individualNumber].some(n=>n&&canonical(n)===canonical(number))))throw Error('その番号は母豚台帳または系譜に登録済みです。別の番号を確認してください。');
   const before=clone(s);s.id=number;s.numberPending=false;s.giltRegistration.assignedAt=new Date().toISOString();
   // Only this individual's operation references change; monthly snapshots stay frozen.
   data.logs.forEach(l=>{if(l.id===id)l.id=number;});
@@ -51,11 +60,12 @@ function assign(data,id,number,date){
 function prepareConfirmation(data,roomKey,values,date){
   const F=root.TanakaFinishing,I=root.TanakaInventory,state=M.replay(data),room=state.finishing.find(r=>r.key===roomKey);
   if(!room||roomKey==='yard'||room.state!=='occupied'||room.kind!=='育成母豚候補'||!Number.isSafeInteger(room.count)||room.count<1)throw Error('育成母豚候補の部屋を選び直してください。');
-  const individuals=(Array.isArray(values.individuals)?values.individuals:[{number:values.number,birthDate:values.birthDate}]).map(p=>({number:String(p.number||'').trim(),birthDate:p.birthDate}));
+  const individuals=(Array.isArray(values.individuals)?values.individuals:[{number:values.number,birthDate:values.birthDate}]).map((p,i)=>({number:String(p.number||'').trim(),label:nextLabel(data,i),birthDate:p.birthDate||room.birthDate||''}));
   if(!individuals.length||individuals.length>room.count||values.count!==undefined&&Number(values.count)!==individuals.length)throw Error('移動頭数と個体情報の件数を確認してください。');
   const canonicalNumber=n=>String(n).replace(/^0+(?=\d)/,''),seen=new Set();
   for(const p of individuals){
-    const number=p.number;if(!/^\d+$/.test(number))throw Error('新しい母豚番号を数字で入力してください。');
+    if(!I.validDate(p.birthDate)||p.birthDate>date)throw Error('誕生日を確認してください。');
+    const number=p.number;if(!number)continue;if(!/^\d+$/.test(number))throw Error('新しい母豚番号を数字で入力してください。');
     const normalized=canonicalNumber(number);if(seen.has(normalized))throw Error('入力した母豚番号 '+number+' が重複しています。');seen.add(normalized);
     const yard=state.finishing.filter(r=>r.key==='yard').flatMap(r=>F.yardState(r).individuals),physical=root.TanakaNurseryYard?.locations(state).map(x=>x.pig)||yard;
     if(Object.values(state.sows).some(s=>s.active&&canonicalNumber(s.id)===normalized)||physical.some(p=>[p.officialNumber,p.individualNumber].some(n=>n&&canonicalNumber(n)===normalized)))throw Error('母豚番号 '+number+' はすでに使用されています');
@@ -69,15 +79,11 @@ function confirmCandidate(data,plan){
   if(JSON.stringify(data)!==plan.expected)throw Error('確認中にデータが変更されました。入力画面から確認し直してください。');
   const checked=prepareConfirmation(data,plan.roomKey,plan,plan.date),F=root.TanakaFinishing,I=root.TanakaInventory,before=checked.before,count=checked.count;
   const key=M.uid(),yard=F.group(M.replay(data).finishing.find(r=>r.key==='yard'));
-  data.logs.push({key,origin:'operator',type:'肉豚舎へ移動',id:before.sowId,date:plan.date,t:new Date().toISOString(),finishingKey:'yard',sourceArea:'finishing',sourceKey:plan.roomKey,sourceBefore:before,sourceTotal:before.count,count,yardIndividuals:1,yardBefore:yard,yardPigKeys:[],simpleYard:1,note:'育成母豚 '+checked.individuals.map(p=>p.number).join('・')+' を確定',confirmedIndividuals:clone(checked.individuals),remainingKind:checked.remainingKind,movement:{from:{name:'肉豚舎 '+plan.roomKey.slice(1)+'室'},to:{name:'運動場'}}});
-  let state=M.replay(data),remaining=F.group(state.finishing.find(r=>r.key===plan.roomKey));
+  data.logs.push({key,origin:'operator',type:'肉豚舎へ移動',id:before.sowId,date:plan.date,t:new Date().toISOString(),finishingKey:'yard',sourceArea:'finishing',sourceKey:plan.roomKey,sourceBefore:before,sourceTotal:before.count,count,yardIndividuals:1,yardBefore:yard,yardPigKeys:[],simpleYard:1,note:'育成母豚 '+checked.individuals.map(p=>p.label).join('・')+' を確定',confirmedIndividuals:clone(checked.individuals),remainingKind:checked.remainingKind,movement:{from:{name:'肉豚舎 '+plan.roomKey.slice(1)+'室'},to:{name:'運動場'}}});
+  let state=M.replay(data);
   const selected=checked.individuals.map((p,i)=>({...p,pigKey:key+':pig:'+(i+1)})),yardBefore=F.group(state.finishing.find(r=>r.key==='yard'));
-  data.logs.push({key:M.uid(),origin:'operator',type:'肉豚舎更新',id:'',date:plan.date,finishingKey:'yard',yardIndividuals:1,finishingBefore:yardBefore,finishingAfter:F.yardState({individuals:yardBefore.individuals.map(p=>{const chosen=selected.find(x=>x.pigKey===p.key);return chosen?{...p,birthDate:chosen.birthDate,officialNumber:chosen.number,kind:'育成母豚'}:p;})})});
-  for(const chosen of selected){
-    const id=create(data,{birthDate:chosen.birthDate,mother:before.sowId},plan.date,chosen.pigKey),s=data.sows.find(s=>s.id===id);
-    s.id=chosen.number;s.numberPending=false;s.giltRegistration.confirmed=true;s.giltRegistration.assignedAt=new Date().toISOString();s.location={area:'yard',key:chosen.pigKey,name:'運動場'};
-    data.logs.forEach(l=>{if(l.id===id)l.id=chosen.number;});
-  }
+  data.logs.push({key:M.uid(),origin:'operator',type:'肉豚舎更新',id:'',date:plan.date,finishingKey:'yard',yardIndividuals:1,finishingBefore:yardBefore,finishingAfter:F.yardState({individuals:yardBefore.individuals.map(p=>{const chosen=selected.find(x=>x.pigKey===p.key);return chosen?{...p,birthDate:chosen.birthDate,kind:'育成母豚'}:p;})})});
+  ensureYardCards(data,plan.date,selected.map(p=>p.pigKey));
   state=M.replay(data);const fresh=I.create(data,state,plan.date.slice(0,7),plan.date,r=>r.birthDate||'');
   if(I.farmSummary(fresh).farmTotal!==checked.total)throw Error('全豚舎総頭数が一致しないため確定できません。');
   const old=data.inventoryMonths?.[fresh.month];
@@ -90,5 +96,5 @@ function restoreConfirmation(data,before,expected){
   Object.keys(data).forEach(k=>delete data[k]);Object.assign(data,clone(before));
 }
 const previous=M.validate;M.validate=function(data){previous(data);validate(data);};
-root.TanakaGilts={pending,isGilt,prepareConfirmation,confirmCandidate,restoreConfirmation,linkedSow,yardKind,create,update,assign,validate};
+root.TanakaGilts={nextLabel,ensureYardCards,pending,isGilt,prepareConfirmation,confirmCandidate,restoreConfirmation,linkedSow,yardKind,create,update,assign,validate};
 })(typeof globalThis!=='undefined'?globalThis:this);

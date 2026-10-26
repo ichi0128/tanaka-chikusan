@@ -98,6 +98,19 @@
     return card;
   }
   M.applyReproductionEvent=applyReproductionEvent;
+  // Sort from exactly the current card the operator sees, including manual corrections.
+  M.currentDueDate=function(data,id){
+    const page=globalThis.TanakaSowParity?.pages(data,id)[0],card=page?.card||sowCard(data,id);
+    if(page?.awaitingMating||card.reheatPending||card.cycleCompleted||card.birthDateActual)return '';
+    const raw=String(card.due||'').trim();if(!raw)return '';
+    try{
+      if(/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(raw))return matingDate(raw);
+      if(!/^\d{1,2}\/\d{1,2}$/.test(raw))return '';
+      const latest=data.logs.filter(l=>!l.legacy&&l.id===id&&l.type==='種付け').slice().sort((a,b)=>a.date.localeCompare(b.date)||data.logs.indexOf(a)-data.logs.indexOf(b)).at(-1);
+      const mating=matingDate(card.matingDateOverride||card.mating,latest?.date||'2026-01-01'),expected=addDays(mating,114),year=Number(expected.slice(0,4));
+      return [year-1,year,year+1].map(y=>{try{return matingDate(raw,y+'-01-01');}catch{return '';}}).filter(Boolean).sort((a,b)=>Math.abs(Date.parse(a)-Date.parse(expected))-Math.abs(Date.parse(b)-Date.parse(expected)))[0]||'';
+    }catch{return '';}
+  };
   function schedules(data,day){
     if(!day){const d=new Date();day=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
     const state=replay(data),out=[];
