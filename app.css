@@ -570,3 +570,5 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 .swimgen-label{display:inline-block;white-space:nowrap}
 
 .sow-cull-button{position:relative;z-index:2;margin-top:10px;min-height:44px}.sow-cull-badge{margin:8px 12px}.sow-card>.sow-card-body>.sow-cull-button{margin:12px}
+
+.consignment-badge{position:relative;z-index:1;display:inline-block;align-self:start;margin:3px 0;background:var(--soft);color:var(--softtext);white-space:normal}

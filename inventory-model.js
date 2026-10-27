@@ -36,7 +36,7 @@ function snapshot(data,state,date,roomBirthDate){
     const inactive=r.state==='empty'||r.state==='waiting';
     return {key:area+':'+r.key,area,roomKey:area==='yard'?'yard':r.key,place:area==='farrowing'?'分娩舎 '+(r.label||r.key.slice(1))+'室':area==='nursery'?'育成舎 管理枠'+r.key.slice(1):area==='yard'?'運動場':'肉豚舎 '+r.key.slice(1)+'番',
       state:r.state,count:inactive?0:r.count??null,birthDate,...(area==='nursery'&&root.TanakaNurseryYard?{registeredSowIds:(r.identifiedIndividuals||[]).map(p=>root.TanakaNurseryYard.registered(p,state)).filter(Boolean)}:{}),...(area==='yard'?{birthMonth:r.birthMonth!==undefined?r.birthMonth:validDate(birthDate)?Number(birthDate.slice(5,7)):null}:{}),sowId:r.mixed?'混成':r.sowId||'',csf:typeof r.csf==='boolean'?r.csf:null,
-      category:category(area,r,date,birthDate),autoCategory:area==='farrowing'||area==='nursery',registeredWeight:r.weight??null,kind:area==='yard'?(root.TanakaGilts?.yardKind(r,state)||r.kind||'肉豚'):rowKind({area,kind:r.kind||'肉豚'}),...(area==='yard'&&root.TanakaGilts?.linkedSow(r,state)?.numberPending===false?{registeredSowId:root.TanakaGilts.linkedSow(r,state).id}:{})};
+      category:category(area,r,date,birthDate),autoCategory:area==='farrowing'||area==='nursery',registeredWeight:r.weight??null,kind:area==='yard'?(root.TanakaGilts?.yardKind(r,state)||r.kind||'肉豚'):rowKind({area,kind:r.kind||'肉豚'}),...(area==='yard'&&root.TanakaGilts?.linkedSow(r,state)&&root.TanakaGilts.linkedSow(r,state).numberPending!==true?{registeredSowId:root.TanakaGilts.linkedSow(r,state).id}:{})};
   };
   return individualYardRows([...state.rooms.map(r=>make('farrowing',r)),...state.nursery.map(r=>make('nursery',r)),...state.finishing.flatMap(r=>{
     if(r.key!=='yard')return [make('finishing',r)];
