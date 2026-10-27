@@ -568,3 +568,5 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 
 /* The appointment itself is the one-tap completion control. */
 .swimgen-label{display:inline-block;white-space:nowrap}
+
+.sow-cull-button{position:relative;z-index:2;margin-top:10px;min-height:44px}.sow-cull-badge{margin:8px 12px}.sow-card>.sow-card-body>.sow-cull-button{margin:12px}
