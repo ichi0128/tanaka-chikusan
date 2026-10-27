@@ -1,6 +1,6 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.7.0';
+const APP_VERSION='1.7.1';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
@@ -185,6 +185,31 @@ function quickMating(id){
   };
   dateInput.addEventListener('change',update);document.getElementById('matingMode').addEventListener('change',update);update();
 }
+// A room's weaning action already identifies the sow and room. Keep recording direct.
+function quickWeaning(roomKey){
+  const room=state.rooms.find(r=>r.key===roomKey);
+  if(!room||room.state!=='family'||!state.sows[room.sowId]?.active)throw Error('授乳中の母豚がいる部屋を選んでください。');
+  const basis=db,day=today(),id=room.sowId;
+  form('母豚 '+sowIdentityLabel(id)+'を離乳',`<p><b>分娩舎${esc(TanakaSowWork.roomLabel(room))}</b></p>${field('date','実際の離乳日',day,'date',true)}${field('count','離乳する子豚頭数',room.count??'','number')}<p class="muted">母豚は運動場へ戻り、子豚はこの部屋に残ります。</p><details><summary>メモを追加（任意）</summary>${notes('')}</details><details id="quick-wean-advice"><summary>離乳の判断を見る（任意）</summary><div id="quick-wean-advice-content"></div></details>`,'離乳を記録',f=>{
+    if(db!==basis)throw Error('記録が更新されています。この部屋の離乳を開き直してください。');
+    const date=String(f.get('date')||'');if(!FF.valid(date)||date>today())throw Error('実際の離乳日を今日以前の日付で入力してください。');
+    let log;save(d=>{log=TanakaWeaning.createLog(d,{...makeLog('離乳',id),id,roomKey,date,count:countValue(f),note:String(f.get('note')||'')});TanakaSowParity.beforeRecord(d,id,log);d.logs.push(log);});
+    showWorkAction(log,'母豚 '+id+'を離乳しました'+(log.count===null?'':'（子豚'+log.count+'頭）'));
+  });
+  document.getElementById('date').max=day;
+  const details=document.getElementById('quick-wean-advice');
+  const updateAdvice=()=>{
+    if(!details.open)return;
+    const host=document.getElementById('quick-wean-advice-content');
+    try{
+      if(db!==basis)throw Error('記録が更新されています。離乳を開き直してください。');
+      const date=document.getElementById('date').value;if(!FF.valid(date)||date>today())throw Error('実際の離乳日を今日以前の日付で入力してください。');
+      const f=ffData(),assessment=FF.nextCorrection(f,id,date);if(!assessment)throw Error('予測に必要な分娩日などを確認してください。');
+      host.innerHTML=`<div class="ff-wean-cue ${assessment.level}"><strong>${FF.verdict(assessment.level)}</strong><span>${esc(date)}に離乳した場合 · 授乳${assessment.age??'未確定'}日</span><b>次回サイクル 最大${assessment.peak}/10室</b></div>${ffResponseHtml({id,type:'離乳',date},assessment,true)}`;
+    }catch(err){host.innerHTML='<p class="muted">'+esc(err.message)+'</p>';}
+  };
+  details.addEventListener('toggle',updateAdvice);document.getElementById('date').addEventListener('change',updateAdvice);
+}
 function record(type='追記',id='',roomKey='',existing=null,forecastChecked=false){
   if(type==='種付け'&&!existing&&state.sows[id]?.numberPending){assignGiltNumber(id);return;}
   if(type==='スイムジェン 実施'&&!existing){changeSwimgen(id,true);return;}
@@ -203,7 +228,7 @@ function record(type='追記',id='',roomKey='',existing=null,forecastChecked=fal
   content+=field('date',type==='分娩'?'出産日':type==='離乳'?'実離乳日':'作業日',existing?.date||(existing?.t&&Number.isFinite(Date.parse(existing.t))?existing.t.slice(0,10):today()),'date',true);
   if(changesRoom)content+=`<label for="roomKey">${type==='分娩'?'入室先':'対象の部屋'}</label><select id="roomKey" name="roomKey" required><option value="">選択してください</option>${roomOptions.map(r=>`<option value="${r.key}" ${r.key===roomKey?'selected':''}>${esc(roomName(r))}${r.sowId?' · '+esc(r.sowId):''}</option>`).join('')}</select>`;
   if(!legacy&&type==='分娩')content+=field('birthTime','出産時刻（不明なら空欄）',existing?.birthTime||'','time')+`<p class="muted">頭数は「生存－死産」で記録します。生存頭数が授乳中の子豚数になります。</p><div class="birth-counts"><div>${field('count','生存頭数',existing?.count??'','number',true)}</div><span aria-hidden="true">－</span><div>${field('stillborn','死産頭数（不明なら空欄）',existing?.stillborn??'','number')}</div></div>`;
-  if(!legacy&&type==='離乳')content+=field('operator','操作者',existing?.operator||'','text',!existing)+field('count','子豚頭数（不明なら空欄）',existing?.count??'','number');
+  if(!legacy&&type==='離乳')content+=field('count','子豚頭数（不明なら空欄）',existing?.count??'','number');
   if(type==='子豚移動'&&!legacy)content+=`<label for="nurseryKey">移動先の育成舎</label><select id="nurseryKey" name="nurseryKey" ${existing&&!existing.nurseryKey?'':'required'}><option value="">${existing?'旧記録：移動先未登録':'選択してください'}</option>${state.nursery.filter(n=>n.state==='empty'||n.key===existing?.nurseryKey).map(n=>`<option value="${n.key}" ${n.key===existing?.nurseryKey?'selected':''}>${esc(nurseryName(n))}</option>`).join('')}</select><p class="muted">全頭を移動し、頭数を引き継ぎます。移動先が未確認の場合は育成舎タブで空きを確認してください。</p>`;
   if(!legacy&&type==='種付け'&&!existing)content+=matingModeField(id);
   if(!legacy&&type==='種付け')content+=field('boar','種雄豚番号（例：B1・B2）',existing?.boar||M.sowCard(db,id).boar||'')+`<label for="matingKind">種付けの区分</label><select id="matingKind" name="matingKind"><option value="normal">通常の種付け</option><option value="return" ${(existing?.remating||!existing&&(requestedRemating||M.isReheatPending(db,id)))?'selected':''}>再発情後の種付け</option></select><p class="muted">実際に種付けした日を記録します。再発情確認とは別に保存し、同じ産次の予定を更新します。</p>`;
@@ -214,7 +239,7 @@ function record(type='追記',id='',roomKey='',existing=null,forecastChecked=fal
     const selectedRoom=state.rooms.find(r=>r.key===f.get('roomKey')),target=type==='子豚移動'&&(selectedRoom?.mixed||existing?.id==='')?'':f.get('id');if(!legacy&&!state.sows[target]&&!(type==='子豚移動'&&(selectedRoom?.mixed||existing?.id==='')))throw Error('登録済みの母豚を選んでください。');
     if(!legacy&&type==='種付け'&&!existing&&f.get('matingMode')==='supplement'){save(d=>TanakaSowParity.addBoar(d,target,String(f.get('boar')||'')));return;}
     let l={...(existing||makeLog(type,target)),id:target,date:f.get('date'),note:f.get('note'),type:legacy?String(f.get('type')).trim():type};
-    if(type==='離乳'&&!legacy){if(!existing){if(db!==weanBasis)throw Error('記録が更新されています。離乳ボタンから判定を確認し直してください。');if(f.get('date')!==today())throw Error('離乳を実行する当日の日付で保存してください。');if(target!==id||f.get('roomKey')!==roomKey)throw Error('母豚・部屋が変わっています。離乳ボタンから判定を確認し直してください。');l=TanakaWeaning.createLog(db,{id:target,roomKey:f.get('roomKey'),date:today(),operator:f.get('operator'),count:countValue(f),note:f.get('note'),key:l.key,t:l.t});}else{l.operator=String(f.get('operator')||existing.operator||'').trim();if(FF.valid(l.birthDate))l.nursingDays=FF.distance(l.birthDate,l.date);}}
+    if(type==='離乳'&&!legacy){if(!existing){if(db!==weanBasis)throw Error('記録が更新されています。離乳ボタンから判定を確認し直してください。');if(!FF.valid(String(f.get('date')||''))||f.get('date')>today())throw Error('実際の離乳日を今日以前の日付で入力してください。');if(target!==id||f.get('roomKey')!==roomKey)throw Error('母豚・部屋が変わっています。離乳ボタンから判定を確認し直してください。');l=TanakaWeaning.createLog(db,{id:target,roomKey:f.get('roomKey'),date:f.get('date'),operator:f.get('operator'),count:countValue(f),note:f.get('note'),key:l.key,t:l.t});}else{l.operator=String(f.get('operator')||existing.operator||'').trim();if(FF.valid(l.birthDate))l.nursingDays=FF.distance(l.birthDate,l.date);}}
     if(!l.type)throw Error('記録内容を入力してください。');
     if(!legacy&&type==='種付け'){l.boar=String(f.get('boar')||'').trim();l.remating=f.get('matingKind')==='return';}
     if(type==='子豚移動'&&!legacy){l.nurseryKey=f.get('nurseryKey')||'';if(!existing&&!l.nurseryKey)throw Error('移動先の育成舎を選んでください。');}
@@ -226,7 +251,7 @@ function record(type='追記',id='',roomKey='',existing=null,forecastChecked=fal
   });
   if(type==='種付け'&&!existing){bindMatingMode(id,true);const update=()=>{const id=document.getElementById('id').value,date=document.getElementById('date').value,host=document.getElementById('ff-breeding-verdict');if(document.getElementById('matingMode').value==='supplement'){host.innerHTML='';return;}try{const f=ffData(),c=FF.compare(f,id,date);host.innerHTML=`<div class="ff-wean-cue ${c.level}"><strong>${FF.verdict(c.level)}</strong><span>今日または選択日の種付けによる収容・暑熱予測</span></div><details><summary>予測日付と理由を見る</summary>${ffComparisonCard(f,{...c,label:'今回の種付け'})}<p>種付けは発情確認を優先してください。大きな調整は次の発情を1周期（約21日）見送る案で検討します。日付は自動変更しません。</p></details>`;}catch(err){host.innerHTML=`<p class="notice">注意 · ${esc(err.message)}</p>`;}};document.getElementById('id').addEventListener('change',update);document.getElementById('date').addEventListener('change',update);document.getElementById('matingMode').addEventListener('change',update);update();}
   const typeSelect=document.getElementById('recordType');if(typeSelect)typeSelect.onchange=()=>{const draft={...existing,type:typeSelect.value,id:document.getElementById('id').value,date:document.getElementById('date').value,note:document.getElementById('note').value,roomKey:document.getElementById('roomKey')?.value||''};record(draft.type,draft.id,draft.roomKey,draft);};
-  if(type==='離乳'&&!existing){document.getElementById('date').readOnly=true;document.getElementById('id').setAttribute('aria-readonly','true');}
+  if(type==='離乳'&&!existing){document.getElementById('date').max=today();document.getElementById('id').setAttribute('aria-readonly','true');}
   showRevisions(existing);
   if(changesRoom){const select=document.getElementById('roomKey');select.onchange=()=>{const r=state.rooms.find(r=>r.key===select.value);const mixed=type==='子豚移動'&&(existing?existing.id==='':!!r?.mixed),mother=document.getElementById('id');mother.disabled=mixed;mother.required=!mixed;if(!existing&&r?.sowId){mother.innerHTML=sowNumberOptions(r.sowId);mother.value=r.sowId;}};select.onchange();}
 }
@@ -271,7 +296,7 @@ document.addEventListener('click',e=>{
   if(a==='lifecycle')record(state.sows[id].active?'廃豚':'現役復帰',id);
   if(a==='room-edit')editRoom(id);if(a==='room-group')roomGroup(id);
   if(a==='wean-days'){try{save(d=>TanakaSowParity.setWeanDays(d,{id:b.dataset.sow,roomKey:id,birthDate:b.dataset.birth||'',days:Number(b.dataset.days)+Number(b.dataset.delta),expectedDays:Number(b.dataset.days)}));}catch(err){toast(err.message);}return;}
-  if(a==='room-record'){const r=state.rooms.find(r=>r.key===id);record(r.state==='family'?'離乳':'子豚移動',r.sowId,id);}
+  if(a==='room-record'){const r=state.rooms.find(r=>r.key===id);if(r?.state==='family')quickWeaning(id);else if(r?.state==='piglets')record('子豚移動',r.sowId,id);else toast('部屋の状態が変わりました。開き直してください。');}
   if(a==='waiting-enter')enterWaiting(id);if(a==='waiting-cancel')cancelWaiting(id);
   if(a==='room-birth'){const r=state.rooms.find(x=>x.key===id);record('分娩',r.state==='waiting'?r.sowId:'',id);}
   if(a==='plan'){form('予定の実施',`<p class="muted">対象の母豚を1頭ずつ記録します。</p><label for="target">母豚番号</label><select id="target" name="target" required><option value="">未選択</option>${id.split(',').sort((a,b)=>a.localeCompare(b,'ja',{numeric:true})).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select>`,'次へ',f=>{setTimeout(()=>record('スイムジェン 実施',f.get('target')),0);});}
