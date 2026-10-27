@@ -1,6 +1,16 @@
 'use strict';
 let lastWorkAction=null;
-function swimgenControl(id,card,interactive=false){const done=TanakaSowWork.swimgenDone(card);return `スイムジェン　${interactive?`<button type="button" class="sow-care-status ${done?'done':''}" data-action="swimgen-toggle" data-id="${esc(id)}" aria-label="母豚 ${esc(id)} スイムジェン ${done?'済、未に戻す':'未、済にする'}" aria-pressed="${done}">${done?'済':'未'}</button>`:`<b>${done?'済':'未'}</b>`}`;}
+function swimgenPlannedDate(card){
+  if(!card||card.reheatPending||card.cycleCompleted||card.birthDateActual||card.reproductionStatus==='分娩済み')return '';
+  // A legacy dose date marked 済 is a past fact, never an appointment.
+  const raw=String(card.swimgen||'').trim();
+  if(raw&&!raw.includes('済')){try{return sowCardDate(TanakaModel.matingDate(raw));}catch{}}
+  try{return sowCardDate(TanakaModel.addDays(TanakaModel.matingDate(card.matingDateOverride||card.mating),100));}catch{return '';}
+}
+function swimgenControl(id,card,interactive=false){
+  const done=TanakaSowWork.swimgenDone(card),planned=swimgenPlannedDate(card),label=done?'済':'接種予定'+(planned||'未定');
+  return `<span class="swimgen-label">スイムジェン</span>　${interactive?`<button type="button" class="sow-care-status ${done?'done':''}" data-action="swimgen-toggle" data-id="${esc(id)}" aria-label="母豚 ${esc(sowIdentityLabel(id))} スイムジェン ${done?'済、予定表示に戻す':label+'、済にする'}" aria-pressed="${done}">${esc(label)}</button>`:`<b>${esc(label)}</b>`}`;
+}
 function focusYardWorkCard(id){
   if(page!=='sows')return;const host=document.querySelector('.sow-yard-swipe'),button=document.querySelector('.sow-yard-item .sow-card-open[data-id="'+id+'"]'),card=button?.closest('.sow-yard-item');
   if(host&&card&&host.firstElementChild)host.scrollLeft=card.offsetLeft-host.firstElementChild.offsetLeft;

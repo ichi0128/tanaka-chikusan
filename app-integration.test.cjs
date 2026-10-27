@@ -447,3 +447,12 @@ test('quick and standard weaning save the selected past date, reject future or p
   b.context.historyWeanForm.set('date',date);vm.runInContext('historyWeanSubmit(historyWeanForm)',b.context);assert.equal(vm.runInContext('db.logs.at(-1).date',b.context),date);assert.equal(vm.runInContext('db.logs.at(-1).nursingDays',b.context),28);assert.equal(vm.runInContext("TanakaSowParity.pages(db,'106')[0].card.weanDateActual",b.context),date);assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).logs.at(-1).date,date);
  }
 });
+
+test('swimgen appointment is the one-tap completion button, restores after undo and never shows a legacy dose date as the plan',()=>{
+ const b=boot();vm.runInContext(`const swimPage=TanakaSowParity.pages(db,'21')[0];save(d=>TanakaSowParity.edit(d,'21',swimPage.key,{...swimPage.card,mating:'2026-10-11'},JSON.stringify(swimPage)));const swimBefore=JSON.stringify(db);const swimMarkup=swimgenControl('21',TanakaSowParity.pages(db,'21')[0].card,true);`,b.context);
+ assert.match(vm.runInContext('swimMarkup',b.context),/>接種予定1\/19<\/button>/);assert.equal(vm.runInContext('JSON.stringify(db)===swimBefore',b.context),true);
+ vm.runInContext(`changeSwimgen('21',true);const doneMarkup=swimgenControl('21',TanakaSowParity.pages(db,'21')[0].card,true);`,b.context);assert.match(vm.runInContext('doneMarkup',b.context),/>済<\/button>/);assert.doesNotMatch(vm.runInContext('doneMarkup',b.context),/>接種予定/);vm.runInContext("changeSwimgen('21',false);",b.context);assert.match(vm.runInContext("swimgenControl('21',TanakaSowParity.pages(db,'21')[0].card,true)",b.context),/>接種予定1\/19<\/button>/);
+ assert.equal(vm.runInContext("swimgenPlannedDate({mating:'2026-10-11',swimgen:'10/16 済'})",b.context),'1/19');assert.equal(vm.runInContext("swimgenPlannedDate({mating:'2026-10-11',swimgen:'2027-01-20',swimgenDone:true})",b.context),'1/20');assert.equal(vm.runInContext("swimgenPlannedDate({swimgen:'10/16 済'})",b.context),'');
+ for(const flag of ['reheatPending','cycleCompleted','birthDateActual'])assert.equal(vm.runInContext(`swimgenPlannedDate({mating:'10/11',swimgen:'1/19',${flag}:true})`,b.context),'');
+ assert.equal(JSON.parse(b.storage.getItem('tanaka-db')).sows.find(s=>s.id==='21').parityCards.current.card.swimgen,'2027-01-19');
+});

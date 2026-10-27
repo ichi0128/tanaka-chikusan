@@ -565,3 +565,6 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 
 /* Temporary identities stay readable beside the existing sow cards. */
 .sow-card-top>.gilt-unassigned-number{font-size:clamp(24px,7vw,38px)!important;white-space:normal;overflow-wrap:anywhere}
+
+/* The appointment itself is the one-tap completion control. */
+.swimgen-label{display:inline-block;white-space:nowrap}
