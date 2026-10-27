@@ -40,3 +40,24 @@ test('cloud JSON key reordering does not block move cancellation or subsequent r
  const cloudData=M.migrate(reorder(plain(moved)));const cancelled=M.commit(cloudData,x=>W.undo(x,'cloud-move',{...stamp,key:'cloud-undo'}));
  a.equal(M.replay(M.migrate(reorder(plain(cancelled)))).rooms.find(r=>r.key==='r6').state,'empty');a.equal(cancelled.logs.at(-1).undoOf,'cloud-move');
 });
+
+test('no reheat receipt completes only this check; undo and JSON/cloud restore retain reproductive facts and future schedules',()=>{
+ const {c,M,P,W,d}=setup(),id='812',day='2026-10-28',page=JSON.stringify(P.pages(d,id)),rooms=JSON.stringify(M.replay(d).rooms),logs=JSON.stringify(d.logs);
+ const before=M.schedules(d,day).filter(x=>x.id===id&&x.type!=='再発情確認');a.ok(M.schedules(d,day).some(x=>x.id===id&&x.type==='再発情確認'));
+ let next=M.commit(d,x=>W.clearReheat(x,{id,date:day,key:'no-reheat',expectedPage:JSON.stringify(P.pages(d,id)[0])}));
+ a.equal(JSON.stringify(P.pages(next,id)),page);a.equal(JSON.stringify(M.replay(next).rooms),rooms);a.equal(JSON.stringify(d.logs),logs);a.equal(next.logs.at(-1).type,'追記');a.equal(next.logs.at(-1).note,'再発情なし（確認済み）');a.ok(!M.schedules(next,day).some(x=>x.id===id&&x.type==='再発情確認'));a.deepEqual(plain(M.schedules(next,day).filter(x=>x.id===id)),plain(before));
+ a.throws(()=>M.commit(next,x=>W.clearReheat(x,{id,date:day,key:'double'})),/現在の/);
+ next=M.migrate(JSON.parse(JSON.stringify(next)));const cloud=new c.TanakaCloud.CloudStore({model:M});next=cloud.validate(next);a.ok(!M.schedules(next,day).some(x=>x.id===id&&x.type==='再発情確認'));
+ const back=M.commit(next,x=>W.undo(x,'no-reheat',{date:day,key:'undo-none'}));a.equal(back.logs.at(-1).undoOf,'no-reheat');a.ok(M.schedules(back,day).some(x=>x.id===id&&x.type==='再発情確認'));a.throws(()=>M.commit(back,x=>W.undo(x,'no-reheat',{date:day})),/取り消し済み/);
+});
+test('later mating or corrected dates require a fresh check and reject old undo; positive findings retain their existing semantics',()=>{
+ const {M,P,W,d}=setup(),id='812',day='2026-10-28';let next=M.commit(d,x=>W.clearReheat(x,{id,date:day,key:'first-none'}));
+ const p=P.pages(next,id)[0];next=M.commit(next,x=>P.edit(x,id,p.key,{...p.card,mating:'10/10'},JSON.stringify(p),true));a.ok(M.schedules(next,day).some(x=>x.id===id&&x.type==='再発情確認'&&x.date==='2026-10-31'));a.throws(()=>M.commit(next,x=>W.undo(x,'first-none',{date:day})),/その後/);
+ next=M.commit(next,x=>W.clearReheat(x,{id,date:day,key:'second-none'}));next=M.commit(next,x=>{const l={key:'positive',type:'再発情確認',id,date:day};P.beforeRecord(x,id,l);x.logs.push(l);});a.equal(P.pages(next,id)[0].card.reheatPending,true);a.equal(P.pages(next,id)[0].card.reheatCount,1);a.throws(()=>M.commit(next,x=>W.undo(x,'second-none',{date:day})),/その後/);
+ next=M.commit(next,x=>{const l={key:'next-mate',type:'種付け',id,date:'2026-10-29',boar:'B1'};P.beforeRecord(x,id,l);x.logs.push(l);});a.ok(M.schedules(next,'2026-11-20').some(x=>x.id===id&&x.type==='再発情確認'&&x.date==='2026-11-19'));
+});
+
+test('old baseline checks before schedule import cutoff can be completed from their cards; December dates use the following year',()=>{
+ const {M,P,W,d}=setup();const next=M.commit(d,x=>W.clearReheat(x,{id:'98',date:'2026-10-28',key:'old-check'}));a.ok(W.reheatReceipt(next,'98','2026-08-10'));a.equal(JSON.stringify(P.pages(next,'98')),JSON.stringify(P.pages(d,'98')));
+ const p=P.pages(d,'812')[0],year=M.commit(d,x=>P.edit(x,'812',p.key,{...p.card,mating:'2026-12-20'},JSON.stringify(p),true));a.equal(W.reheatPlanDate(year,'812'),'2027-01-10');
+});

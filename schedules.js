@@ -124,6 +124,7 @@
       if(M.isReheatPending(data,sow.id)||globalThis.TanakaSowParity?.pages(data,sow.id)[0]?.awaitingMating)continue;
       function add(base,days,label,type){
         const date=addDays(base.date,days);
+        if(type==='再発情確認'&&globalThis.TanakaSowWork?.reheatReceipt(data,sow.id,date))return;
         if(type==='スイムジェン 実施'&&current?.swimgenDone===true)return;
         const complete=type==='スイムジェン 実施'&&current?.swimgenDone===false?null:logs.filter(l=>l.type===type&&l.date>=base.date&&data.logs.indexOf(l)>data.logs.indexOf(base)).at(-1);
         if(!complete||date>=day)out.push({id:sow.id,date,label,type,baseKey:base.key,completedKey:complete?.key||''});
@@ -151,7 +152,7 @@
         if(rh&&md&&!birth){
           const year=2026+(rh[0]<md[0]?1:0),date=year+'-'+String(rh[0]).padStart(2,'0')+'-'+String(rh[1]).padStart(2,'0');
           const complete=logs.filter(l=>l.type==='再発情確認'&&l.date>=confirmedFrom).at(-1);
-          if(date>=confirmedFrom&&(!complete||date>=day))out.push({id:sow.id,date,label:'再発情確認',type:'再発情確認',baseKey:'card',completedKey:complete?.key||''});
+          if(date>=confirmedFrom&&(!complete||date>=day)&&!globalThis.TanakaSowWork?.reheatReceipt(data,sow.id,date))out.push({id:sow.id,date,label:'再発情確認',type:'再発情確認',baseKey:'card',completedKey:complete?.key||''});
         }
       }
     }
