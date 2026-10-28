@@ -572,3 +572,16 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 .sow-cull-button{position:relative;z-index:2;margin-top:10px;min-height:44px}.sow-cull-badge{margin:8px 12px}.sow-card>.sow-card-body>.sow-cull-button{margin:12px}
 
 .consignment-badge{position:relative;z-index:1;display:inline-block;align-self:start;margin:3px 0;background:var(--soft);color:var(--softtext);white-space:normal}
+
+/* Keep the same left-date / right-performance arrangement as the farm card. */
+.sow-card-body{position:relative;grid-template-areas:"mating results" "dates results" "cull cull";grid-template-rows:auto 1fr auto;min-height:440px}
+.sow-card-body>.sow-mating-row{grid-area:mating;position:static;border-bottom:0;border-right:1px solid var(--border);padding-bottom:12px}
+.sow-card-body>.sow-card-dates{grid-area:dates;min-width:0;padding-top:8px}
+.sow-card-body>.sow-card-results{grid-area:results;min-width:0;padding-top:86px;justify-content:space-between}
+.sow-card-body>.sow-cull-button{grid-area:cull;width:auto;justify-self:stretch}
+.sow-reheat-control{position:relative;z-index:2;display:block;max-width:100%;min-height:44px;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;touch-action:manipulation}
+.sow-reheat-control>b{white-space:nowrap}.sow-reheat-control>small{font-size:11px;font-weight:600;line-height:1.5;white-space:normal}
+.sow-reheat-control.done>small{color:var(--accent)}
+.sow-reheat-control:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:4px}
+.sow-card-body>.sow-mating-row .sow-mating-summary{flex-wrap:wrap;column-gap:6px;row-gap:0}
+.sow-card-body>.sow-mating-row .sow-mating-summary>span:not(.sow-reheat-count){font-size:16px;white-space:normal;overflow-wrap:anywhere}

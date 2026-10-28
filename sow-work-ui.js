@@ -72,7 +72,7 @@ document.addEventListener('click',e=>{
 function reheatControl(id,card){
   const date=TanakaSowWork.reheatPlanDate(db,id),receipt=date&&TanakaSowWork.reheatReceipt(db,id,date);
   if(card.reheatPending||card.cycleCompleted||card.birthDateActual||!date)return `<small>次回再発予定</small><b>${esc(sowCardDate(card.reheat)||'未入力')}</b>`;
-  return `<small>再発情確認</small><button type="button" class="sow-care-status ${receipt?'done':''}" data-action="reheat-open" data-id="${esc(id)}">${receipt?'再発情なし · 確認済み':esc(sowCardDate(date))+' 確認する'}</button>`;
+  return `<small>再発情確認</small><button type="button" class="sow-reheat-control ${receipt?'done':''}" data-action="reheat-open" data-id="${esc(id)}" aria-label="母豚 ${esc(id)} 再発情確認 ${esc(sowCardDate(date))}${receipt?' 再発情なし・確認済み':' 確認する'}"><b>${esc(sowCardDate(date))}</b><small>${receipt?'再発情なし · 確認済み':'確認する'}</small></button>`;
 }
 function openReheatCheck(id){
   if(!id){form('再発情確認',sowSelect(''),'次へ',f=>openReheatCheck(String(f.get('id')||'')));return;}
