@@ -494,3 +494,11 @@ test('meat yard list excludes breeding individuals without changing their regist
  const html=vm.runInContext('finishingYardList()',b.context);assert.match(html,/運動場（肉豚）.*2頭/);assert.match(html,/data-yard-pig="meat-a"/);assert.match(html,/data-yard-pig="meat-b"/);assert.doesNotMatch(html,/data-yard-pig="breeding-a"|data-yard-pig="linked-mother"/);assert.equal(vm.runInContext('JSON.stringify(db)===yardBeforeDisplay',b.context),true);assert.equal(vm.runInContext(`I.farmSummary(I.create(db,state,today().slice(0,7),today(),()=> '')).farmTotal===yardTotalBeforeDisplay`,b.context),true);
  vm.runInContext(`save(d=>{const y=d.finishingBaseline.find(r=>r.key==='yard');Object.assign(y,F.yardState({individuals:F.yardState(y).individuals.filter(p=>p.key==='breeding-a')}));});`,b.context);assert.match(vm.runInContext('finishingYardList()',b.context),/肉豚はいません/);assert.equal(vm.runInContext(`F.yardState(state.finishing.find(r=>r.key==='yard')).count`,b.context),1);
 });
+
+test('weekly shipment plan is for the following month in screen, history and print, including year rollover; saved values stay intact',()=>{
+ const b=boot();for(const [month,label] of [['2026-10','2026年11月'],['2026-12','2027年1月']]){
+  b.context.planMonthForTest=month;vm.runInContext(`var weeklyReport=I.create(db,state,planMonthForTest,planMonthForTest+'-28',()=> '');weeklyReport.weekly=[1,2,3,4,5];var weeklyBefore=JSON.stringify(weeklyReport);`,b.context);
+  for(const expr of ['inventoryPlan(weeklyReport)','inventoryPlan(weeklyReport,true)','inventoryPrintPlan(weeklyReport)']){const html=vm.runInContext(expr,b.context);assert.ok(html.includes(label),expr);assert.match(html,/週別出荷計画/);}
+  assert.equal(vm.runInContext('JSON.stringify(weeklyReport)===weeklyBefore',b.context),true);assert.equal(vm.runInContext('I.weeklyTotal(weeklyReport)',b.context),15);
+ }
+});
