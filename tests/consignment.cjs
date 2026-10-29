@@ -19,3 +19,13 @@ test('new cohort, changed stock and ineligible breeding animals cannot accidenta
 test('past consignment dates stay separate from entry date; repeated dates show once and past monthly inventories stay frozen',()=>{
  const {M,C,I,d}=setup(),old=I.clone(d.inventoryMonths['2026-10']);old.month='2026-09';old.date='2026-09-30';d.inventoryMonths['2026-09']=old;const oldJson=JSON.stringify(old);let next=M.commit(d,x=>C.mark(x,{roomKey:'f1',count:1}));next=M.commit(next,x=>C.finalize(x,{roomKey:'f1',date:'2026-09-30',inventoryDate:date}));a.equal(next.consignmentDates[0],'2026-09-30');a.equal(JSON.stringify(next.inventoryMonths['2026-09']),oldJson);next=M.commit(next,x=>C.mark(x,{roomKey:'f1',count:1}));next=M.commit(next,x=>C.finalize(x,{roomKey:'f1',date:'2026-09-30',inventoryDate:date}));a.equal(next.consignmentDates.length,1);a.equal(next.inventoryMonths['2026-10'].rows.find(r=>r.roomKey==='f1').count,3);
 });
+
+test('consignment history totals same-day heads across room and yard, restores legacy snapshots and excludes commercial sale',()=>{
+ const {c,M,C,F,d}=setup();let next=M.commit(d,x=>C.mark(x,{roomKey:'f1',count:2}));next=M.commit(next,x=>C.finalize(x,{roomKey:'f1',date}));next=M.commit(next,x=>C.mark(x,{roomKey:'yard',pigKey:'meat',count:1}));next=M.commit(next,x=>C.finalize(x,{roomKey:'yard',pigKey:'meat',date}));
+ a.equal(C.history(next)[0].count,3);a.equal(C.history(next)[0].incomplete,false);a.equal(next.logs.at(-1).consignmentCount,1);a.throws(()=>M.commit(next,x=>{x.logs.at(-1).consignmentCount=2;}),/委託履歴の頭数/);a.equal(F.shipmentSummary(next,'2026-10').currentTotal,0);
+ const legacy=M.clone(next);for(const l of legacy.logs)delete l.consignmentCount;const original=JSON.stringify(legacy);a.equal(C.history(legacy)[0].count,3);a.equal(JSON.stringify(legacy),original);
+ const restored=new c.TanakaCloud.CloudStore({model:M}).validate(M.migrate(JSON.parse(JSON.stringify(legacy))));a.equal(C.history(restored)[0].count,3);
+ restored.consignmentDates.push('2026-10-25');a.equal(C.history(restored)[1].count,null);a.equal(C.history(restored)[1].incomplete,true);
+ restored.logs.push({key:'sale-only',type:'肉豚出荷',id:'46',date,finishingKey:'f1',finishingBefore:F.group(M.replay(restored).finishing[0]),count:1});a.equal(C.history(restored)[0].count,3);a.equal(F.shipmentSummary(restored,'2026-10').currentTotal,1);
+ restored.logs.push({key:'unknown-private',type:'肉豚舎更新',date,privateStockUse:true});a.equal(C.history(restored)[0].count,3);a.equal(C.history(restored)[0].incomplete,true);
+});

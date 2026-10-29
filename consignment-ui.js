@@ -5,7 +5,7 @@ function consignmentButton(roomKey,pigKey=''){
  if(!Consignment.eligible(state,roomKey,pigKey))return '';const c=Consignment.candidate(db,state,roomKey,pigKey);
  return `${consignmentBadge(roomKey,pigKey)}<button type="button" class="btn secondary" data-consignment="open" data-id="${esc(roomKey)}" data-pig="${esc(pigKey)}">${c?'委託候補の操作':'委託候補にする'}</button>`;
 }
-function consignmentHistory(){return `<button class="back" data-action="page" data-id="finishing">‹ 肉豚舎</button><h2>委託履歴</h2><p class="muted">委託した日付のみ。通常の出荷頭数には含めません。同じ日は1行で表示します。</p><div class="card">${(db.consignmentDates||[]).slice().sort().reverse().map(date=>`<div class="row"><time datetime="${esc(date)}">${esc(date.replaceAll('-','/'))}</time></div>`).join('')||'<p class="empty">委託履歴はありません。</p>'}</div>`;}
+function consignmentHistory(){return `<button class="back" data-action="page" data-id="finishing">‹ 肉豚舎</button><h2>委託履歴</h2><p class="muted">委託した日付と頭数です。同じ日の委託は合計して表示します。通常の出荷頭数には含めません。</p><div class="card">${Consignment.history(db).map(({date,count,incomplete})=>`<div class="row"><time datetime="${esc(date)}">${esc(date.replaceAll('-','/'))}</time><b>${count===null?'頭数不明':esc(count)+'頭'+(incomplete?'＋頭数不明':'')}</b></div>`).join('')||'<p class="empty">委託履歴はありません。</p>'}</div>`;}
 function openConsignment(roomKey,pigKey='',edit=false){
  const pig=Consignment.eligible(state,roomKey,pigKey);if(!pig)throw Error('肉豚の部屋・個体を選んでください。');
  const c=Consignment.candidate(db,state,roomKey,pigKey),basis=db,session=dataSession,check=()=>{if(db!==basis||dataSession!==session)throw Error('記録が更新されています。開き直してください。');};

@@ -40,7 +40,7 @@ function finalize(data,{roomKey,pigKey='',date,inventoryDate=date,expected}){
  if(p.birthDate&&date<p.birthDate)throw Error('誕生日より前の日付にはできません。');
  const room=before.finishing.find(r=>r.key===roomKey),group=F.group(room),after=roomKey==='yard'?F.yardState({individuals:group.individuals.filter(p=>p.key!==pigKey)}):{...group,count:group.count-c.count};
  const total=I.farmSummary(I.create(data,before,inventoryDate.slice(0,7),inventoryDate,()=> '')).farmTotal;
- data.logs.push({key:M.uid(),origin:'operator',type:'肉豚舎更新',id:'',date,t:new Date().toISOString(),note:'',privateStockUse:true,finishingKey:roomKey,finishingBefore:group,finishingAfter:after,...(roomKey==='yard'?{yardIndividuals:1}:{simpleYard:1})});clear(data,{roomKey,pigKey});
+ data.logs.push({key:M.uid(),origin:'operator',type:'肉豚舎更新',id:'',date,t:new Date().toISOString(),note:'',privateStockUse:true,consignmentCount:c.count,finishingKey:roomKey,finishingBefore:group,finishingAfter:after,...(roomKey==='yard'?{yardIndividuals:1}:{simpleYard:1})});clear(data,{roomKey,pigKey});
  data.consignmentDates=data.consignmentDates||[];if(!data.consignmentDates.includes(date))data.consignmentDates.push(date);
  const next=M.replay(data),fresh=I.create(data,next,inventoryDate.slice(0,7),inventoryDate,r=>M.roomBirthDate(data,r));if(I.farmSummary(fresh).farmTotal!==total-c.count)throw Error('委託後の頭数を確認してください。');
  const old=data.inventoryMonths?.[fresh.month];if(old){const report=clone(old);
@@ -50,6 +50,19 @@ function finalize(data,{roomKey,pigKey='',date,inventoryDate=date,expected}){
  }else I.saveReport(data,fresh,'null');
  return c.count;
 }
-const validate=M.validate;M.validate=function(data){validate(data);if(data.consignmentDates!==undefined&&(!Array.isArray(data.consignmentDates)||new Set(data.consignmentDates).size!==data.consignmentDates.length||data.consignmentDates.some(date=>!I.validDate(date))))throw Error('委託履歴の日付を確認してください。');if(data.consignmentCandidates===undefined)return;const values=data.consignmentCandidates;if(!values||Array.isArray(values)||typeof values!=='object')throw Error('委託候補の保存形式を確認してください。');for(const [key,c] of Object.entries(values)){if(!c||!(c.roomKey==='yard'?typeof c.pigKey==='string'&&c.pigKey.length>0&&c.count===1:/^f([1-9]|1\d|2[0-4])$/.test(c.roomKey))||key!==targetKey(c.roomKey,c.pigKey)||!Number.isSafeInteger(c.count)||c.count<1||typeof c.cohort!=='string')throw Error('委託候補の情報を確認してください。');}};
-root.TanakaConsignment={targetKey,eligible,candidate,mark,clear,saleLimit,assertSale,assertMove,finalize};
+// Older releases kept the stock snapshots, so derive their exact departed heads
+// without rewriting either those receipts or the archived inventory reports.
+function history(data){
+ const days=new Map((data.consignmentDates||[]).map(date=>[date,{date,count:0,incomplete:false,records:0}]));
+ for(const l of data.logs){
+  if(!l.privateStockUse||l.type!=='肉豚舎更新'||!I.validDate(l.date))continue;
+  if(!days.has(l.date))days.set(l.date,{date:l.date,count:0,incomplete:false,records:0});
+  const row=days.get(l.date),before=l.finishingBefore?.count,after=l.finishingAfter?.count,delta=Number.isSafeInteger(before)&&Number.isSafeInteger(after)?before-after:null;
+  const count=Number.isSafeInteger(l.consignmentCount)&&l.consignmentCount>0?l.consignmentCount:delta;
+  row.records++;if(Number.isSafeInteger(count)&&count>0)row.count+=count;else row.incomplete=true;
+ }
+ return [...days.values()].sort((a,b)=>b.date.localeCompare(a.date)).map(({date,count,incomplete,records})=>({date,count:count||null,incomplete:incomplete||!records}));
+}
+const validate=M.validate;M.validate=function(data){validate(data);for(const l of data.logs){if(l.privateStockUse&&l.consignmentCount!==undefined&&(!Number.isSafeInteger(l.consignmentCount)||l.consignmentCount<1||Number.isSafeInteger(l.finishingBefore?.count)&&Number.isSafeInteger(l.finishingAfter?.count)&&l.consignmentCount!==l.finishingBefore.count-l.finishingAfter.count))throw Error('委託履歴の頭数を確認してください。');}if(data.consignmentDates!==undefined&&(!Array.isArray(data.consignmentDates)||new Set(data.consignmentDates).size!==data.consignmentDates.length||data.consignmentDates.some(date=>!I.validDate(date))))throw Error('委託履歴の日付を確認してください。');if(data.consignmentCandidates===undefined)return;const values=data.consignmentCandidates;if(!values||Array.isArray(values)||typeof values!=='object')throw Error('委託候補の保存形式を確認してください。');for(const [key,c] of Object.entries(values)){if(!c||!(c.roomKey==='yard'?typeof c.pigKey==='string'&&c.pigKey.length>0&&c.count===1:/^f([1-9]|1\d|2[0-4])$/.test(c.roomKey))||key!==targetKey(c.roomKey,c.pigKey)||!Number.isSafeInteger(c.count)||c.count<1||typeof c.cohort!=='string')throw Error('委託候補の情報を確認してください。');}};
+root.TanakaConsignment={targetKey,eligible,candidate,mark,clear,saleLimit,assertSale,assertMove,finalize,history};
 })(typeof globalThis!=='undefined'?globalThis:this);
