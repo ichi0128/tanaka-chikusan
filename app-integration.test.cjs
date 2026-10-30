@@ -502,3 +502,31 @@ test('weekly shipment plan is for the following month in screen, history and pri
   assert.equal(vm.runInContext('JSON.stringify(weeklyReport)===weeklyBefore',b.context),true);assert.equal(vm.runInContext('I.weeklyTotal(weeklyReport)',b.context),15);
  }
 });
+
+test('editing previous inventory stock saves only the displayed month and survives JSON/cloud restore, history and printing',()=>{
+ const b=boot();vm.runInContext(`
+  save(d=>{for(const month of ['2026-09','2026-10']){const r=I.create(d,M.replay(d),month,month+'-25',()=> '');r.weekly=[7,5,5,5,5];r.plannedStock['110']=15;r.plannedStock['100']=15;r.stockPlanEdited=['110','100'];I.saveReport(d,r,'null');}});
+  inventoryMonth='2026-10';var previousContext=inventoryContext();previousContext.editing=true;
+  var untouchedSeptember=JSON.stringify(db.inventoryMonths['2026-09']),untouchedFarm=JSON.stringify({...db,inventoryMonths:null}),untouchedOctober=I.clone(previousContext.report);
+  var previousFields=new Map([['date',previousContext.report.date],['remarks',previousContext.report.remarks]]);
+  previousContext.report.rows.forEach((row,i)=>{for(const [name,value] of [['count',row.count],['birth',row.birthDate],['sow',row.sowId],['csf',row.csf],['category',row.category]])previousFields.set(name+'_'+i,value===null?'':String(value));});
+  I.STOCK.forEach(k=>{previousFields.set('stock_previous_'+k,previousContext.report.previousStock[k]??'');previousFields.set('stock_plan_'+k,previousContext.report.plannedStock[k]??'');});
+  previousContext.report.weekly.forEach((n,i)=>previousFields.set('week_'+i,n??''));
+  previousContext.report.monthly.forEach((x,i)=>{previousFields.set('planned_'+i,x.planned??'');previousFields.set('actual_'+i,x.actual??'');});
+  FormData=class{get(name){return previousFields.has(name)?previousFields.get(name):null;}};
+  previousFields.set('stock_previous_110','10');previousFields.set('stock_previous_100','5');previousFields.set('stock_previous_90','');previousFields.set('stock_previous_80','0');
+  inventoryUpdate({name:'stock_previous_110'});
+  var editedPrevious=inventoryRead();I.syncPlan(editedPrevious);inventoryStoreSnapshot(previousContext,editedPrevious);
+ `,b.context);
+ const x=JSON.parse(vm.runInContext(`JSON.stringify({r:db.inventoryMonths['2026-10'],before:untouchedOctober,septSame:JSON.stringify(db.inventoryMonths['2026-09'])===untouchedSeptember,farmSame:JSON.stringify({...db,inventoryMonths:null})===untouchedFarm})`,b.context));
+ assert.equal(x.r.previousStock['110'],10);assert.equal(x.r.previousStock['100'],5);assert.equal(x.r.previousStock['90'],null);assert.equal(x.r.previousStock['80'],0);
+ assert.ok(x.septSame);assert.ok(x.farmSame);
+ for(const field of ['rows','plannedStock','stockPlanEdited','weekly','monthly','date','remarks'])assert.deepEqual(x.r[field],x.before[field],field);
+ assert.deepEqual(x.r.revisions.at(-1).report.previousStock,x.before.previousStock);
+ assert.match(vm.runInContext(`inventoryPlan(previousContext.report)`,b.context),/name="stock_previous_110"[^>]*value="10"/);
+ assert.doesNotMatch(vm.runInContext(`inventoryPlan(previousContext.report,true)`,b.context),/name="stock_previous_/);
+ assert.match(vm.runInContext(`inventoryPrintPlan(previousContext.report)`,b.context),/<th>110kg<\/th><td>10<\/td>/);
+ vm.runInContext(`var restoredPrevious=M.migrate(JSON.parse(localStorage.getItem('tanaka-db')));M.validate(restoredPrevious);cloudStore.validate(restoredPrevious);cloudStore.replaceLocal(restoredPrevious);inventoryDrafts.clear();`,b.context);
+ assert.equal(vm.runInContext(`inventoryContext().report.previousStock['110']`,b.context),10);
+ vm.runInContext(`previousFields.set('stock_previous_100','-1');inventoryContext().editing=true;`,b.context);assert.throws(()=>vm.runInContext('inventoryRead()',b.context),/0以上の整数/);
+});
