@@ -20,7 +20,7 @@ function showWorkAction(log,message=''){
   lastWorkAction={key:log.key,session:dataSession};
   const host=document.getElementById('work-feedback');
   const text=message||(log.movement?`${log.id}を${log.movement.to.name}へ移動しました`:`${log.id}のスイムジェンを「${log.action.after.done?'済':'未'}」にしました`);
-  host.innerHTML=`<span>${esc(simulation?'【仮データ】'+text:text)}</span>${log.action?.kind==='farrowing-entry'||['swimgen-status','reheat-clear'].includes(log.action?.kind)?`<button type="button" data-action="work-undo" data-id="${esc(log.key)}">取り消す</button>`:''}<button type="button" class="work-feedback-close" data-action="work-dismiss" aria-label="操作結果を閉じる">×</button>`;host.hidden=false;
+  host.innerHTML=`<span>${esc(simulation?'【仮データ】'+text:text)}</span>${log.action?.kind==='farrowing-entry'||['swimgen-status','reheat-clear','death'].includes(log.action?.kind)?`<button type="button" data-action="work-undo" data-id="${esc(log.key)}">取り消す</button>`:''}<button type="button" class="work-feedback-close" data-action="work-dismiss" aria-label="操作結果を閉じる">×</button>`;host.hidden=false;
 }
 function hideWorkAction(){lastWorkAction=null;const host=document.getElementById('work-feedback');if(host){host.hidden=true;host.innerHTML='';}}
 function roomUsage(room){if(room.state==='empty')return '空き';if(room.state==='piglets')return '使用中：'+(room.mixed?'混成・':'')+'子豚'+(room.count===null?'頭数未入力':room.count+'頭');return '使用中：'+room.sowId+' · '+(room.state==='waiting'?'分娩待ち':'授乳中・子豚'+(room.count===null?'頭数未入力':room.count+'頭'));}
@@ -61,10 +61,12 @@ document.addEventListener('click',e=>{
       const id=b.dataset.id,p=TanakaSowParity.pages(db,id)[0];changeSwimgen(id,!TanakaSowWork.swimgenDone(p.card));
     }else{
       if(lastWorkAction?.key!==b.dataset.id||lastWorkAction.session!==dataSession)throw Error('画面が切り替わりました。現在のカードを確認してください。');
+      const deathUndo=db.logs.find(l=>l.key===b.dataset.id)?.action?.kind==='death';if(deathUndo)checkDeathDraft();
       let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});
-      showWorkAction(log,log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'));
+      if(deathUndo)inventoryDrafts.delete(today().slice(0,7));
+      showWorkAction(log,log.type==='死亡取消'?'死亡記録を取り消し、頭数を戻しました':log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'));
       // A compensating record remains in history; do not offer an undo-of-undo.
-      document.getElementById('work-feedback').innerHTML=`<span>${esc(simulation?'【仮データ】':'')}${esc(log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'))}</span><button type="button" data-action="work-dismiss">閉じる</button>`;
+      document.getElementById('work-feedback').innerHTML=`<span>${esc(simulation?'【仮データ】':'')}${esc(log.type==='死亡取消'?'死亡記録を取り消し、頭数を戻しました':log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'))}</span><button type="button" data-action="work-dismiss">閉じる</button>`;
     }
   }catch(err){toast(err.message);}
 });

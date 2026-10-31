@@ -23,7 +23,7 @@
   function nurseryBaseline(){return Array.from({length:5},(_,i)=>({key:'n'+(i+1),mixed:false,state:'unknown',sowId:'',count:null,entered:'',birthDate:''}));}
   function checkNursery(rs){if(rs.length!==5||new Set(rs.map(r=>r.key)).size!==5)throw Error('育成舎は5枠で管理します。');for(const r of rs){if(!/^n[1-5]$/.test(r.key)||!['unknown','empty','occupied'].includes(r.state)||typeof r.sowId!=='string'||(r.mixed!==undefined&&typeof r.mixed!=='boolean')||(r.mixed&&(r.state!=='occupied'||r.sowId))||(r.count!==null&&(!Number.isInteger(r.count)||r.count<0))||(r.state!=='occupied'&&(r.sowId||r.count!==null||r.entered))||(r.birthDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.birthDate)||!Number.isFinite(Date.parse(r.birthDate))||new Date(r.birthDate).toISOString().slice(0,10)!==r.birthDate))||(r.entered&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.entered)||!Number.isFinite(Date.parse(r.entered))||new Date(r.entered).toISOString().slice(0,10)!==r.entered)))throw Error('育成舎の状態・頭数・入室日を確認してください。');}}
   function uid(){return root.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);}
-  const BOAR_STATUSES=['在籍','廃用／退役','未確認'];
+  const BOAR_STATUSES=['在籍','廃用／退役','未確認','死亡'];
   // Only the explicitly confirmed current B1/B2 are seeded for old backups.
   // An existing registry (including an empty one) is never inferred from mating history.
   function boarRecords(data){return data.boars===undefined?[{id:'B1',name:'B1',status:'在籍'},{id:'B2',name:'B2',status:'在籍'}]:clone(data.boars);}
@@ -46,6 +46,7 @@
     const i=data.boars.findIndex(b=>b.id===record.id);
     if(i>=0&&data.boars[i].name!==record.name)throw Error('登録済みの種豚名は履歴を残すため変更できません。新しい種豚として追加してください。');
     if(!BOAR_STATUSES.includes(record.status))throw Error('種豚の在籍状態を選んでください。');
+    if(i>=0&&data.boars[i].deathKey)throw Error('死亡記録を取り消してから状態を変更してください。');
     const next={...(i>=0?data.boars[i]:{}),...clone(record)};
     if(i>=0)data.boars[i]=next;else data.boars.push(next);
     validateBoars(data);
@@ -92,6 +93,7 @@
     const rooms=clone(data.baseline),nursery=clone(data.nurseryBaseline||nurseryBaseline()),fin=root.TanakaFinishing,finishing=fin?fin.baseline(data):[];checkRooms(rooms,sows);checkNursery(nursery);
     for(const l of data.logs){
       if(l.legacy)continue;
+      if(root.TanakaDeaths?.TYPES.includes(l.type)){root.TanakaDeaths.apply(l,{sows,rooms,nursery,finishing});checkRooms(rooms,sows);checkNursery(nursery);if(fin)fin.check(finishing);continue;}
       if(fin?.TYPES.includes(l.type)){fin.apply(l,finishing,nursery);checkRooms(rooms,sows);checkNursery(nursery);continue;}
       const sow=sows[l.id],room=rooms.find(r=>r.key===l.roomKey);
       if(sow?.numberPending&&['種付け','分娩','離乳','分娩舎へ移動'].includes(l.type))throw Error('先に正式な母豚番号を登録してください。');
@@ -144,7 +146,7 @@
         if(l.type==='廃豚'){
           if(rooms.some(r=>['family','waiting'].includes(r.state)&&r.sowId===l.id))throw Error('母豚が分娩舎にいます。先に離乳または分娩舎の修正を記録してください。');sow.active=false;
         }
-        if(l.type==='現役復帰')sow.active=true;
+        if(l.type==='現役復帰'){if(sow.deathKey)throw Error('死亡記録は死亡取消から戻してください。');sow.active=true;}
       }
       checkRooms(rooms,sows);checkNursery(nursery);
     }

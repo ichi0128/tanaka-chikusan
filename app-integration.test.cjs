@@ -530,3 +530,72 @@ test('editing previous inventory stock saves only the displayed month and surviv
  assert.equal(vm.runInContext(`inventoryContext().report.previousStock['110']`,b.context),10);
  vm.runInContext(`previousFields.set('stock_previous_100','-1');inventoryContext().editing=true;`,b.context);assert.throws(()=>vm.runInContext('inventoryRead()',b.context),/0以上の整数/);
 });
+
+function seedDeaths(b){vm.runInContext(`save(d=>{
+ d.finishingBaseline=F.baseline(d);Object.assign(d.finishingBaseline.find(r=>r.key==='f3'),{state:'occupied',count:5,birthDate:'2025-01-01',sowId:'46',weight:90,kind:'肉豚'});
+ Object.assign(d.finishingBaseline.find(r=>r.key==='yard'),F.yardState({individuals:[F.yardPig({birthDate:'2025-01-01',sowId:'46',weight:90},'death-meat')]}));
+ d.nurseryBaseline=M.replay(d).nursery;Object.assign(d.nurseryBaseline[0],{state:'occupied',count:3,birthDate:'2025-01-01',sowId:'46',weight:30,kind:'肉豚'});
+ for(const month of [I.previousMonth(today().slice(0,7)),today().slice(0,7)]){const r=I.create(d,M.replay(d),month,month+'-25',r=>M.roomBirthDate(d,r));r.plannedStock['110']=15;r.stockPlanEdited=['110'];r.previousStock['110']=10;r.weekly=[7,5,5,5,5];I.saveReport(d,r,'null');}
+});var deathBefore=JSON.stringify(db),deathStockBefore=I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal,deathPast=JSON.stringify(db.inventoryMonths[I.previousMonth(today().slice(0,7))]),deathPlan=JSON.stringify(db.inventoryMonths[today().slice(0,7)].plannedStock);`,b.context);}
+
+test('mortality and undo preserve exact stock across every barn and breeding animals; plans, old reports and reproductive history stay intact',()=>{
+ for(const [token,count] of [['finishing:f3',1],['finishing:f3',5],['farrowing:r1',2],['farrowing:r1',9],['nursery:n1',1],['nursery:n1',3],['yard:death-meat',1],['sow:21',1],['sow:512',1],['boar:B1',1]]){
+  const b=boot();seedDeaths(b);b.context.deathToken=token;b.context.deathCount=count;
+  vm.runInContext(`var deathReceipt;save(d=>{deathReceipt=Deaths.finalize(d,{token:deathToken,date:today(),count:deathCount,now:today()});});`,b.context);
+  assert.equal(vm.runInContext(`I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal`,b.context),vm.runInContext('deathStockBefore',b.context)-count,token);
+  assert.equal(vm.runInContext(`JSON.stringify(db.inventoryMonths[I.previousMonth(today().slice(0,7))])===deathPast`,b.context),true,token);
+  assert.equal(vm.runInContext(`JSON.stringify(db.inventoryMonths[today().slice(0,7)].plannedStock)===deathPlan`,b.context),true,token);
+  assert.equal(vm.runInContext(`F.shipmentSummary(db,today().slice(0,7)).currentTotal`,b.context),0);
+  assert.equal(vm.runInContext(`Consignment.history(db).length`,b.context),0);
+  vm.runInContext(`M.validate(db);cloudStore.validate(M.migrate(JSON.parse(localStorage.getItem('tanaka-db'))));save(d=>Deaths.undo(d,deathReceipt.key,{date:today()}));`,b.context);
+  assert.equal(vm.runInContext(`I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal===deathStockBefore`,b.context),true,token);
+  assert.equal(vm.runInContext(`M.sameData(M.replay(db),M.replay(JSON.parse(deathBefore)))`,b.context),true,token);
+  assert.equal(vm.runInContext(`db.inventoryMonths[today().slice(0,7)].rows.find(r=>r.roomKey==='f3'&&r.area==='finishing').birthDate`,b.context),'2025-01-01',token);
+  assert.equal(vm.runInContext(`db.inventoryMonths[today().slice(0,7)].rows.find(r=>r.roomKey==='n1'&&r.area==='nursery').birthDate`,b.context),'2025-01-01',token);
+  assert.equal(vm.runInContext(`Deaths.history(db)[0].cancelled`,b.context),true);
+  assert.equal(vm.runInContext(`Deaths.years(db,today().slice(0,4)).reduce((n,y)=>n+y.count,0)`,b.context),0);
+  assert.equal(vm.runInContext(`JSON.stringify(db.sows)===JSON.stringify(JSON.parse(deathBefore).sows)`,b.context),true);
+ }
+});
+
+test('mortality year totals use actual death dates, retain the four agreed fields, and do not fabricate stillbirths from performance differences',()=>{
+ const b=boot();seedDeaths(b);vm.runInContext(`save(d=>Deaths.finalize(d,{token:'finishing:f3',date:'2025-12-31',count:2,now:today()}));save(d=>Deaths.finalize(d,{token:'finishing:f3',date:today(),count:1,now:today()}));go('records');`,b.context);
+ const html=b.elements.get('app').innerHTML;assert.ok(html.indexOf('年別の死亡頭数')<html.indexOf('記録をタップして'));assert.match(html,/2025年：2頭/);assert.match(html,/2026年：1頭/);
+ const receipt=JSON.parse(vm.runInContext(`JSON.stringify(Deaths.history(db)[0])`,b.context));assert.equal(receipt.birthDate,'2025-01-01');assert.equal(receipt.motherId,'46');assert.equal(receipt.count,1);
+ vm.runInContext(`save(d=>Deaths.undo(d,Deaths.history(d)[0].key,{date:today()}));`,b.context);assert.equal(vm.runInContext(`Deaths.years(db,'2026').find(y=>y.year==='2025').count`,b.context),2);assert.equal(vm.runInContext(`Deaths.years(db,'2026').find(y=>y.year==='2026').count`,b.context),0);
+});
+
+test('mortality guards stale state, impossible counts/dates, repeated undo and later room operations atomically',()=>{
+ const b=boot();seedDeaths(b);
+ for(const input of [{count:0},{count:6},{date:'2099-01-01'},{date:'2024-12-31'},{expected:'old'},{count:1.5}]){
+  b.context.deathInput=input;assert.throws(()=>vm.runInContext(`save(d=>Deaths.finalize(d,{token:'finishing:f3',date:today(),count:1,now:today(),...deathInput}));`,b.context));assert.equal(vm.runInContext(`JSON.stringify(db)===deathBefore`,b.context),true);
+ }
+ vm.runInContext(`save(d=>Deaths.finalize(d,{token:'finishing:f3',date:today(),count:1,now:today()}));var deathKey=Deaths.history(db)[0].key;save(d=>{const room=M.replay(d).finishing.find(r=>r.key==='f3');d.logs.push({...makeLog('肉豚舎更新',''),finishingKey:'f3',finishingBefore:F.group(room),finishingAfter:{...F.group(room),weight:80}});});var laterDeathState=JSON.stringify(db);`,b.context);
+ assert.throws(()=>vm.runInContext(`save(d=>Deaths.undo(d,deathKey,{date:today()}))`,b.context),/その後/);assert.equal(vm.runInContext(`JSON.stringify(db)===laterDeathState`,b.context),true);
+});
+
+test('death form has no cause/operator input, inherits group identity, persists and supports immediate undo without touching shipments',()=>{
+ const b=boot();seedDeaths(b);vm.runInContext(`let deathSubmit,deathForm;form=(title,body,label,submit)=>{deathSubmit=submit;deathForm=body;};openDeath('finishing:f3');`,b.context);const form=vm.runInContext('deathForm',b.context);assert.doesNotMatch(form,/操作者|原因/);assert.match(form,/2025-01-01/);assert.match(form,/母豚番号：46/);
+ vm.runInContext(`deathSubmit({get:k=>({deathDate:today(),deathCount:'1'}[k]??'')});`,b.context);assert.match(b.elements.get('work-feedback').innerHTML,/取り消す/);
+ const button={dataset:{action:'work-undo',id:vm.runInContext('lastWorkAction.key',b.context)}};for(const listener of b.listeners.click)listener({target:{closest:selector=>selector.includes('work-undo')?button:null}});
+ assert.equal(vm.runInContext(`Deaths.history(db)[0].cancelled`,b.context),true);assert.match(b.elements.get('work-feedback').innerHTML,/死亡記録を取り消し/);
+});
+
+test('mortality handles unnumbered gilts and identified nursery animals once, without losing reproductive history or group members',()=>{
+ const b=boot();seedDeaths(b);vm.runInContext(`save(d=>{const y=d.finishingBaseline.find(r=>r.key==='yard');y.individuals.push(F.yardPig({kind:'育成母豚',birthDate:'2025-01-01',sowId:'46',weight:80},'death-gilt'));Object.assign(y,F.yardState(y));TanakaGilts.ensureYardCards(d,today(),['death-gilt']);});inventoryDrafts.clear();var deadGilt=Object.values(state.sows).find(s=>s.giltRegistration?.yardPigKey==='death-gilt');var giltHistory=JSON.stringify(TanakaSowParity.pages(db,deadGilt.id));`,b.context);
+ assert.equal(vm.runInContext(`Deaths.targets(db).filter(t=>t.pigKey==='death-gilt').length`,b.context),1);
+ vm.runInContext(`save(d=>Deaths.finalize(d,{token:'sow:'+deadGilt.id,date:today(),now:today()}));`,b.context);assert.equal(vm.runInContext(`state.sows[deadGilt.id].active`,b.context),false);assert.equal(vm.runInContext(`JSON.stringify(TanakaSowParity.pages(db,deadGilt.id))===giltHistory`,b.context),true);
+ vm.runInContext(`save(d=>Deaths.undo(d,Deaths.history(d)[0].key,{date:today()}));save(d=>{const r=d.nurseryBaseline[0];r.identifiedIndividuals=[F.yardPig({identityLabel:'育成個体',kind:'育成母豚',birthDate:'2025-01-01',weight:30},'nursery-death')];});`,b.context);
+ assert.equal(vm.runInContext(`Deaths.target(db,'nursery:n1').count`,b.context),2);
+ assert.throws(()=>vm.runInContext(`save(d=>Deaths.finalize(d,{token:'nursery:n1',count:3,date:today(),now:today()}))`,b.context),/死亡頭数/);
+ vm.runInContext(`save(d=>Deaths.finalize(d,{token:'nursery-pig:nursery-death',count:1,date:today(),now:today()}));`,b.context);assert.equal(vm.runInContext(`state.nursery[0].count`,b.context),2);assert.equal(vm.runInContext(`state.nursery[0].identifiedIndividuals.length`,b.context),0);
+ vm.runInContext(`save(d=>Deaths.undo(d,Deaths.history(d).find(l=>!l.cancelled).key,{date:today()}));`,b.context);assert.equal(vm.runInContext(`state.nursery[0].identifiedIndividuals[0].key`,b.context),'nursery-death');
+});
+
+test('mortality clears a consignment reservation explicitly, restores it on undo, blocks double undo and fails safely on a full disk',()=>{
+ const b=boot();seedDeaths(b);vm.runInContext(`save(d=>Consignment.mark(d,{roomKey:'f3',count:2}));var reservedBefore=JSON.stringify(db);var realDeathWrite=localStorage.setItem;localStorage.setItem=()=>{throw Error('disk full');};`,b.context);
+ assert.throws(()=>vm.runInContext(`save(d=>Deaths.finalize(d,{token:'finishing:f3',count:1,date:today(),now:today()}))`,b.context),/disk full/);assert.equal(vm.runInContext(`JSON.stringify(db)===reservedBefore`,b.context),true);
+ vm.runInContext(`localStorage.setItem=realDeathWrite;save(d=>Deaths.finalize(d,{token:'finishing:f3',count:1,date:today(),now:today()}));var reservedDeathKey=Deaths.history(db)[0].key;`,b.context);assert.equal(vm.runInContext(`Consignment.candidate(db,state,'f3')`,b.context),null);
+ vm.runInContext(`save(d=>Deaths.undo(d,reservedDeathKey,{date:today()}));`,b.context);assert.equal(vm.runInContext(`Consignment.candidate(db,state,'f3').count`,b.context),2);
+ assert.throws(()=>vm.runInContext(`save(d=>Deaths.undo(d,reservedDeathKey,{date:today()}))`,b.context),/取り消し済み/);
+});

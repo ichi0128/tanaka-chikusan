@@ -585,3 +585,8 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 .sow-reheat-control:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:4px}
 .sow-card-body>.sow-mating-row .sow-mating-summary{flex-wrap:wrap;column-gap:6px;row-gap:0}
 .sow-card-body>.sow-mating-row .sow-mating-summary>span:not(.sow-reheat-count){font-size:16px;white-space:normal;overflow-wrap:anywhere}
+
+/* Annual mortality totals stay near the top of Records; details remain compact. */
+.death-summary .row > span {min-width:0;}
+.death-summary .row small {display:block;line-height:1.6;}
+.death-summary .row b {flex:0 0 auto;white-space:nowrap;}
