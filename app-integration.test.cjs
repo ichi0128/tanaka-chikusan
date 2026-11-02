@@ -599,3 +599,46 @@ test('mortality clears a consignment reservation explicitly, restores it on undo
  vm.runInContext(`save(d=>Deaths.undo(d,reservedDeathKey,{date:today()}));`,b.context);assert.equal(vm.runInContext(`Consignment.candidate(db,state,'f3').count`,b.context),2);
  assert.throws(()=>vm.runInContext(`save(d=>Deaths.undo(d,reservedDeathKey,{date:today()}))`,b.context),/取り消し済み/);
 });
+
+function seedMix(b){vm.runInContext(`save(d=>{d.nurseryBaseline=M.replay(d).nursery;for(const [key,count,sowId,birthDate] of [['n4',10,'101','2026-08-04'],['n3',7,'60','2026-08-06']])Object.assign(d.nurseryBaseline.find(r=>r.key===key),{state:'occupied',count,sowId,birthDate,entered:'2026-10-01',weight:30,csf:true,kind:'肉豚',custom:{keep:true}});const r=I.create(d,M.replay(d),today().slice(0,7),today(),r=>M.roomBirthDate(d,r));r.plannedStock['110']=15;r.stockPlanEdited=['110'];r.previousStock['110']=10;r.weekly=[8,7,5,5,null];I.saveReport(d,r,'null');});var mixBefore=JSON.stringify(db),mixFarmBefore=M.replay(db),mixMonth=today().slice(0,7);`,b.context);}
+
+test('mixing 10 and 7 nursery pigs then moving 8 and 7 leaves 2 with exact totals, provenance and plans',()=>{
+ const b=boot();seedMix(b);vm.runInContext(`var mixReceipt;save(d=>{mixReceipt=GroupMix.create(d,{a:{area:'nursery',key:'n4'},b:{area:'nursery',key:'n3'},destination:'nursery:n4',date:today(),now:today(),weight:30});});`,b.context);
+ assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n4').count`,b.context),17);assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n3').state`,b.context),'empty');assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n4').birthDate`,b.context),'2026-08-06');assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n4').mixed`,b.context),true);
+ assert.equal(vm.runInContext(`mixReceipt.mix.patches.find(p=>p.key==='n4').before.sowId`,b.context),'101');assert.equal(vm.runInContext(`mixReceipt.mix.patches.find(p=>p.key==='n3').before.sowId`,b.context),'60');
+ vm.runInContext(`let mixedMoveSubmit;form=(title,body,label,submit)=>{mixedMoveSubmit=submit;};finishingTransfer('f13','nursery','n4');mixedMoveSubmit({get:k=>({moveKind:'partial',moveCount:'8',date:today()}[k]??'')});finishingTransfer('f19','nursery','n4');mixedMoveSubmit({get:k=>({moveKind:'partial',moveCount:'7',date:today()}[k]??'')});`,b.context);
+ for(const [key,count] of [['f13',8],['f19',7]])assert.equal(vm.runInContext(`state.finishing.find(r=>r.key==='${key}').count`,b.context),count);
+ assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n4').count`,b.context),2);
+ const result=JSON.parse(vm.runInContext(`JSON.stringify({report:db.inventoryMonths[mixMonth],before:JSON.parse(mixBefore).inventoryMonths[mixMonth],total:I.farmSummary(db.inventoryMonths[mixMonth]).farmTotal,beforeTotal:I.farmSummary(JSON.parse(mixBefore).inventoryMonths[mixMonth]).farmTotal})`,b.context));
+ assert.equal(result.total,result.beforeTotal);assert.equal(result.report.rows.find(r=>r.roomKey==='n4'&&r.area==='nursery').count,2);assert.equal(result.report.rows.find(r=>r.roomKey==='f13').count,8);assert.equal(result.report.rows.find(r=>r.roomKey==='f19').count,7);
+ for(const field of ['previousStock','plannedStock','stockPlanEdited','weekly','monthly'])assert.deepEqual(result.report[field],result.before[field]);
+ vm.runInContext(`M.validate(db);cloudStore.validate(M.migrate(JSON.parse(localStorage.getItem('tanaka-db'))));`,b.context);
+ const frozen=vm.runInContext('JSON.stringify(db)',b.context);assert.throws(()=>vm.runInContext(`save(d=>GroupMix.undo(d,mixReceipt.key,{date:today()}))`,b.context),/後に/);assert.equal(vm.runInContext('JSON.stringify(db)',b.context),frozen);
+ // A later move permits harmless date/memo edits but never silently relocates stock.
+ vm.runInContext(`save(d=>GroupMix.edit(d,mixReceipt.key,{destination:'nursery:n4',date:today(),weight:30,note:'日付・メモの訂正',now:today()}));`,b.context);assert.equal(vm.runInContext(`db.logs.find(l=>l.key===mixReceipt.key).revisions.length`,b.context),1);assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n4').count`,b.context),2);
+ assert.throws(()=>vm.runInContext(`save(d=>GroupMix.edit(d,mixReceipt.key,{destination:'nursery:n3',date:today(),weight:30,now:today()}))`,b.context),/日付・メモだけ/);
+});
+
+test('mix receipts can change destination and be undone with full source restoration and revision history',()=>{
+ const b=boot();seedMix(b);vm.runInContext(`var mixReceipt;save(d=>{mixReceipt=GroupMix.create(d,{a:{area:'nursery',key:'n4'},b:{area:'nursery',key:'n3'},destination:'nursery:n4',date:today(),now:today(),weight:30});});save(d=>GroupMix.edit(d,mixReceipt.key,{destination:'nursery:n3',date:today(),now:today(),weight:40,note:'まとめ先を修正'}));`,b.context);
+ assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n3').count`,b.context),17);assert.equal(vm.runInContext(`db.logs.find(l=>l.key===mixReceipt.key).revisions[0].mix.destination`,b.context),'nursery:n4');
+ vm.runInContext(`save(d=>GroupMix.undo(d,mixReceipt.key,{date:today()}));`,b.context);
+ assert.equal(vm.runInContext(`M.sameData(state,mixFarmBefore)`,b.context),true);assert.equal(vm.runInContext(`GroupMix.cancelled(db,mixReceipt.key)`,b.context),true);
+ assert.throws(()=>vm.runInContext(`save(d=>GroupMix.undo(d,mixReceipt.key,{date:today()}))`,b.context),/取り消し済み/);
+});
+
+test('mixing cross-barn groups preserves candidate status and blocks unknown/individual/reserved/stale groups and invalid dates atomically',()=>{
+ const b=boot();seedMix(b);vm.runInContext(`save(d=>{d.finishingBaseline=F.baseline(d);Object.assign(d.finishingBaseline.find(r=>r.key==='f3'),{state:'occupied',count:4,sowId:'46',birthDate:'2026-07-07',csf:false,weight:40,kind:'育成母豚候補'});});var mixGuardBefore=JSON.stringify(db);`,b.context);
+ for(const more of [{destination:'nursery:n2'},{weight:35},{date:'2099-01-01'},{date:'2026-07-01'},{expected:'old'}]){b.context.mixOverrides=more;assert.throws(()=>vm.runInContext(`save(d=>GroupMix.create(d,{a:{area:'nursery',key:'n4'},b:{area:'finishing',key:'f3'},destination:'finishing:f3',date:today(),now:today(),weight:30,...mixOverrides}));`,b.context));assert.equal(vm.runInContext(`JSON.stringify(db)===mixGuardBefore`,b.context),true);}
+ vm.runInContext(`save(d=>GroupMix.create(d,{a:{area:'nursery',key:'n4'},b:{area:'finishing',key:'f3'},destination:'finishing:f3',date:today(),now:today(),weight:30}));`,b.context);assert.equal(vm.runInContext(`state.finishing.find(r=>r.key==='f3').count`,b.context),14);assert.equal(vm.runInContext(`state.finishing.find(r=>r.key==='f3').kind`,b.context),'育成母豚候補');assert.equal(vm.runInContext(`state.finishing.find(r=>r.key==='f3').csf`,b.context),false);
+ vm.runInContext(`save(d=>GroupMix.undo(d,d.logs.find(l=>l.type==='豚群混合').key,{date:today()}));save(d=>{const n=M.replay(d).nursery.find(r=>r.key==='n4');d.logs.push({...makeLog('育成舎修正','101'),nurseryKey:'n4',nursery:{...n,identifiedIndividuals:[F.yardPig({birthDate:'2026-08-04',kind:'育成母豚',weight:30},'protected-mix')]}});});`,b.context);
+ assert.equal(vm.runInContext(`GroupMix.groups(db).some(t=>t.key==='n4')`,b.context),false);
+});
+
+test('mixing ignores dictionary order on cloud restore, rejects reserved groups, and preserves ledgers on storage failure',()=>{
+ const b=boot();seedMix(b);vm.runInContext(`save(d=>{d.finishingBaseline=F.baseline(d);Object.assign(d.finishingBaseline.find(r=>r.key==='f4'),{state:'occupied',count:5,sowId:'46',birthDate:'2026-07-07',weight:40,kind:'肉豚'});Consignment.mark(d,{roomKey:'f4',count:1});});var reservedMix=JSON.stringify(db);`,b.context);
+ assert.throws(()=>vm.runInContext(`save(d=>GroupMix.create(d,{a:{area:'nursery',key:'n4'},b:{area:'finishing',key:'f4'},destination:'nursery:n4',date:today(),now:today(),weight:30}))`,b.context),/委託候補/);assert.equal(vm.runInContext(`JSON.stringify(db)===reservedMix`,b.context),true);
+ vm.runInContext(`var realMixWrite=localStorage.setItem;localStorage.setItem=()=>{throw Error('disk full');};`,b.context);assert.throws(()=>vm.runInContext(`save(d=>GroupMix.create(d,{a:{area:'nursery',key:'n4'},b:{area:'nursery',key:'n3'},destination:'nursery:n4',date:today(),now:today(),weight:30}))`,b.context),/disk full/);assert.equal(vm.runInContext(`JSON.stringify(db)===reservedMix`,b.context),true);
+ vm.runInContext(`localStorage.setItem=realMixWrite;save(d=>GroupMix.create(d,{a:{area:'nursery',key:'n4'},b:{area:'nursery',key:'n3'},destination:'nursery:n4',date:today(),now:today(),weight:30}));var reorderMix=x=>Array.isArray(x)?x.map(reorderMix):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).reverse().map(k=>[k,reorderMix(x[k])])):x;var cloudMix=reorderMix(JSON.parse(localStorage.getItem('tanaka-db')));M.validate(cloudMix);cloudStore.validate(cloudMix);cloudStore.replaceLocal(cloudMix);`,b.context);
+ assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n4').count`,b.context),17);
+});
