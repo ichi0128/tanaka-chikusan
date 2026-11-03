@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-function boot(){
+function boot(options={}){
   const map=new Map(),elements=new Map(),listeners={};
   const element=id=>{if(!elements.has(id))elements.set(id,{id,innerHTML:'',textContent:'',dataset:{},classList:{add(){},remove(){},toggle(){}},setAttribute(){},addEventListener(){},appendChild(child){child.parentNode=this;},close(){this.open=false;},showModal(){this.open=true;},insertAdjacentHTML(){},querySelector(){return null;},querySelectorAll(){return [];}});return elements.get(id);};
   const storage={getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k),key:i=>[...map.keys()][i]??null,get length(){return map.size;}};
@@ -11,6 +11,7 @@ function boot(){
   const root=require('node:path').join(__dirname),scripts=[...fs.readFileSync(require('node:path').join(root,'index.html'),'utf8').matchAll(/<script src="([^"?]+)(?:\?[^\"]*)?"><\/script>/g)].map(x=>x[1]);
   for(const name of scripts){
     if(name==='app.js'){
+      if(options.forbidForecast)vm.runInContext("TanakaForecast.build=()=>{throw Error('annual forecast forbidden');};TanakaForecast.planActions=()=>{throw Error('long-range plan forbidden');};TanakaModel.schedules=()=>{throw Error('unbounded schedules forbidden');};",context);
       vm.runInContext('const seed=TanakaModel.migrate(null);TanakaReminders.initialize(seed);',context);
       context.seedRelationships=JSON.parse(fs.readFileSync(require('node:path').join(root,'maternal-lineage-seed.json')));
       vm.runInContext("TanakaMaternal.initialize(seed,seedRelationships);localStorage.setItem('tanaka-db',JSON.stringify(seed));",context);
@@ -669,4 +670,74 @@ test('annual correction editor rejects stale dialogs and invalid totals, and ful
  run(`annualYear='2026';let annualAction;form=(title,html,submit,action)=>annualAction=action;editAnnual('piglets');save(d=>d.sows[0].note='another edit');`);
  assert.throws(()=>run(`annualAction({get:()=> '3'});`),/更新/);run(`editAnnual('piglets');`);const before=b.storage.getItem('tanaka-db');assert.throws(()=>run(`annualAction({get:()=> '-99999'});`),/0以上/);assert.equal(b.storage.getItem('tanaka-db'),before);
  b.storage.setItem=()=>{throw Error('disk full');};assert.throws(()=>run(`annualAction({get:()=> '3'});`),/disk full/);assert.equal(b.storage.getItem('tanaka-db'),before);assert.equal(run('db.annualAdjustments'),undefined);
+});
+
+function currentTasksFixture(b){
+ vm.runInContext(`const TaskDate=Date;Date=class extends TaskDate{constructor(...args){super(...(args.length?args:['2026-11-03T12:00:00']));}static now(){return new TaskDate('2026-11-03T12:00:00').getTime();}};
+ save(d=>{d.logs=[];d.sows=[];d.baseline.forEach(r=>Object.assign(r,{state:'empty',sowId:'',count:null,birthDate:'',mixed:false}));d.recurringReminders=[{id:'past-reminder',month:10,day:31,message:'月越しのお知らせ'},{id:'today-reminder',month:11,day:3,message:'今日のお知らせ'},{id:'future-reminder',month:12,day:3,message:'30日先のお知らせ'},{id:'excluded-reminder',month:12,day:4,message:'31日先のお知らせ'}];
+ const sow=(id,patch={})=>d.sows.push({id,cardBaseline:{parity:2,mating:'2026-07-12',due:'2027-03-01',reheat:'2027-01-01',swimgenDone:true,...patch}});
+ sow('101',{due:'2026-11-03'});sow('102',{due:'2026-11-07'});sow('103',{due:'2026-12-03'});sow('104',{due:'2026-12-04'});sow('105',{mating:'2026-10-13',reheat:'2026-11-03'});sow('106',{swimgen:'2026-11-03',swimgenDone:false});sow('107',{birthDateActual:'2026-10-04'});sow('108',{due:'2026-11-03'});sow('109',{birthDateActual:'2026-10-01'});sow('110',{swimgen:'2026-11-02',swimgenDone:false});sow('111',{birthDateActual:'2026-10-30'});
+ for(const [key,id,state,birthDate] of [['r1','107','family','2026-10-04'],['r2','109','family','2026-10-01'],['r3','108','waiting',''],['r4','111','family','2026-10-30']])Object.assign(d.baseline.find(r=>r.key===key),{state,sowId:id,count:state==='family'?9:null,birthDate});
+ });`,b.context);
+}
+test('today and next-30-day lists have exact boundaries, no overlap, stable work priority and a separate overdue count',()=>{
+ const b=boot({forbidForecast:true}),run=s=>vm.runInContext(s,b.context);currentTasksFixture(b);
+ const before=b.storage.getItem('tanaka-db'),g=JSON.parse(run('JSON.stringify(currentTaskGroups())'));
+ assert.equal(g.day,'2026-11-03');assert.equal(g.end,'2026-12-03');assert.ok(g.today.every(x=>x.date===g.day));assert.ok(g.upcoming.every(x=>x.date>g.day&&x.date<=g.end));assert.ok(g.overdue.every(x=>x.date<g.day));
+ assert.ok(g.upcoming.some(x=>x.id==='103'&&x.type==='分娩'&&x.date==='2026-12-03'));assert.ok(!g.all.some(x=>x.id==='104'&&x.type==='分娩'));assert.ok(!g.all.some(x=>x.forecastBreeding));
+ assert.deepEqual(g.today.map(x=>x.type),['分娩','分娩','分娩舎へ移動','離乳','再発情確認','スイムジェン 実施','バイコックス 実施','farm-reminder']);assert.ok(g.overdue.some(x=>x.id==='110'&&x.type==='スイムジェン 実施'));
+ assert.ok(g.overdue.some(x=>x.reminderId==='past-reminder'));assert.ok(g.upcoming.some(x=>x.reminderId==='future-reminder'));assert.ok(!g.all.some(x=>x.reminderId==='excluded-reminder'));
+ const futureDates=g.upcoming.map(x=>x.date);assert.deepEqual(futureDates,[...futureDates].sort());assert.equal(b.storage.getItem('tanaka-db'),before);
+ run("go('home');");const home=b.elements.get('app').innerHTML;
+ assert.ok(home.indexOf('今日の予定 8件')<home.indexOf('直近の予定 '));assert.ok(home.indexOf('直近の予定 ')<home.indexOf('最近の更新 '+run('workRecords(db.logs).length')+'件'));assert.match(home,/未完了 \d+件あり/);
+ run("go('todayTasks');");assert.match(b.elements.get('app').innerHTML,/aria-label="未完了の予定"/);assert.ok(!b.elements.get('app').innerHTML.includes('30日先のお知らせ'));
+ run("go('schedules');");assert.match(b.elements.get('app').innerHTML,/30日先のお知らせ/);assert.ok(!b.elements.get('app').innerHTML.includes('今日のお知らせ'));assert.ok(!b.elements.get('app').innerHTML.includes('月越しのお知らせ'));assert.equal(b.storage.getItem('tanaka-db'),before);
+});
+test('home startup, counts and both task lists never invoke annual forecasts, long-range planning or old unbounded schedules; cache invalidates on saves and days',()=>{
+ const b=boot({forbidForecast:true}),run=s=>vm.runInContext(s,b.context);assert.equal(run('fatal'),'');assert.equal(run('farrowingForecastCache'),null);currentTasksFixture(b);
+ run(`let taskCalls=0;const collectTasks=TanakaTasks.collect;TanakaTasks.collect=(...args)=>{taskCalls++;return collectTasks(...args);};currentTaskCache=null;go('home');go('todayTasks');go('schedules');go('home');`);assert.equal(run('taskCalls'),1);assert.equal(run('farrowingForecastCache'),null);
+ run(`save(d=>d.sows[0].note='cache refresh');`);assert.equal(run('taskCalls'),2);
+ run(`Date=class extends TaskDate{constructor(...args){super(...(args.length?args:['2026-11-04T12:00:00']));}};refreshTaskDay();`);assert.equal(run('taskCalls'),3);assert.equal(run('currentTaskGroups().today.length'),0);assert.ok(run('currentTaskGroups().overdue.length')>0);
+});
+test('completed swimgen, no-reheat confirmation, entry, weaning, birth and piglet care disappear immediately and undo brings work back',()=>{
+ const b=boot({forbidForecast:true}),run=s=>vm.runInContext(s,b.context);currentTasksFixture(b);
+ const has=(id,type)=>run(`currentTaskGroups().all.some(x=>x.id==='${id}'&&x.type==='${type}')`);
+ assert.equal(has('106','スイムジェン 実施'),true);run(`let taskSwim;save(d=>{taskSwim=TanakaSowWork.setSwimgen(d,{...makeLog('追記','106'),id:'106',done:true});});`);assert.equal(has('106','スイムジェン 実施'),false);
+ run(`save(d=>TanakaSowWork.undo(d,taskSwim.key,{date:today()}));`);assert.equal(has('106','スイムジェン 実施'),true);
+ run(`let taskReheat;save(d=>{taskReheat=TanakaSowWork.clearReheat(d,{...makeLog('追記','105'),id:'105'});});`);assert.equal(has('105','再発情確認'),false);run(`save(d=>TanakaSowWork.undo(d,taskReheat.key,{date:today()}));`);assert.equal(has('105','再発情確認'),true);
+ run(`let taskEntry;save(d=>{taskEntry=TanakaSowWork.entry(d,{...makeLog('分娩舎へ移動','102'),id:'102',roomKey:'r5'});});`);assert.equal(has('102','分娩舎へ移動'),false);assert.equal(has('102','分娩'),true);run(`save(d=>TanakaSowWork.undo(d,taskEntry.key,{date:today()}));`);assert.equal(has('102','分娩舎へ移動'),true);
+ run(`save(d=>{const l=TanakaWeaning.createLog(d,{...makeLog('離乳','107'),id:'107',roomKey:'r1',date:today(),count:9});TanakaSowParity.beforeRecord(d,'107',l);d.logs.push(l);});`);assert.equal(has('107','離乳'),false);
+ run(`save(d=>{const l={...makeLog('分娩','108'),roomKey:'r3',count:9};TanakaSowParity.beforeRecord(d,'108',l);d.logs.push(l);});`);assert.equal(has('108','分娩'),false);assert.equal(has('108','再発情確認'),false);assert.equal(has('108','スイムジェン 実施'),false);
+ assert.equal(has('111','バイコックス 実施'),true);run(`save(d=>M.setPigletCheck(d,'r4','baycox'));`);assert.equal(has('111','バイコックス 実施'),false);run(`save(d=>M.setPigletCheck(d,'r4','baycox'));`);assert.equal(has('111','バイコックス 実施'),true);
+});
+test('today task actions use direct light forms and reminder completion works on the new page without rewriting livestock',()=>{
+ const b=boot({forbidForecast:true}),run=s=>vm.runInContext(s,b.context);currentTasksFixture(b);run("go('todayTasks');quickWeaning('r1');");assert.match(b.elements.get('modal').innerHTML,/実際の離乳日/);assert.equal(run('farrowingForecastCache'),null);
+ run(`openReheatCheck('105');`);assert.match(b.elements.get('modal').innerHTML,/再発情なし/);assert.equal(run('farrowingForecastCache'),null);
+ const before=JSON.parse(b.storage.getItem('tanaka-db'));
+ for(const listener of b.listeners.click)listener({target:{closest:selector=>selector==='[data-reminder-complete]'?{dataset:{reminderComplete:'today-reminder',occurrence:'2026-11-03'}}:null}});
+ assert.equal(run("currentTaskGroups().today.some(x=>x.reminderId==='today-reminder')"),false);
+ const after=JSON.parse(b.storage.getItem('tanaka-db'));assert.deepEqual(after.logs,before.logs);assert.deepEqual(after.sows,before.sows);assert.deepEqual(after.baseline,before.baseline);assert.equal(after.recurringReminderCompletions.at(-1).year,2026);
+});
+test('year rollover, leap days, nursing settings and corrected mating schedules use current dates without annual calculation or writes',()=>{
+ const b=boot({forbidForecast:true}),run=s=>vm.runInContext(s,b.context);currentTasksFixture(b);
+ run(`save(d=>{d.recurringReminders=[{id:'year-end',month:12,day:31,message:'年末'},{id:'new-year',month:1,day:1,message:'年始'},{id:'leap',month:2,day:29,message:'うるう日'}];d.sows.find(s=>s.id==='107').cardBaseline.plannedWeanDays=35;});`);
+ assert.equal(run("currentTaskGroups().upcoming.find(x=>x.id==='107'&&x.type==='離乳').date"),'2026-11-08');
+ const before=b.storage.getItem('tanaka-db');let g=JSON.parse(run("JSON.stringify(TanakaTasks.collect(db,'2026-12-31',state))"));assert.ok(g.today.some(x=>x.reminderId==='year-end'));assert.ok(g.upcoming.some(x=>x.reminderId==='new-year'&&x.date==='2027-01-01'));
+ g=JSON.parse(run("JSON.stringify(TanakaTasks.collect(db,'2027-01-01',state))"));assert.ok(g.overdue.some(x=>x.reminderId==='year-end'&&x.date==='2026-12-31'));
+ g=JSON.parse(run("JSON.stringify(TanakaTasks.collect(db,'2028-02-29',state))"));assert.ok(g.today.some(x=>x.reminderId==='leap'));g=JSON.parse(run("JSON.stringify(TanakaTasks.collect(db,'2032-01-01',state))"));assert.ok(g.overdue.some(x=>x.reminderId==='leap'&&x.date==='2028-02-29'));assert.equal(b.storage.getItem('tanaka-db'),before);
+ run(`save(d=>{const p=TanakaSowParity.pages(d,'105')[0];TanakaSowParity.editHistory(d,'105',p.key,{mating:'2026-10-14'},JSON.stringify(p));});`);assert.equal(run("currentTaskGroups().upcoming.find(x=>x.id==='105'&&x.type==='再発情確認').date"),'2026-11-04');
+});
+test('task classification survives JSON/cloud restore with all livestock and historic data unchanged',async()=>{
+ const b=boot({forbidForecast:true}),run=s=>vm.runInContext(s,b.context);await new Promise(r=>setImmediate(r));currentTasksFixture(b);
+ const original=b.storage.getItem('tanaka-db'),groups=run('JSON.stringify(currentTaskGroups())');
+ run(`const taskRoundtrip=M.migrate(JSON.parse(localStorage.getItem(KEY)));cloudStore.replaceLocal(taskRoundtrip);go('todayTasks');go('schedules');`);
+ assert.equal(run('JSON.stringify(currentTaskGroups())'),groups);assert.equal(b.storage.getItem('tanaka-db'),original);assert.equal(run('db.version'),3);
+});
+test('current task planner excludes inactive and completed cycles, uses first-parity entry seven days early and keeps year crossing dates anchored',()=>{
+ const b=boot({forbidForecast:true}),run=s=>vm.runInContext(s,b.context);currentTasksFixture(b);
+ run(`save(d=>{d.logs.push({...makeLog('廃豚','101'),date:'2026-11-03'});const s=d.sows.find(s=>s.id==='102');s.cardBaseline.parity=0;s.cardBaseline.due='2026-11-10';});`);
+ assert.equal(run("currentTaskGroups().all.some(x=>x.id==='101')"),false);assert.equal(run("currentTaskGroups().today.find(x=>x.id==='102'&&x.type==='分娩舎へ移動').date"),'2026-11-03');
+ run(`save(d=>{const s=d.sows.find(s=>s.id==='105');s.cardBaseline={parity:2,mating:'2026-12-20',reheat:'1/10',due:'4/13',swimgen:'3/30',swimgenDone:false};});`);
+ assert.equal(run("TanakaTasks.collect(db,'2026-12-31',state).upcoming.find(x=>x.id==='105'&&x.type==='再発情確認').date"),'2027-01-10');
+ const before=b.storage.getItem('tanaka-db');run(`const taskState=M.clone(state);taskState.sows['105'].numberPending=true;`);assert.equal(run("TanakaTasks.collect(db,'2026-12-31',taskState).all.some(x=>x.id==='105')"),false);assert.equal(b.storage.getItem('tanaka-db'),before);
 });
