@@ -642,3 +642,31 @@ test('mixing ignores dictionary order on cloud restore, rejects reserved groups,
  vm.runInContext(`localStorage.setItem=realMixWrite;save(d=>GroupMix.create(d,{a:{area:'nursery',key:'n4'},b:{area:'nursery',key:'n3'},destination:'nursery:n4',date:today(),now:today(),weight:30}));var reorderMix=x=>Array.isArray(x)?x.map(reorderMix):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).reverse().map(k=>[k,reorderMix(x[k])])):x;var cloudMix=reorderMix(JSON.parse(localStorage.getItem('tanaka-db')));M.validate(cloudMix);cloudStore.validate(cloudMix);cloudStore.replaceLocal(cloudMix);`,b.context);
  assert.equal(vm.runInContext(`state.nursery.find(r=>r.key==='n4').count`,b.context),17);
 });
+
+test('annual UI precedes all records, separates monthly scales, switches years read-only and saves signed offsets without changing facts',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`save(d=>{const s=d.sows[0];s.parityCards={version:1,history:[{key:'annual-2025',parity:1,card:{birthDateActual:'2025-12-01',birthCount:8},revisions:[]}],current:{key:'annual-2026',parity:2,card:{birthDateActual:'2026-01-03',birthCount:9},capturedKeys:d.logs.filter(l=>l.id===s.id&&!l.legacy).map(l=>l.key),revisions:[]}};d.shipmentHistory={added:[{key:'annual-shipped',date:'2026-02-01',count:5}],deletedLogKeys:[]};});annualYear='2026';go('records');`);
+ const before=JSON.parse(b.storage.getItem('tanaka-db')),html=b.elements.get('app').innerHTML;
+ assert.ok(html.indexOf('aria-label="年間実績"')<html.indexOf('死亡記録'));assert.ok(html.indexOf('月別実績')<html.indexOf('記録の編集・過去記録'));assert.match(html,/2026年/);assert.match(html,/年間<br>総産子数/);assert.match(html,/annual-bars/);
+ const click=dataset=>{const el={dataset};for(const listener of b.listeners.click)listener({target:{closest:selector=>selector==='[data-annual]'?el:null}});};
+ click({annual:'year',delta:'-1'});assert.match(b.elements.get('app').innerHTML,/2025年/);assert.equal(b.storage.getItem('tanaka-db'),JSON.stringify(before));click({annual:'year',delta:'1'});click({annual:'metric',metric:'shipments'});assert.match(b.elements.get('app').innerHTML,/2026年 月別総出荷数/);
+ run(`let annualForm;form=(title,html,submit,action)=>{annualForm={title,html,submit,action};};editAnnual('piglets');`);
+ assert.match(run('annualForm.html'),/自動集計/);assert.match(run('annualForm.html'),/value="0"/);assert.doesNotMatch(run('annualForm.html'),/min="0"/);
+ run(`annualForm.action({get:()=>'-2'});`);const after=JSON.parse(b.storage.getItem('tanaka-db'));assert.equal(after.annualAdjustments['2026'].piglets,-2);assert.deepEqual(after.logs,before.logs);assert.deepEqual(after.sows,before.sows);assert.deepEqual(after.shipmentHistory,before.shipmentHistory);
+ assert.equal(run("TanakaAnnual.summary(db,'2026').piglets.total"),7);assert.equal(run("TanakaAnnual.summary(db,'2026').monthly[0].piglets"),9);
+ run(`go('edit');`);assert.doesNotMatch(b.elements.get('app').innerHTML,/aria-label="年間実績"/);
+});
+test('annual adjustments use ordinary local/cloud/export/import persistence and survive record changes and cloud replacement',async()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);await new Promise(r=>setImmediate(r));
+ run(`save(d=>TanakaAnnual.setAdjustment(d,'2024','farrowings',24,0));`);const saved=JSON.parse(b.storage.getItem('tanaka-db'));assert.equal(saved.version,3);assert.equal(saved.annualAdjustments['2024'].farrowings,24);
+ run(`let annualExport;download=text=>annualExport=text;`);for(const listener of b.listeners.click)listener({target:{closest:selector=>selector==='button'?{dataset:{action:'export'}}:null}});
+ assert.deepEqual(JSON.parse(run('annualExport')).annualAdjustments,saved.annualAdjustments);
+ run(`const annualCloud=M.migrate(JSON.parse(annualExport));cloudStore.replaceLocal(annualCloud);`);assert.equal(run("TanakaAnnual.summary(db,'2024').farrowings.total"),24);
+ run(`save(d=>{d.shipmentHistory={added:[{key:'year-old',date:'2024-02-01',count:10}],deletedLogKeys:[]};TanakaAnnual.setAdjustment(d,'2024','shipments',-1,0);});save(d=>{d.shipmentHistory.added[0].count=12;});`);assert.equal(run("TanakaAnnual.summary(db,'2024').shipments.total"),11);assert.equal(run("db.annualAdjustments['2024'].farrowings"),24);
+});
+test('annual correction editor rejects stale dialogs and invalid totals, and full-disk save leaves all stored data intact',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`annualYear='2026';let annualAction;form=(title,html,submit,action)=>annualAction=action;editAnnual('piglets');save(d=>d.sows[0].note='another edit');`);
+ assert.throws(()=>run(`annualAction({get:()=> '3'});`),/更新/);run(`editAnnual('piglets');`);const before=b.storage.getItem('tanaka-db');assert.throws(()=>run(`annualAction({get:()=> '-99999'});`),/0以上/);assert.equal(b.storage.getItem('tanaka-db'),before);
+ b.storage.setItem=()=>{throw Error('disk full');};assert.throws(()=>run(`annualAction({get:()=> '3'});`),/disk full/);assert.equal(b.storage.getItem('tanaka-db'),before);assert.equal(run('db.annualAdjustments'),undefined);
+});
