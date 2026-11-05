@@ -24,6 +24,26 @@ function entry(data,{id,roomKey,expectedRoom,...options}){
   log.action={version:1,kind:'farrowing-entry',before:{room:clone(room),location:from,hadYardLocation:Object.hasOwn(sow,'yardLocation'),...(Object.hasOwn(sow,'yardLocation')?{yardLocation:clone(sow.yardLocation)}:{})},after:{room:after,location:to}};
   data.logs.push(log);return log;
 }
+// Reuse the formal movement receipt; choose only an explicitly empty internal slot.
+function syncFarrowingInventory(data,roomKey,id,date){
+  const I=root.TanakaInventory;if(!I)return;
+  const state=M.replay(data),month=date.slice(0,7),old=data.inventoryMonths?.[month];
+  if(!old){I.saveReport(data,I.create(data,state,month,date,r=>M.roomBirthDate(data,r)),'null');return;}
+  const report=clone(old),fresh=I.snapshot(data,state,report.date,r=>M.roomBirthDate(data,r));
+  const related=r=>r.area==='farrowing'&&r.roomKey===roomKey||r.area==='yard'&&r.registeredSowId===id;
+  const inRoom=state.rooms.some(r=>['waiting','family'].includes(r.state)&&r.sowId===id);
+  const rows=fresh.filter(related).filter(r=>!(inRoom&&r.area==='yard'));
+  report.rows=report.rows.filter(r=>!related(r)).concat(rows);
+  if(!report.sowSnapshot)report.sowSnapshot={ids:Object.values(state.sows).filter(s=>s.active&&!s.numberPending&&!root.TanakaGilts?.isGilt(s)).map(s=>s.id)};
+  else if(!report.sowSnapshot.ids.includes(id))report.sowSnapshot.ids.push(id);
+  report.status='draft';I.syncPlan(report);I.saveReport(data,report,JSON.stringify(old));
+}
+function autoEntry(data,options){
+  const state=M.replay(data),room=state.rooms.slice().sort((a,b)=>Number(a.key.slice(1))-Number(b.key.slice(1))).find(r=>r.state==='empty');
+  if(!room)throw Error('分娩舎に空きがありません');
+  const log=entry(data,{...options,roomKey:room.key,expectedRoom:JSON.stringify(room)});log.autoAssigned=true;
+  syncFarrowingInventory(data,room.key,log.id,log.date);return log;
+}
 function returnContext(data,roomKey,expectedEntry){
   const state=M.replay(data),room=state.rooms.find(r=>r.key===roomKey);
   if(!room||room.state!=='waiting')throw Error('出産前の分娩待ちだけ運動場へ戻せます。');
@@ -36,7 +56,7 @@ function returnToYard(data,{roomKey,expectedEntry,...options}){
   const {room,original,to}=returnContext(data,roomKey,expectedEntry),log=stamp('移動取り消し',room.sowId,options);
   log.roomKey=room.key;log.undoOf=original?.key||'';log.movement={version:1,from:clone(original?.movement?.to||roomLocation(room)),to};
   log.action={version:1,kind:'undo',originalKind:'farrowing-entry',originalKey:original?.key||'',before:{room:clone(room)},after:{location:to}};
-  data.logs.push(log);return log;
+  data.logs.push(log);if(original?.autoAssigned)syncFarrowingInventory(data,room.key,log.id,log.date);return log;
 }
 function swimgenDone(card){return typeof card?.swimgenDone==='boolean'?card.swimgenDone:/済/.test(String(card?.swimgen||''));}
 function setSwimgen(data,{id,done,expectedPage,...options}){
@@ -74,5 +94,5 @@ registerUndo('swimgen-status',(data,original,options)=>{
   const p=P.pages(data,original.id)[0];if(p?.key!==original.action.cycleKey||swimgenDone(p.card)!==original.action.after.done||data.logs.slice(data.logs.indexOf(original)+1).some(l=>l.id===original.id&&(l.action?.kind==='swimgen-status'||['種付け','再発情確認','分娩','離乳','スイムジェン 実施'].includes(l.type))))throw Error('その後の作業があるため、この操作は取り消せません。現在のカードを確認してください。');
   const log=setSwimgen(data,{...options,id:original.id,done:original.action.before.done,expectedPage:JSON.stringify(p)});log.undoOf=original.key;return log;
 });
-root.TanakaSowWork={roomLabel,roomLocation,yardOrigin,entry,returnContext,returnToYard,swimgenDone,setSwimgen,registerUndo,undo,reheatReceipt,clearReheat,reheatPlanDate};
+root.TanakaSowWork={roomLabel,roomLocation,yardOrigin,entry,autoEntry,returnContext,returnToYard,swimgenDone,setSwimgen,registerUndo,undo,reheatReceipt,clearReheat,reheatPlanDate};
 })(typeof globalThis!=='undefined'?globalThis:this);

@@ -20,27 +20,32 @@ function showWorkAction(log,message=''){
   lastWorkAction={key:log.key,session:dataSession};
   const host=document.getElementById('work-feedback');
   const text=message||(log.movement?`${log.id}を${log.movement.to.name}へ移動しました`:`${log.id}のスイムジェンを「${log.action.after.done?'済':'未'}」にしました`);
-  host.innerHTML=`<span>${esc(simulation?'【仮データ】'+text:text)}</span>${log.action?.kind==='farrowing-entry'||['swimgen-status','reheat-clear','death'].includes(log.action?.kind)?`<button type="button" data-action="work-undo" data-id="${esc(log.key)}">取り消す</button>`:''}<button type="button" class="work-feedback-close" data-action="work-dismiss" aria-label="操作結果を閉じる">×</button>`;host.hidden=false;
+  const automatic=log.autoAssigned===true;
+  host.innerHTML=`<span>${esc(simulation?'【仮データ】'+text:text)}</span>${log.action?.kind==='farrowing-entry'||['swimgen-status','reheat-clear','death'].includes(log.action?.kind)?`<button type="button" data-action="work-undo" data-id="${esc(log.key)}">${automatic?'元に戻す':'取り消す'}</button>`:''}<button type="button" class="work-feedback-close" data-action="work-dismiss" aria-label="操作結果を閉じる">${automatic?'閉じる':'×'}</button>`;host.hidden=false;
 }
 function hideWorkAction(){lastWorkAction=null;const host=document.getElementById('work-feedback');if(host){host.hidden=true;host.innerHTML='';}}
 function roomUsage(room){if(room.state==='empty')return '空き';if(room.state==='piglets')return '使用中：'+(room.mixed?'混成・':'')+'子豚'+(room.count===null?'頭数未入力':room.count+'頭');return '使用中：'+room.sowId+' · '+(room.state==='waiting'?'分娩待ち':'授乳中・子豚'+(room.count===null?'頭数未入力':room.count+'頭'));}
+function syncWaitingDraft(log,expected){
+  const month=log.date.slice(0,7),cached=inventoryDrafts.get(month);if(!cached||cached.expected!==expected)return;
+  if(!cached.dirty){inventoryDrafts.delete(month);return;}
+  const saved=db.inventoryMonths?.[month];if(!saved)return;
+  const related=r=>r.area==='farrowing'&&r.roomKey===log.roomKey||r.area==='yard'&&r.registeredSowId===log.id;
+  cached.report.rows=cached.report.rows.filter(r=>!related(r)).concat(M.clone(saved.rows.filter(related)));
+  if(saved.sowSnapshot)cached.report.sowSnapshot=M.clone(saved.sowSnapshot);
+  cached.report.revisions=M.clone(saved.revisions||[]);I.syncPlan(cached.report);cached.expected=JSON.stringify(saved);
+}
 function enterWaiting(id){
   const sow=state.sows[id];if(!sow?.active||sow.numberPending){toast('移動できる現役母豚を選んでください');return;}
   if(state.rooms.some(r=>['waiting','family'].includes(r.state)&&r.sowId===id)){toast('この母豚は既に分娩舎にいます');return;}
-  const choices=state.rooms.slice().sort((a,b)=>Number(a.key.slice(1))-Number(b.key.slice(1))),empty=choices.filter(r=>r.state==='empty'),sole=empty.length===1?empty[0]:null,basis=db;
-  const grid=`<fieldset class="farrowing-room-picker"><legend>移動先を選択</legend><div>${choices.map(r=>`<label class="farrowing-room-choice ${r.state==='empty'?'is-empty':'is-occupied'}"><input type="radio" name="roomKey" value="${esc(r.key)}" ${r.state==='empty'?'required':'disabled'} ${r===sole?'checked':''}><span><b>${esc(TanakaSowWork.roomLabel(r))}</b><small>${esc(roomUsage(r))}</small></span></label>`).join('')}</div></fieldset>`;
-  form('母豚 '+id+' · 分娩舎へ',`<p>${esc(TanakaSowWork.yardOrigin(sow).name)}から移動します。</p><p class="muted">出産予定日：${esc(sowDue(id))}</p>${!empty.length?'<p class="notice"><b>分娩舎に空きがありません</b></p>':''}${grid}${empty.length?`<p id="room-choice-summary" role="status">${sole?esc(TanakaSowWork.roomLabel(sole))+'へ移動します':'移動先の空室を選んでください'}</p>`:''}`,empty.length?'移動する':'閉じる',f=>{
-    if(!empty.length)return;
-    if(db!==basis)throw Error('記録が更新されました。移動先を選び直してください。');
-    const key=String(f.get('roomKey')||''),chosen=empty.find(r=>r.key===key);if(!chosen)throw Error('移動先の空室を選んでください。');
-    let log;save(d=>{log=TanakaSowWork.entry(d,{...makeLog('分娩舎へ移動',id),id,roomKey:key,expectedRoom:JSON.stringify(chosen)});});showWorkAction(log);
-  });
-  document.querySelectorAll('.farrowing-room-picker input:not(:disabled)').forEach(input=>input.addEventListener('change',()=>{const room=choices.find(r=>r.key===input.value);document.getElementById('room-choice-summary').textContent=TanakaSowWork.roomLabel(room)+'へ移動します';}));
+  const month=today().slice(0,7),expected=JSON.stringify(db.inventoryMonths?.[month]??null);
+  try{let log;save(d=>{log=TanakaSowWork.autoEntry(d,{...makeLog('分娩舎へ移動',id),id});});
+    syncWaitingDraft(log,expected);if(dlg.open)dlg.close();showWorkAction(log,'母豚'+id+'を分娩舎へ移動しました');
+  }catch(err){toast(err.message);}
 }
 function cancelWaiting(key){
   let ctx;try{ctx=TanakaSowWork.returnContext(db,key);}catch(err){toast(err.message);return;}
   const {room,to}=ctx;
-  form('運動場へ戻す',`<p>母豚 ${esc(room.sowId)}を<br><b>${esc(TanakaSowWork.roomLocation(room).name)} → ${esc(to.name)}</b><br>へ戻します。</p><p class="muted">移動履歴を残したまま「移動取消」を記録します。</p>`,'元の場所へ戻す',()=>{let log;save(d=>{log=TanakaSowWork.returnToYard(d,{...makeLog('移動取り消し',room.sowId),roomKey:key,expectedEntry:room.entryKey||''});});showWorkAction(log,room.sowId+'を'+log.movement.to.name+'へ戻しました（移動取消）');});
+  form('運動場へ戻す',`<p>母豚 ${esc(room.sowId)}を<br><b>${esc(TanakaSowWork.roomLocation(room).name)} → ${esc(to.name)}</b><br>へ戻します。</p><p class="muted">移動履歴を残したまま「移動取消」を記録します。</p>`,'元の場所へ戻す',()=>{const expected=JSON.stringify(db.inventoryMonths?.[today().slice(0,7)]??null);let log;save(d=>{log=TanakaSowWork.returnToYard(d,{...makeLog('移動取り消し',room.sowId),roomKey:key,expectedEntry:room.entryKey||''});});syncWaitingDraft(log,expected);showWorkAction(log,room.sowId+'を'+log.movement.to.name+'へ戻しました（移動取消）');});
 }
 function waitingLog(l){
   const route=l.movement?`${l.movement.from.name} → ${l.movement.to.name}`:`分娩舎${TanakaSowWork.roomLabel(state.rooms.find(r=>r.key===l.roomKey))} ${l.type==='分娩舎へ移動'?'への移動':'からの移動取消'}`;
@@ -62,7 +67,7 @@ document.addEventListener('click',e=>{
     }else{
       if(lastWorkAction?.key!==b.dataset.id||lastWorkAction.session!==dataSession)throw Error('画面が切り替わりました。現在のカードを確認してください。');
       const deathUndo=db.logs.find(l=>l.key===b.dataset.id)?.action?.kind==='death';if(deathUndo)checkDeathDraft();
-      let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});
+      const expected=JSON.stringify(db.inventoryMonths?.[today().slice(0,7)]??null);let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});if(log.action?.originalKind==='farrowing-entry')syncWaitingDraft(log,expected);
       if(deathUndo)inventoryDrafts.delete(today().slice(0,7));
       showWorkAction(log,log.type==='死亡取消'?'死亡記録を取り消し、頭数を戻しました':log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'));
       // A compensating record remains in history; do not offer an undo-of-undo.
@@ -100,6 +105,6 @@ document.addEventListener('click',e=>{
   try{
     if(b.dataset.action==='reheat-open')openReheatCheck(b.dataset.id);
     else if(b.dataset.action==='reheat-positive')record('再発情確認',b.dataset.id,'',null,false,true);
-    else{let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});dlg.close();showWorkAction(log,log.id+'の再発情なしの確認を取り消しました');}
+    else{const expected=JSON.stringify(db.inventoryMonths?.[today().slice(0,7)]??null);let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});if(log.action?.originalKind==='farrowing-entry')syncWaitingDraft(log,expected);dlg.close();showWorkAction(log,log.id+'の再発情なしの確認を取り消しました');}
   }catch(err){toast(err.message);}
 });

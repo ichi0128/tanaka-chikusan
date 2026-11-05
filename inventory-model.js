@@ -60,13 +60,14 @@ function farmSummary(report){
   const areaTotals=Object.fromEntries(['farrowing','nursery','finishing','yard'].map(area=>[area,report.rows.filter(r=>r.area===area).reduce((sum,r)=>sum+(r.count??0),0)]));
   // Rows record piglets in farrowing. Assign the mothers to their physical
   // location once; a linked mother already recorded in yard is not added again.
+  const farrowingIds=new Set(report.rows.filter(r=>r.area==='farrowing'&&['family','waiting'].includes(r.state)).map(r=>r.sowId));
   const counted=new Set(report.rows.filter(r=>r.area==='nursery'&&r.count).flatMap(r=>r.registeredSowIds||[]));
   for(const row of report.rows){
     if(rowKind(row)!=='母豚'||!ids?.includes(row.registeredSowId)||!row.count)continue;
+    if(farrowingIds.has(row.registeredSowId)){areaTotals[row.area]-=row.count;continue;}
     if(counted.has(row.registeredSowId))areaTotals[row.area]-=row.count;
     counted.add(row.registeredSowId);
   }
-  const farrowingIds=new Set(report.rows.filter(r=>r.area==='farrowing'&&['family','waiting'].includes(r.state)).map(r=>r.sowId));
   for(const id of ids||[])if(!counted.has(id)){areaTotals[farrowingIds.has(id)?'farrowing':'yard']++;counted.add(id);}
   const boarCount=report.boarSnapshot?root.TanakaModel.activeBoars(report.boarSnapshot).length:null;
   return {...stats,sowCount:ids?registered:null,boarCount,areaTotals,farmTotal:Object.values(areaTotals).reduce((sum,n)=>sum+n,0)+(boarCount??0)};
