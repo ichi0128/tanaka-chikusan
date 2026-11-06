@@ -47,3 +47,15 @@ test('optional adjustment fields preserve schema3 old data, JSON round trips and
  const next=M.commit(d,x=>A.setAdjustment(x,'2026','piglets',218,0)),restored=M.migrate(JSON.parse(JSON.stringify(next)));assert.equal(restored.version,3);assert.equal(A.summary(restored,'2026').piglets.total,218);
  assert.throws(()=>M.commit(next,x=>x.annualAdjustments['2026'].piglets=1.5),/補正値/);assert.throws(()=>M.commit(next,x=>x.annualAdjustments['2026'].piglets='3'),/補正値/);assert.equal(next.annualAdjustments['2026'].piglets,218);
 });
+test('month-only shipment totals populate all nine chart bars and yearly sum without inventing dates or changing later months',()=>{
+ const {c,A}=setup(),F=c.TanakaFinishing,d={sows:[],logs:[],shipmentHistory:{added:[{key:'oct',date:'2026-10-29',count:20},{key:'nov',date:'2026-11-05',count:7}],deletedLogKeys:[]}};
+ const lines='1 35\n2 15\n3 30\n4 21\n5 20\n6 20\n7 23\n8 26\n9 27',facts=JSON.stringify(d.shipmentHistory.added),plan=F.monthlyShipmentPlan(d,'2026',lines,'2026-11-06');F.setMonthlyShipments(d,plan,'2026-11-06');
+ const result=A.summary(d,'2026');assert.equal(result.shipments.automatic,244);assert.deepEqual(Array.from(result.monthly,x=>x.shipments),[35,15,30,21,20,20,23,26,27,20,7,0]);assert.equal(JSON.stringify(d.shipmentHistory.added),facts);assert.equal(d.logs.length,0);assert.ok(d.shipmentHistory.monthlyAdded.every(r=>r.month.length===7&&r.date===undefined));
+ const keys=d.shipmentHistory.monthlyAdded.map(r=>r.key);F.setMonthlyShipments(d,plan,'2026-11-06');assert.equal(A.summary(d,'2026').shipments.total,244);assert.deepEqual(d.shipmentHistory.monthlyAdded.map(r=>r.key),keys);
+});
+test('monthly import reconciles existing daily facts, rejects plans/duplicates/impossible lower totals and supports deletion',()=>{
+ const {c,A}=setup(),F=c.TanakaFinishing,d={sows:[],logs:[],shipmentHistory:{added:[{key:'jan',date:'2026-01-10',count:5}],deletedLogKeys:[]}};
+ F.setMonthlyShipments(d,F.monthlyShipmentPlan(d,'2026','1 10','2026-11-06'),'2026-11-06');assert.equal(d.shipmentHistory.monthlyAdded[0].count,5);assert.equal(A.summary(d,'2026').monthly[0].shipments,10);
+ assert.throws(()=>F.monthlyShipmentPlan(d,'2026','1 4','2026-11-06'),/日付付き/);assert.throws(()=>F.monthlyShipmentPlan(d,'2026','12 20','2026-11-06'),/未来月/);assert.throws(()=>F.monthlyShipmentPlan(d,'2026','1 10\n1 10','2026-11-06'),/重複/);assert.throws(()=>F.monthlyShipmentPlan(d,'2026','13 10','2026-11-06'),/1行/);
+ F.deleteShipment(d,'monthly',d.shipmentHistory.monthlyAdded[0].key);assert.equal(A.summary(d,'2026').shipments.total,5);assert.equal(d.shipmentHistory.added.length,1);
+});

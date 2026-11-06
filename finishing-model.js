@@ -109,6 +109,9 @@ TanakaFinishing.validateShipmentHistory=function(data){
   const h=data.shipmentHistory;if(h===undefined)return;
   if(!h||!Array.isArray(h.added)||!Array.isArray(h.deletedLogKeys))throw Error('出荷履歴の保存形式を確認してください。');
   h.added.forEach(TanakaFinishing.validShipment);
+  if(h.monthlyAdded!==undefined){
+    if(!Array.isArray(h.monthlyAdded)||h.monthlyAdded.some(r=>!r||typeof r.key!=='string'||!r.key||!/^\d{4}-(0[1-9]|1[0-2])$/.test(r.month)||!Number.isSafeInteger(r.count)||r.count<0)||new Set(h.monthlyAdded.map(r=>r.key)).size!==h.monthlyAdded.length||new Set(h.monthlyAdded.map(r=>r.month)).size!==h.monthlyAdded.length)throw Error('月別の出荷実績を確認してください。');
+  }
   if(new Set(h.added.map(r=>r.key)).size!==h.added.length||h.deletedLogKeys.some(k=>typeof k!=='string'||!k)||new Set(h.deletedLogKeys).size!==h.deletedLogKeys.length)throw Error('出荷履歴の識別番号を確認してください。');
 };
 TanakaFinishing.addShipment=function(data,record){
@@ -122,13 +125,14 @@ TanakaFinishing.deleteShipment=function(data,source,key){
   const record=TanakaFinishing.shipmentSummary(data,'').records.find(r=>r.source===source&&r.key===key);
   if(!record)throw Error('出荷履歴が変更されています。画面を開き直してください。');
   const h=data.shipmentHistory||(data.shipmentHistory={added:[],deletedLogKeys:[]});
-  if(source==='manual')h.added=h.added.filter(r=>r.key!==key);
+  if(source==='monthly')h.monthlyAdded=h.monthlyAdded.filter(r=>r.key!==key);
+  else if(source==='manual')h.added=h.added.filter(r=>r.key!==key);
   else h.deletedLogKeys.push(key);
 };
 // Shared by Home and shipment history; manual additions and exclusions are display totals only.
 TanakaFinishing.shipmentSummary=function(data,month){
   const h=data.shipmentHistory||{added:[],deletedLogKeys:[]},excluded=new Set(h.deletedLogKeys);
-  const records=[...(data.logs||[]).filter(l=>l.type==='肉豚出荷'&&!excluded.has(l.key)&&Number.isInteger(l.count)&&l.count>0&&typeof l.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(l.date)&&Number.isFinite(Date.parse(l.date))&&new Date(l.date).toISOString().slice(0,10)===l.date).map(l=>({key:l.key,source:'log',date:l.date,count:l.count,finishingKey:l.finishingKey||'',note:l.note||''})),...h.added.map(r=>({...r,source:'manual',finishingKey:'',note:''}))].sort((a,b)=>b.date.localeCompare(a.date));
+  const records=[...(data.logs||[]).filter(l=>l.type==='肉豚出荷'&&!excluded.has(l.key)&&Number.isInteger(l.count)&&l.count>0&&typeof l.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(l.date)&&Number.isFinite(Date.parse(l.date))&&new Date(l.date).toISOString().slice(0,10)===l.date).map(l=>({key:l.key,source:'log',date:l.date,count:l.count,finishingKey:l.finishingKey||'',note:l.note||''})),...h.added.map(r=>({...r,source:'manual',finishingKey:'',note:''})),...(h.monthlyAdded||[]).map(r=>({...r,date:r.month,source:'monthly',finishingKey:'',note:'月別実績（出荷日不明）'}))].sort((a,b)=>b.date.localeCompare(a.date));
   const months=new Map();
   for(const record of records){
     const key=record.date.slice(0,7);
@@ -138,4 +142,24 @@ TanakaFinishing.shipmentSummary=function(data,month){
     const day=entry.days.get(record.date);day.total+=record.count;day.records.push(record);
   }
   return {records,currentTotal:months.get(month)?.total||0,months:[...months.values()].map(m=>({month:m.month,total:m.total,days:[...m.days.values()]}))};
+};
+
+// Import month totals without inventing shipment days or changing current stock.
+TanakaFinishing.monthlyShipmentPlan=function(data,year,text,day){
+  if(!/^[1-9]\d{3}$/.test(String(year)))throw Error('対象年を確認してください。');
+  const lines=String(text||'').trim().split(/\r?\n/).filter(l=>l.trim()),seen=new Set();if(!lines.length)throw Error('月と出荷頭数を入力してください。');
+  const summary=this.shipmentSummary(data,''),rows=lines.map(line=>{
+    const m=/^\s*(\d{1,2})月?\s*[,、\s]\s*(\d+)頭?\s*$/.exec(line);if(!m||Number(m[1])<1||Number(m[1])>12||!Number.isSafeInteger(Number(m[2])))throw Error('1行に「月 頭数」を入力してください。例：1 10');
+    const month=String(year)+'-'+m[1].padStart(2,'0'),total=Number(m[2]);if(seen.has(month))throw Error('同じ月が重複しています。');seen.add(month);
+    if(month>day.slice(0,7))throw Error('未来月の出荷計画は実績へ登録できません。');
+    const records=summary.records.filter(r=>r.date.slice(0,7)===month),daily=records.filter(r=>r.source!=='monthly').reduce((n,r)=>n+r.count,0),before=records.reduce((n,r)=>n+r.count,0);
+    if(total<daily)throw Error(Number(m[1])+'月は日付付きの出荷履歴が'+daily+'頭あります。先にその履歴を確認してください。');
+    return {month,total,daily,additional:total-daily,before};
+  }).sort((a,b)=>a.month.localeCompare(b.month));return {year:String(year),rows};
+};
+TanakaFinishing.setMonthlyShipments=function(data,plan,day){
+  const checked=this.monthlyShipmentPlan(data,plan.year,plan.rows.map(r=>Number(r.month.slice(5))+' '+r.total).join('\n'),day);
+  const h=data.shipmentHistory||(data.shipmentHistory={added:[],deletedLogKeys:[]});h.monthlyAdded??=[];
+  for(const row of checked.rows){const old=h.monthlyAdded.find(r=>r.month===row.month);if(old)old.count=row.additional;else h.monthlyAdded.push({key:TanakaModel.uid(),month:row.month,count:row.additional});}
+  this.validateShipmentHistory(data);
 };

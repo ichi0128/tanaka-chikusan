@@ -42,7 +42,7 @@ function summary(data,year){
  if(!yearOK(year))throw Error('対象年を確認してください。');year=String(year);
  const monthly=Array.from({length:12},(_,i)=>({month:i+1,farrowings:0,piglets:0,shipments:0,missingPiglets:0}));
  for(const r of births(data)){if(!r.date.startsWith(year+'-'))continue;const m=monthly[Number(r.date.slice(5,7))-1];m.farrowings++;if(r.count===null)m.missingPiglets++;else m.piglets+=r.count;}
- for(const r of root.TanakaFinishing.shipmentSummary(data,'').records){if(iso(r.date)&&r.date.startsWith(year+'-'))monthly[Number(r.date.slice(5,7))-1].shipments+=r.count;}
+ for(const r of root.TanakaFinishing.shipmentSummary(data,'').records){if((iso(r.date)||r.source==='monthly'&&/^\d{4}-(0[1-9]|1[0-2])$/.test(r.date))&&r.date.startsWith(year+'-'))monthly[Number(r.date.slice(5,7))-1].shipments+=r.count;}
  const result={year,monthly,missingPiglets:monthly.reduce((n,m)=>n+m.missingPiglets,0)};
  for(const metric of metrics){const automatic=monthly.reduce((n,m)=>n+m[metric],0),offset=adjustment(data,year,metric);result[metric]={automatic,adjustment:offset,total:automatic+offset};}
  return result;

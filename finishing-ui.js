@@ -158,6 +158,7 @@ document.addEventListener('click',e=>{
   const a=b.dataset.action,key=b.dataset.id;if(!a?.startsWith('fin-')||b.disabled)return;
   try{
     if(a==='fin-shipment-add')shipmentAdd();
+    if(a==='fin-shipment-monthly')shipmentMonthly(b.dataset.year||today().slice(0,4));
     if(a==='fin-shipment-delete')shipmentDelete(b.dataset.source,key);
     if(a==='fin-mode'){finishingMoveMode=!finishingMoveMode;finishingPreferred='';render();}
     if(a==='fin-empty')finishingEmpty(key);
@@ -217,7 +218,7 @@ document.addEventListener('click',e=>{
 
 function shipmentHistory(){
   const month=today().slice(0,7),summary=F.shipmentSummary(db,month),monthText=key=>Number(key.slice(0,4))+'年'+Number(key.slice(5,7))+'月';
-  return `<button class="back" data-action="page" data-id="finishing">‹ 肉豚舎</button><h2>出荷履歴</h2><button class="btn" data-action="fin-shipment-add">出荷実績を追加</button><p class="muted">履歴の追加・削除では、現在の肉豚舎頭数は変わりません。訂正は削除して再追加してください。</p><div class="card"><b>${monthText(month)}の出荷合計　${summary.currentTotal}頭</b></div>${summary.months.map(m=>`<section aria-label="${monthText(m.month)}の出荷実績"><div class="subhead"><h2>${monthText(m.month)}</h2><span class="badge">合計 ${m.total}頭</span></div><div class="card">${m.days.map(day=>`<details><summary class="row"><span><b>${esc(day.date.replaceAll('-','/'))}</b><small class="muted">　内訳 ${day.records.length}件</small></span><strong>${day.total}頭</strong></summary>${day.records.map(r=>`<div class="row"><div><b>${r.finishingKey?esc(finishingPlace(r.finishingKey)):'追加した出荷実績'}</b><p>${esc(r.date.replaceAll('-','/'))} · ${r.count}頭</p>${r.note?`<p class="muted history-note">${esc(r.note)}</p>`:''}</div><button type="button" class="btn secondary" style="width:auto;flex-shrink:0" data-action="fin-shipment-delete" data-source="${r.source}" data-id="${esc(r.key)}" aria-label="${esc(r.date)} ${r.count}頭の出荷履歴を削除">削除</button></div>`).join('')}</details>`).join('')}</div></section>`).join('')||'<div class="card empty">出荷の記録はまだありません。</div>'}`;
+  return `<button class="back" data-action="page" data-id="finishing">‹ 肉豚舎</button><h2>出荷履歴</h2><button class="btn" data-action="fin-shipment-add">出荷実績を追加</button><button class="btn secondary" data-action="fin-shipment-monthly">過去の月別出荷実績を入力</button><p class="muted">履歴の追加・削除では、現在の肉豚舎頭数は変わりません。訂正は削除して再追加してください。</p><div class="card"><b>${monthText(month)}の出荷合計　${summary.currentTotal}頭</b></div>${summary.months.map(m=>`<section aria-label="${monthText(m.month)}の出荷実績"><div class="subhead"><h2>${monthText(m.month)}</h2><span class="badge">合計 ${m.total}頭</span></div><div class="card">${m.days.map(day=>`<details><summary class="row"><span><b>${esc(day.date.replaceAll('-','/'))}${day.date.length===7?' 月合計・出荷日不明':''}</b><small class="muted">　内訳 ${day.records.length}件</small></span><strong>${day.total}頭</strong></summary>${day.records.map(r=>`<div class="row"><div><b>${r.finishingKey?esc(finishingPlace(r.finishingKey)):r.source==='monthly'?'月別の出荷実績':'追加した出荷実績'}</b><p>${esc(r.date.replaceAll('-','/'))} · ${r.count}頭</p>${r.note?`<p class="muted history-note">${esc(r.note)}</p>`:''}</div><button type="button" class="btn secondary" style="width:auto;flex-shrink:0" data-action="fin-shipment-delete" data-source="${r.source}" data-id="${esc(r.key)}" aria-label="${esc(r.date)} ${r.count}頭の出荷履歴を削除">削除</button></div>`).join('')}</details>`).join('')}</div></section>`).join('')||'<div class="card empty">出荷の記録はまだありません。</div>'}`;
 }
 
 function shipmentAdd(){
@@ -277,4 +278,23 @@ function finishingGiltComplete(plan,before,expected,session){
       save(d=>TanakaGilts.restoreConfirmation(d,before,expected));done=true;inventoryDrafts.delete(plan.date.slice(0,7));dlg.close();toast('育成母豚の確定を元に戻しました');
     }catch(err){document.getElementById('gilt-error').textContent=err.message;busy=false;button.disabled=false;}
   };
+}
+
+function shipmentMonthly(year){
+ if(!/^[1-9]\d{3}$/.test(String(year)))throw Error('対象年を確認してください。');
+ const basis=db,offset=TanakaAnnual.adjustment(db,year,'shipments');
+ form(year+'年 月別の出荷実績',`<p>紙に残っている各月の<b>実際の出荷合計</b>を入力します。日付は不明のまま月単位で保存し、グラフと年間合計へ反映します。</p><label for="monthlyShipments">1行に「月 頭数」</label><textarea id="monthlyShipments" name="monthlyShipments" rows="10" placeholder="1 10&#10;2 12" required></textarea><p class="muted">入力した月だけを更新します。未入力の月・現在の在庫頭数は変わりません。委託や出荷計画は含めないでください。</p>${offset?`<label><input type="checkbox" style="display:inline;width:auto;min-height:auto" name="resetShipmentOffset" value="yes"> 年間の出荷補正（${annualSigned(offset)}頭）を0にする</label><p class="muted">同じ過去実績を年間補正にも入力済みの場合に選んでください。</p>`:''}`,'次へ',f=>{
+  if(db!==basis)throw Error('出荷履歴が更新されています。開き直してください。');
+  const plan=F.monthlyShipmentPlan(db,year,f.get('monthlyShipments'),today()),reset=f.get('resetShipmentOffset')==='yes';
+  setTimeout(()=>shipmentMonthlyReview(plan,basis,reset),0);
+ });
+}
+function shipmentMonthlyReview(plan,basis,reset){
+ if(db!==basis){toast('出荷履歴が更新されています。開き直してください。');return;}
+ const copy=M.clone(db);F.setMonthlyShipments(copy,plan,today());if(reset)TanakaAnnual.setAdjustment(copy,plan.year,'shipments',0);
+ const summary=TanakaAnnual.summary(copy,plan.year);
+ form(plan.year+'年 月別出荷を確認',`<p>入力した各月の合計へ合わせます。登録済みの出荷と重複して加算しません。</p><div class="card">${plan.rows.map(r=>`<p><b>${Number(r.month.slice(5))}月</b>　${r.before}頭 → <b>${r.total}頭</b></p>`).join('')}</div><p>反映後の年間総出荷数：<b>${summary.shipments.total}頭</b></p><p class="muted">自動集計 ${summary.shipments.automatic}頭 ＋ 年間補正 ${annualSigned(summary.shipments.adjustment)}頭${reset?'（年間の出荷補正を0にします）':''}</p>`,'保存する',()=>{
+  if(db!==basis)throw Error('出荷履歴が更新されています。開き直してください。');
+  save(d=>{F.setMonthlyShipments(d,plan,today());if(reset)TanakaAnnual.setAdjustment(d,plan.year,'shipments',0);});
+ });
 }
