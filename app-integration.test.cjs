@@ -781,3 +781,22 @@ test('monthly shipment additions survive schema3 JSON/cloud restore and fail ato
  run(`let monthlySave;form=(title,html,label,action)=>monthlySave=action;shipmentMonthlyReview(F.monthlyShipmentPlan(db,'2025','1 11',today()),db,false);save(d=>d.sows[0].note='new');`);assert.throws(()=>run('monthlySave();'),/更新/);
  run(`shipmentMonthlyReview(F.monthlyShipmentPlan(db,'2025','1 11',today()),db,false);`);const raw=b.storage.getItem('tanaka-db');b.storage.setItem=()=>{throw Error('disk full');};assert.throws(()=>run('monthlySave();'),/disk full/);assert.equal(b.storage.getItem('tanaka-db'),raw);assert.equal(run('JSON.stringify(db)'),raw);
 });
+
+test('notebook printing keeps room mapping, shorter dates, section order and read-only totals',async()=>{
+ const b=boot();await new Promise(resolve=>setImmediate(resolve));seedFinishingWeight(b);
+ const before=b.storage.getItem('tanaka-db');
+ vm.runInContext(`var notebookReport=I.clone(db.inventoryMonths[weightMonth]);`,b.context);
+ const count=vm.runInContext('inventoryPrintCount(notebookReport)',b.context);
+ assert.match(count,/>7<\/td><td>7\/1<\/td><td>149/);
+ assert.doesNotMatch(count,/>2026\/07\/01</);
+ assert.ok(count.indexOf('notebook-columns')<count.indexOf('<h2>分娩舎</h2>'));
+ assert.ok(count.indexOf('<h2>分娩舎</h2>')<count.indexOf('<h2>運動場</h2>'));
+ assert.ok(count.indexOf('<h2>運動場</h2>')<count.indexOf('<h2>育成舎</h2>'));
+ const aggregate=vm.runInContext('inventoryPrintAggregate(notebookReport)',b.context);
+ assert.match(aggregate,/<th>体重・区分<\/th><th>肉豚舎<\/th><th>運動場<\/th><th>分娩舎<\/th><th>育成舎<\/th><th>合計<\/th>/);
+ const plan=vm.runInContext('inventoryPrintPlan(notebookReport)',b.context);
+ const order=['stock-block','monthly-block','weekly-block','remarks-block'].map(c=>plan.indexOf('class="'+c+'"'));
+ assert.ok(order.every((n,i)=>n>=0&&(!i||n>order[i-1])));
+ for(const label of ['当月実数','当月計画','前年実績','今年計画','今年実績'])assert.ok(plan.includes(label));
+ assert.equal(b.storage.getItem('tanaka-db'),before);
+});
