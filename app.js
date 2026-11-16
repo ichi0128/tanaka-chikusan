@@ -1,6 +1,6 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.17.2';
+const APP_VERSION='1.17.3';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
@@ -409,7 +409,7 @@ function sortedFarrowRooms(rooms){
 
 function monthDayText(raw){const m=/^(?:\d{4}-)?(\d{1,2})[-/](\d{1,2})$/.exec(raw||'');return m?Number(m[1])+'月'+Number(m[2])+'日':raw;}
 
-function sowParityText(id){const sow=state.sows[id],base=sow?.cardBaseline?.parity;if(base===null||base===undefined||base===''||!Number.isInteger(Number(base))||Number(base)<0)return '未入力';const births=db.logs.filter(l=>!l.legacy&&l.id===id&&l.type==='分娩').length;return (Number(base)+births)+'産目';}
+function sowParityText(id){const parity=TanakaSowParity.pages(db,id)[0]?.parity;return parity===null||parity===undefined||parity===''||!Number.isInteger(Number(parity))||Number(parity)<0?'未入力':Number(parity)+'産目';}
 
 function pigletAgeText(birthDate,day=today()){const birth=Date.parse(birthDate+'T00:00:00Z'),now=Date.parse(day+'T00:00:00Z');if(!Number.isFinite(birth)||!Number.isFinite(now))return '日令不明';const days=Math.round((now-birth)/86400000);return days<0?'出産日を確認':days+'日令';}
 let ageDisplayDay=today();setInterval(()=>{const day=today();if(day!==ageDisplayDay){ageDisplayDay=day;if(!fatal&&!dlg.open)render();}},60000);

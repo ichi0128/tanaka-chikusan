@@ -800,3 +800,13 @@ test('notebook printing keeps room mapping, shorter dates, section order and rea
  for(const label of ['当月実数','当月計画','前年実績','今年計画','今年実績'])assert.ok(plan.includes(label));
  assert.equal(b.storage.getItem('tanaka-db'),before);
 });
+
+test('farrowing parity display follows the current parity card after correction without adding birth logs again',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`save(d=>{for(const [id,roomKey,date,count] of [['18','r6','2026-11-07',14],['51','r7','2026-11-15',11]]){const s=d.sows.find(s=>s.id===id),key='parity-display-'+id;d.logs.push({key,type:'分娩',id,date,roomKey,count});s.parityCards={version:1,history:[],current:{key:'corrected-'+id,parity:7,card:{...M.clone(s.cardBaseline),parity:7,birthDateActual:date,birthCount:count},revisions:[],capturedKeys:[key],source:'確認済みの産次'}};}});`);
+ const before=b.storage.getItem('tanaka-db');
+ for(const id of ['18','51']){assert.equal(run(`sowParityText('${id}')`),'7産目');assert.equal(run(`TanakaSowParity.pages(db,'${id}')[0].parity`),7);}
+ assert.equal((run('rooms()').match(/7産目/g)||[]).length,2);assert.equal(b.storage.getItem('tanaka-db'),before);
+ run(`save(d=>{const p=TanakaSowParity.pages(d,'18')[0];TanakaSowParity.edit(d,'18',p.key,{...p.card,parity:8},JSON.stringify(p));});`);
+ assert.equal(run("sowParityText('18')"),'8産目');assert.equal(run("sowParityText('51')"),'7産目');
+});
