@@ -1,10 +1,11 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.18.0';
+const APP_VERSION='1.18.1';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
 let simulation=null,dataSession=0;
+let yardViewport=null;
 let openPigletCare=new Set();
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const today=()=>{if(simulation)return simulation.day;const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
@@ -57,8 +58,8 @@ function yardSowList(){
   return Object.values(state.sows).filter(s=>s.active&&!s.numberPending&&!TanakaGilts.isGilt(s)&&!present.has(s.id)&&!TanakaNurseryYard.inNursery(state,s.id)).sort((a,b)=>(due.get(a.id)||'9999-12-31').localeCompare(due.get(b.id)||'9999-12-31')||a.id.localeCompare(b.id,'ja',{numeric:true}));
 }
 function sowList(){
-  const yardSows=yardSowList(),yardGilts=yardGiltList(),card=(s,quick=false)=>quick?`<div class="sow-yard-item">${simulationSowBadge(s.id)}${sowCardMarkup(s,null,null,false,true)}<button type="button" class="sow-card-open" data-action="detail" data-id="${esc(s.id)}" aria-label="母豚 ${esc(sowIdentityLabel(s.id))}の詳細"></button></div>`:`<button type="button" class="sow-card-link" data-action="detail" data-id="${esc(s.id)}" aria-label="母豚 ${esc(sowIdentityLabel(s.id))}の詳細">${simulationSowBadge(s.id)}${sowCardMarkup(s)}</button>`;
-  return `<div class="subhead"><h2>現役母豚（運動場）</h2><span class="badge green">${yardSows.length+yardGilts.length}頭</span></div><p class="muted sow-swipe-hint">左から出産予定が近い順 · 育成母豚は右端 · 左右にスワイプして確認</p><div class="sow-yard-swipe" role="region" aria-label="運動場の母豚カード・出産予定順" tabindex="0">${[...yardSows,...yardGilts].map(s=>card(s,true)).join('')||'<div class="empty">該当する母豚はいません</div>'}</div><div class="sow-yard-tools"><button class="btn" data-action="add">＋ 新規母豚を追加</button><div class="card"><b>育成母豚 ${TanakaInventory.gilts(state)}頭</b><p class="muted">現役母豚とは別枠・肉豚総数には含めません</p></div>${nurseryYardIndividualCards()}${giltCards()}${maternalTree()}<h2>廃豚済み（履歴保持）</h2><div class="sow-cards">${Object.values(state.sows).filter(s=>!s.active).map(s=>card(s)).join('')||'<div class="empty">該当する母豚はいません</div>'}</div></div>`;
+  const yardSows=yardSowList(),yardGilts=yardGiltList(),card=(s,quick=false)=>quick?`<div class="sow-yard-item" data-sow-id="${esc(s.id)}">${simulationSowBadge(s.id)}${sowCardMarkup(s,null,null,false,true)}<button type="button" class="sow-card-open" data-action="detail" data-id="${esc(s.id)}" aria-label="母豚 ${esc(sowIdentityLabel(s.id))}の詳細"></button></div>`:`<button type="button" class="sow-card-link" data-action="detail" data-id="${esc(s.id)}" aria-label="母豚 ${esc(sowIdentityLabel(s.id))}の詳細">${simulationSowBadge(s.id)}${sowCardMarkup(s)}</button>`;
+  return `<div class="subhead"><h2>現役母豚（運動場）</h2><span class="badge green">${yardSows.length+yardGilts.length}頭</span></div><p class="muted sow-swipe-hint">左から出産予定が近い順 · 育成母豚は右端 · 左右にスワイプして確認</p><div class="sow-yard-swipe" data-yard-session="${dataSession}" role="region" aria-label="運動場の母豚カード・出産予定順" tabindex="0">${[...yardSows,...yardGilts].map(s=>card(s,true)).join('')||'<div class="empty">該当する母豚はいません</div>'}</div><div class="sow-yard-tools"><button class="btn" data-action="add">＋ 新規母豚を追加</button><div class="card"><b>育成母豚 ${TanakaInventory.gilts(state)}頭</b><p class="muted">現役母豚とは別枠・肉豚総数には含めません</p></div>${nurseryYardIndividualCards()}${giltCards()}${maternalTree()}<h2>廃豚済み（履歴保持）</h2><div class="sow-cards">${Object.values(state.sows).filter(s=>!s.active).map(s=>card(s)).join('')||'<div class="empty">該当する母豚はいません</div>'}</div></div>`;
 }
 
 function sowCardDate(raw){return String(raw??'').replace(/^\d{4}-(\d{2})-(\d{2})(.*)$/,(_,m,d,suffix)=>Number(m)+'/'+Number(d)+suffix);}
@@ -86,11 +87,29 @@ function boarEdit(id=''){
   });
   document.getElementById('boarName').readOnly=!!existing;
 }
+// Transient view state: preserve the visible individual, not their old sort index.
+function rememberYardViewport(){
+  const host=document.querySelector('.sow-yard-swipe');if(!host)return;
+  if(Number(host.dataset.yardSession)!==dataSession){yardViewport=null;return;}
+  const cards=Array.from(host.children).filter(el=>el.dataset.sowId);if(!cards.length){yardViewport=null;return;}
+  const origin=cards[0].offsetLeft;
+  const index=cards.reduce((best,card,i)=>Math.abs(card.offsetLeft-origin-host.scrollLeft)<Math.abs(cards[best].offsetLeft-origin-host.scrollLeft)?i:best,0);
+  yardViewport={session:dataSession,id:cards[index].dataset.sowId,index,fraction:(host.scrollLeft-(cards[index].offsetLeft-origin))/(host.clientWidth||1)};
+}
+function restoreYardViewport(){
+  if(page!=='sows'||!yardViewport||yardViewport.session!==dataSession)return;
+  const host=document.querySelector('.sow-yard-swipe');if(!host)return;
+  const cards=Array.from(host.children).filter(el=>el.dataset.sowId);if(!cards.length)return;
+  const card=cards.find(el=>el.dataset.sowId===yardViewport.id)||cards[Math.min(yardViewport.index,cards.length-1)];
+  host.scrollLeft=Math.max(0,card.offsetLeft-cards[0].offsetLeft+(card.dataset.sowId===yardViewport.id?yardViewport.fraction*host.clientWidth:0));
+}
 function render(){
+  rememberYardViewport();
   updateSimulationBanner();
   openPigletCare=page==='rooms'?new Set([...document.querySelectorAll('details.piglet-care[open]')].map(el=>el.dataset.careRoom)):new Set();
   if(fatal){app.innerHTML=`<h2>保存データを読み込めません</h2><div class="notice">${esc(fatal)}<br>保存データは削除していません。</div><button class="btn" data-action="raw-export">元データを保存</button><button class="btn secondary" data-action="recovery-export">以前の保存データを取り出す</button>`;return;}
   app.innerHTML=simulationProgressSummary()+({home,sows:sowList,detail,rooms,nursery,finishing,shipments:shipmentHistory,consignments:consignmentHistory,forecast:farrowingForecastPage,records,edit,schedules,todayTasks:todayTasksPage,updates,inventory:inventoryPage}[page]||home)()+`<footer>田中畜産<br>確認できていない情報は未入力で表示</footer>`;
+  restoreYardViewport();
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.page===(page==='detail'?'sows':page==='shipments'?'finishing':page==='forecast'?'rooms':page)?'page':'false'));
   inventoryQueuePlanRepair();
   inventoryQueueBoarSync();

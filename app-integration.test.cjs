@@ -848,3 +848,13 @@ test('old birth records keep original totals and stillborn unless total is expli
  b.context.input=form({birthTotal:'',count:'9'});run('birthForm.action(input)');assert.equal(run('db.logs.at(-1).birthTotal===undefined'),true);assert.equal(run('db.logs.at(-1).stillborn'),2);
  run(`record('分娩','98','r1',db.logs.find(l=>l.key===oldBirthKey));`);b.context.input=form({birthTotal:'11',count:'9'});run('birthForm.action(input)');assert.equal(run('roomBirthCount(state.rooms[0])'),11);assert.equal(run('state.rooms[0].count'),9);assert.equal(run('TanakaAnnual.summary(db,today().slice(0,4)).piglets.automatic'),11);
 });
+
+test('yard redraw and detail return retain the visible sow across sorting, removal and viewport changes without saving view state',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`var fakeYard=null,nextYard=null,renderedHtml='';function yardHost(ids,width,left=0,session=dataSession){return {dataset:{yardSession:String(session)},clientWidth:width,scrollLeft:left,children:ids.map((id,i)=>({dataset:{sowId:id},offsetLeft:12+i*width}))};}document.querySelector=s=>s==='.sow-yard-swipe'?fakeYard:null;Object.defineProperty(app,'innerHTML',{get(){return renderedHtml;},set(value){renderedHtml=value;if(nextYard){fakeYard=nextYard;nextYard=null;}}});page='sows';fakeYard=yardHost(['46','53','21'],320,640);nextYard=yardHost(['21','46','53'],360);save(d=>d.sows[0].note='test edit');`);
+ assert.equal(run('fakeYard.scrollLeft'),0);assert.equal(run('yardViewport.id'),'21');
+ run(`fakeYard=yardHost(['21','46','53'],360,360);go('detail','46');fakeYard=null;nextYard=yardHost(['53','21','46'],300);go('sows');`);assert.equal(run('fakeYard.scrollLeft'),600);
+ run(`nextYard=yardHost(['53','21'],300);render();`);assert.equal(run('fakeYard.scrollLeft'),300);
+ const saved=b.storage.getItem('tanaka-db');run(`rememberYardViewport();restoreYardViewport();`);assert.equal(b.storage.getItem('tanaka-db'),saved);assert.ok(!saved.includes('yardViewport'));
+ run(`dataSession++;nextYard=yardHost(['53','21'],300);render();`);assert.equal(run('fakeYard.scrollLeft'),0);assert.equal(run('yardViewport'),null);
+});
