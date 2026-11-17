@@ -4,7 +4,7 @@
 const M=root.TanakaModel,F=root.TanakaFinishing,P=root.TanakaSowParity,FF=root.TanakaForecast;
 const add=FF.add,valid=FF.valid,clone=M.clone;
 function birthEstimate(data,id){
-  const pages=P.pages(data,id);for(const p of pages){const n=p.card.birthCount;if(Number.isInteger(n)&&n>=0)return {count:n,source:'同じ母豚の直近の出生頭数を仮使用'};}
+  const pages=P.pages(data,id);for(const p of pages){const n=p.card.liveBirthCount??p.card.birthCount;if(Number.isInteger(n)&&n>=0)return {count:n,source:'同じ母豚の直近の出生頭数を仮使用'};}
   const births=data.logs.filter(l=>!l.legacy&&l.id===id&&l.type==='分娩'&&Number.isInteger(l.count)).sort((a,b)=>b.date.localeCompare(a.date));
   if(births.length)return {count:births[0].count,source:'同じ母豚の直近の出生頭数を仮使用'};
   const room=M.replay(data).rooms.find(r=>r.sowId===id&&Number.isInteger(r.birthCount));

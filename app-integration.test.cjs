@@ -762,7 +762,7 @@ test('automatic movement persists through cloud and JSON, invalidates forecasts 
 });
 test('farrowing cards hide room numbers while retaining exact card content, and linked breeding individuals count at their physical destination once',()=>{
  const b=boot(),run=s=>vm.runInContext(s,b.context);run(`go('rooms');`);const html=b.elements.get('app').innerHTML;
- assert.doesNotMatch(html,/\d+号室|<span class="farrowing-room-number">/);assert.equal((html.match(/class="card room(?: [^"]*)?"/g)||[]).length,10);assert.match(html,/分娩待ち|授乳/);assert.match(html,/出生－現在/);assert.match(html,/data-action="room-record"/);assert.match(html,/512/);
+ assert.doesNotMatch(html,/\d+号室|<span class="farrowing-room-number">/);assert.equal((html.match(/class="card room(?: [^"]*)?"/g)||[]).length,10);assert.match(html,/分娩待ち|授乳/);assert.match(html,/総数－生存数/);assert.match(html,/data-action="room-record"/);assert.match(html,/512/);
  run(`save(d=>{d.finishingBaseline=F.baseline(d);const yard=d.finishingBaseline.find(r=>r.key==='yard');Object.assign(yard,F.yardState({individuals:[F.yardPig({kind:'育成母豚',birthDate:'2024-01-01',registeredSowId:'21'},'linked-21')]}));I.saveReport(d,I.create(d,M.replay(d),today().slice(0,7),today(),r=>M.roomBirthDate(d,r)),'null');});const linkedBefore=I.farmSummary(I.create(db,state,today().slice(0,7),today(),r=>M.roomBirthDate(db,r)));enterWaiting('21');`);
  assert.equal(run("I.farmSummary(I.create(db,state,today().slice(0,7),today(),r=>M.roomBirthDate(db,r))).areaTotals.farrowing===linkedBefore.areaTotals.farrowing+1"),true);assert.equal(run("I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal===linkedBefore.farmTotal"),true);assert.equal(run("db.inventoryMonths[today().slice(0,7)].rows.some(r=>r.area==='yard'&&r.registeredSowId==='21')"),false);
  run(`save(d=>TanakaSowWork.undo(d,d.logs.at(-1).key,{...makeLog('追記','')}));`);assert.equal(run("db.inventoryMonths[today().slice(0,7)].rows.some(r=>r.area==='yard'&&r.registeredSowId==='21')"),true);assert.equal(run("I.farmSummary(db.inventoryMonths[today().slice(0,7)]).farmTotal===linkedBefore.farmTotal"),true);
@@ -809,4 +809,42 @@ test('farrowing parity display follows the current parity card after correction 
  assert.equal((run('rooms()').match(/7産目/g)||[]).length,2);assert.equal(b.storage.getItem('tanaka-db'),before);
  run(`save(d=>{const p=TanakaSowParity.pages(d,'18')[0];TanakaSowParity.edit(d,'18',p.key,{...p.card,parity:8},JSON.stringify(p));});`);
  assert.equal(run("sowParityText('18')"),'8産目');assert.equal(run("sowParityText('51')"),'7産目');
+});
+
+function birthFormFixture(){
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`save(d=>{d.logs=[];d.baseline.forEach(r=>Object.assign(r,{state:'empty',sowId:'',count:null,birthDate:''}));Object.assign(d.baseline[0],{state:'waiting',sowId:'98',entryKey:'birth-entry-98'});const sow=d.sows.find(s=>s.id==='98');sow.parityCards={version:1,history:[{key:'known-parity-3',parity:3,card:{birthDateActual:'2025-06-05',birthCount:6},revisions:[]}],current:{key:'baseline',parity:4,card:{...M.clone(sow.cardBaseline),birthDateActual:''},capturedKeys:[],revisions:[],source:'元カード'}};});let birthForm;form=(title,html,label,action)=>{birthForm={title,html,label,action};};record('分娩','98','r1');`);
+ return {b,run,form:(patch={})=>new Map(Object.entries({id:'98',roomKey:'r1',date:run('today()'),birthTime:'22:00',birthTotal:'14',count:'13',note:'',...patch}))};
+}
+test('waiting-room birth fixes its mother and destination and records total/alive with computed stillborn',()=>{
+ const {b,run,form}=birthFormFixture(),html=run('birthForm.html'),before=b.storage.getItem('tanaka-db');
+ assert.match(run('birthForm.title'),/母豚 98/);assert.doesNotMatch(html,/入室先|<select[^>]*(?:id="id"|id="roomKey")/);assert.match(html,/出産総数（死産を含む）/);assert.match(html,/生存頭数（生きて生まれた数）/);assert.doesNotMatch(html,/name="stillborn"/);
+ b.context.input=form({id:'51'});assert.throws(()=>run('birthForm.action(input)'),/対象の母豚/);assert.equal(b.storage.getItem('tanaka-db'),before);
+ b.context.input=form({roomKey:'r2'});assert.throws(()=>run('birthForm.action(input)'),/対象の母豚/);assert.equal(b.storage.getItem('tanaka-db'),before);
+ b.context.input=form();run('birthForm.action(input)');
+ assert.equal(run('state.rooms[0].count'),13);assert.equal(run('roomBirthCount(state.rooms[0])'),14);assert.equal(run('db.logs.at(-1).birthTotal'),14);assert.equal(run('db.logs.at(-1).stillborn'),1);assert.equal(run("TanakaSowParity.pages(db,'98')[0].card.birthCount"),14);assert.equal(run("sowParityText('98')"),'4産目');
+ assert.equal(run('TanakaAnnual.summary(db,today().slice(0,4)).piglets.automatic'),14);assert.match(run('feedBoxCard(state.rooms[0])'),/14－13/);
+ run(`save(d=>Deaths.finalize(d,{token:'farrowing:r1',date:today(),now:today(),count:3}));`);assert.equal(run('state.rooms[0].count'),10);assert.equal(run('roomBirthCount(state.rooms[0])'),14);assert.match(run('feedBoxCard(state.rooms[0])'),/14－10/);assert.equal(run('TanakaAnnual.summary(db,today().slice(0,4)).piglets.automatic'),14);
+ run(`save(d=>{const l=TanakaWeaning.createLog(d,{id:'98',roomKey:'r1',date:today(),count:10});TanakaSowParity.beforeRecord(d,'98',l);d.logs.push(l);});`);
+ assert.equal(run("TanakaSowParity.pages(db,'98').find(p=>p.card.birthDateActual===today()).card.birthCount"),14);
+ assert.equal(run("TanakaSowParity.pages(db,'98').find(p=>p.card.birthDateActual===today()).card.weanCount"),10);
+ const copy=JSON.parse(b.storage.getItem('tanaka-db'));b.context.copy=copy;assert.equal(run('JSON.stringify(M.migrate(copy))===JSON.stringify(db)'),true);assert.equal(run('JSON.stringify(new TanakaCloud.CloudStore({model:M}).validate(copy))===JSON.stringify(db)'),true);
+});
+test('birth counts reject missing, fractional, negative and greater-than-total alive counts; zero survivors remain valid',()=>{
+ const {b,run,form}=birthFormFixture(),before=b.storage.getItem('tanaka-db');
+ for(const patch of [{birthTotal:''},{count:''},{count:'15'},{birthTotal:'-1'},{count:'1.5'}]){b.context.input=form(patch);assert.throws(()=>run('birthForm.action(input)'),/頭数|総数/);assert.equal(b.storage.getItem('tanaka-db'),before);}
+ b.context.input=form({birthTotal:'3',count:'0'});run('birthForm.action(input)');assert.equal(run('state.rooms[0].count'),0);assert.equal(run('roomBirthCount(state.rooms[0])'),3);assert.equal(run('db.logs.at(-1).stillborn'),3);
+ b.context.bad=JSON.parse(b.storage.getItem('tanaka-db'));b.context.bad.logs.at(-1).stillborn=1;assert.throws(()=>run('M.migrate(bad)'),/一致/);
+});
+test('birth form is atomic on a stale page and storage failure and generic entry still offers a destination',()=>{
+ const {b,run,form}=birthFormFixture();b.context.input=form();run(`save(d=>d.sows[0].note='changed');`);const current=b.storage.getItem('tanaka-db');assert.throws(()=>run('birthForm.action(input)'),/更新/);assert.equal(b.storage.getItem('tanaka-db'),current);
+ run(`record('分娩','98','r1');`);const put=b.storage.setItem;b.storage.setItem=()=>{throw Error('disk full');};assert.throws(()=>run('birthForm.action(input)'),/disk full/);assert.equal(b.storage.getItem('tanaka-db'),current);b.storage.setItem=put;
+ run(`record('分娩');`);assert.match(run('birthForm.html'),/入室先/);
+});
+test('old birth records keep original totals and stillborn unless total is explicitly supplied when edited',()=>{
+ const {b,run,form}=birthFormFixture();
+ run(`save(d=>d.logs.push({...makeLog('分娩','98'),roomKey:'r1',count:9,stillborn:2}));var oldBirthKey=db.logs.at(-1).key;record('分娩','98','r1',db.logs.at(-1));`);
+ assert.equal(run('roomBirthCount(state.rooms[0])'),9);assert.equal(run('TanakaAnnual.summary(db,today().slice(0,4)).piglets.automatic'),9);assert.match(run('birthForm.html'),/旧記録は総数未登録/);
+ b.context.input=form({birthTotal:'',count:'9'});run('birthForm.action(input)');assert.equal(run('db.logs.at(-1).birthTotal===undefined'),true);assert.equal(run('db.logs.at(-1).stillborn'),2);
+ run(`record('分娩','98','r1',db.logs.find(l=>l.key===oldBirthKey));`);b.context.input=form({birthTotal:'11',count:'9'});run('birthForm.action(input)');assert.equal(run('roomBirthCount(state.rooms[0])'),11);assert.equal(run('state.rooms[0].count'),9);assert.equal(run('TanakaAnnual.summary(db,today().slice(0,4)).piglets.automatic'),11);
 });

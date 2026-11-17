@@ -8,7 +8,7 @@ const count=n=>Number.isSafeInteger(n)&&n>=0?n:null;
 const yearOK=y=>/^\d{4}$/.test(String(y))&&Number(y)>=1000&&Number(y)<=9999;
 function births(data){
  const logs=data.logs||[],actual=logs.filter(l=>!l.legacy&&l.type==='分娩'&&iso(l.date)),deleted=(data.deletedLogs||[]).filter(l=>!l.legacy&&l.type==='分娩');
- const rows=actual.map(l=>({key:l.key,id:l.id,date:l.date,count:count(l.count),dateAt:l.updatedAt||l.t||'',countAt:l.updatedAt||l.t||''}));
+ const rows=actual.map(l=>({key:l.key,id:l.id,date:l.date,count:count(M.birthTotal(l)),dateAt:l.updatedAt||l.t||'',countAt:l.updatedAt||l.t||''}));
  // Room birth-headcount corrections belong to the preceding actual birth, never to a mixed group.
  logs.forEach((l,i)=>{if(l.type!=='分娩舎修正'||l.legacy||!['family','piglets'].includes(l.room?.state)||l.room.mixed)return;
   const b=logs.slice(0,i).filter(b=>b.type==='分娩'&&!b.legacy&&b.id===l.id&&b.roomKey===l.roomKey).at(-1),row=rows.find(r=>r.key===b?.key);if(!row)return;

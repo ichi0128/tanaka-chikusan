@@ -7,7 +7,7 @@ const number=v=>v!==''&&v!==null&&v!==undefined&&Number.isSafeInteger(Number(v))
 function apply(card,events){
   for(const l of events){
     M.applyReproductionEvent(card,l);
-    if(l.type==='分娩'){card.wean='';card.weanDateActual='';card.weanCount=null;card.weanNote='';card.weanOperator='';card.nursingDays=null;card.birthDateActual=l.date;card.birthTime=l.birthTime||'';card.birthCount=l.count??null;card.stillborn=l.stillborn??null;card.birthNote=l.note||'';card.result=(l.count??'')+'－';}
+    if(l.type==='分娩'){card.wean='';card.weanDateActual='';card.weanCount=null;card.weanNote='';card.weanOperator='';card.nursingDays=null;card.birthDateActual=l.date;card.birthTime=l.birthTime||'';card.birthCount=M.birthTotal(l);if(l.birthTotal!==undefined)card.liveBirthCount=l.count;else delete card.liveBirthCount;card.stillborn=l.stillborn??null;card.birthNote=l.note||'';card.result=(M.birthTotal(l)??'')+'－';}
     if(l.type==='離乳'){
       if(!card.birthDateActual&&l.birthDate)card.birthDateActual=l.birthDate;
       if(card.birthCount==null&&Number.isInteger(l.sourceRoom?.birthCount))card.birthCount=l.sourceRoom.birthCount;
@@ -102,7 +102,7 @@ function performance(data,id,key){
   const logs=events(data,id),wean=logs.filter(l=>l.type==='離乳').at(-1);
   if(wean){
     const birth=logs.filter(l=>l.type==='分娩'&&l.date<=wean.date).at(-1);
-    return {...cardPerformance({birthCount:wean.sourceRoom?.birthCount??birth?.count??null,weanCount:wean.count??null,weanDateActual:wean.date}),previous:true,sourceKey:wean.key};
+    return {...cardPerformance({birthCount:wean.sourceRoom?.birthCount??(birth?M.birthTotal(birth):null),weanCount:wean.count??null,weanDateActual:wean.date}),previous:true,sourceKey:wean.key};
   }
   return cardPerformance(card);
 }
@@ -149,7 +149,9 @@ function beforeRecord(data,id,log){
   if(log.type==='種付け'&&!log.remating&&current.card.birthDateActual&&current.card.weanDateActual)start(data,id);
   else if(log.type==='分娩'&&current.source==='元カード'){
     start(data,id);
-    const card=data.sows.find(s=>s.id===id).parityCards.current.card;
+    const next=data.sows.find(s=>s.id===id).parityCards.current,card=next.card;
+    // An undelivered baseline card already names the upcoming parity.
+    if(!current.card.birthDateActual&&current.parity>0&&pages(data,id).some(p=>p.parity===current.parity-1&&p.card.birthDateActual)){next.parity=current.parity;card.parity=current.parity;}
     for(const k of ['boar','mating','reheat','due','swimgen','csf','reheatCount'])card[k]=clone(current.card[k]??'');
     if(current.card.plannedWeanDays!==undefined)card.plannedWeanDays=current.card.plannedWeanDays;
   }

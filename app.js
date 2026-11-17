@@ -1,6 +1,6 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.17.3';
+const APP_VERSION='1.18.0';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
@@ -32,7 +32,7 @@ function cardLink(title,value,sub,target,hint='',vacancy='',counts=[]){
 
 function workRecords(logs){return logs.filter(l=>!l.privateStockUse&&!['developer','system'].includes(l.origin));}
 function recordTitle(l){if(l.type==='種付け'&&l.remating)return '再種付け';return ({'移動取り消し':'移動取消','分娩舎修正':'分娩舎の情報を編集','育成舎修正':'育成舎の情報を編集'})[l.type]||l.type;}
-function history(logs,limit=Infinity){const visible=new Set(M.uniqueMatingLogs(db.logs));return logs.filter(l=>!l.privateStockUse&&visible.has(l)).slice().reverse().slice(0,limit).map(l=>`<button class="row row-action" data-action="log" data-id="${esc(l.key)}"><div><b>${esc(l.mix?mixRecordLabel(l):l.death?deathTargetLabel(l.death.target):l.nursery?.mixed||l.room?.mixed||l.finishingAfter?.mixed||l.sourceBefore?.mixed||l.mixed?'混成':sowIdentityLabel(l.id)||(l.finishingKey?'肉豚舎':l.nurseryKey?'育成舎':'分娩舎'))}　${esc(recordTitle(l))}${l.origin==='simulation'?' · 予測・仮想':''}</b><p class="muted">${esc(dateText(l))}${l.type==='分娩舎内移動'?' · '+esc(l.count)+'頭を移動':''}${l.nurseryKey?' · 育成舎':''}${l.finishingKey?' · '+esc(finishingPlace(l.finishingKey)):''}${l.type==='肉豚舎へ移動'?' · '+esc(l.sourceArea==='nursery'?'育成舎':finishingPlace(l.sourceKey))+'から '+esc(l.count)+'頭':''}${l.type==='肉豚出荷'?' · '+esc(l.count)+'頭出荷':''}${l.death?' · '+esc(l.count)+'頭':''}${l.type==='種付け'&&l.boar?' · '+esc(l.boar):''}${l.legacy?' · 旧版記録':''}${l.updatedAt?' · 修正済み':''}</p>${l.movement?`<p class="muted">${esc(l.movement.from.name)} → ${esc(l.movement.to.name)}</p>`:''}${l.type==='分娩'?`<p class="muted">${l.birthTime?esc(l.birthTime)+' · ':''}生存 ${l.count==null?'未入力':esc(l.count)+'頭'} － 死産 ${l.stillborn==null?'未入力':esc(l.stillborn)+'頭'}</p>`:''}${l.type==='離乳'&&l.operator?`<p class="muted">操作者：${esc(l.operator)}${l.nursingDays!==null&&l.nursingDays!==undefined?' · 授乳'+l.nursingDays+'日':''}</p>`:''}${l.type==='再発情確認'&&l.failedMating?`<p class="muted">前回種付け：${esc(sowCardDate(l.failedMating.date))} ${esc(l.failedMating.boar||'')} · 不成立（${esc(l.failedMating.parity??'—')}産）</p>`:''}${l.note?`<p class="muted history-note">${esc(l.note)}</p>`:''}</div><span class="chev">›</span></button>`).join('')||'<div class="empty">まだ記録はありません</div>';}
+function history(logs,limit=Infinity){const visible=new Set(M.uniqueMatingLogs(db.logs));return logs.filter(l=>!l.privateStockUse&&visible.has(l)).slice().reverse().slice(0,limit).map(l=>`<button class="row row-action" data-action="log" data-id="${esc(l.key)}"><div><b>${esc(l.mix?mixRecordLabel(l):l.death?deathTargetLabel(l.death.target):l.nursery?.mixed||l.room?.mixed||l.finishingAfter?.mixed||l.sourceBefore?.mixed||l.mixed?'混成':sowIdentityLabel(l.id)||(l.finishingKey?'肉豚舎':l.nurseryKey?'育成舎':'分娩舎'))}　${esc(recordTitle(l))}${l.origin==='simulation'?' · 予測・仮想':''}</b><p class="muted">${esc(dateText(l))}${l.type==='分娩舎内移動'?' · '+esc(l.count)+'頭を移動':''}${l.nurseryKey?' · 育成舎':''}${l.finishingKey?' · '+esc(finishingPlace(l.finishingKey)):''}${l.type==='肉豚舎へ移動'?' · '+esc(l.sourceArea==='nursery'?'育成舎':finishingPlace(l.sourceKey))+'から '+esc(l.count)+'頭':''}${l.type==='肉豚出荷'?' · '+esc(l.count)+'頭出荷':''}${l.death?' · '+esc(l.count)+'頭':''}${l.type==='種付け'&&l.boar?' · '+esc(l.boar):''}${l.legacy?' · 旧版記録':''}${l.updatedAt?' · 修正済み':''}</p>${l.movement?`<p class="muted">${esc(l.movement.from.name)} → ${esc(l.movement.to.name)}</p>`:''}${l.type==='分娩'?`<p class="muted">${l.birthTime?esc(l.birthTime)+' · ':''}${l.birthTotal!==undefined?'総数 '+esc(l.birthTotal)+'頭 － ':''}生存 ${l.count==null?'未入力':esc(l.count)+'頭'}（出生時） · 死産 ${l.stillborn==null?'未入力':esc(l.stillborn)+'頭'}</p>`:''}${l.type==='離乳'&&l.operator?`<p class="muted">操作者：${esc(l.operator)}${l.nursingDays!==null&&l.nursingDays!==undefined?' · 授乳'+l.nursingDays+'日':''}</p>`:''}${l.type==='再発情確認'&&l.failedMating?`<p class="muted">前回種付け：${esc(sowCardDate(l.failedMating.date))} ${esc(l.failedMating.boar||'')} · 不成立（${esc(l.failedMating.parity??'—')}産）</p>`:''}${l.note?`<p class="muted history-note">${esc(l.note)}</p>`:''}</div><span class="chev">›</span></button>`).join('')||'<div class="empty">まだ記録はありません</div>';}
 
 function homeScheduleEntries(){return currentTaskGroups().all;}
 function scheduleHome(){return taskSchedulePage(page==='schedules'?'upcoming':'today');}
@@ -110,7 +110,7 @@ function installGlobalHomeButton(){
 
 function form(title,content,submit,action){const session=dataSession;modal.innerHTML=`<h2>${esc(title)}</h2><form id="form">${content}<p class="error" id="form-error" role="alert"></p><button class="btn" type="submit">${esc(submit)}</button><button class="btn secondary" type="button" data-action="close">閉じる</button></form>`;document.getElementById('form').onsubmit=e=>{e.preventDefault();try{if(session!==dataSession)throw Error('モードが切り替わりました。画面を開き直してください。');action(new FormData(e.target));dlg.close();if(submit!=='次へ')toast(simulation?'仮データを変更しました（本番保存なし）':'保存しました');}catch(err){document.getElementById('form-error').textContent=err.message;}};syncHeadcountControls();if(!dlg.open)dlg.showModal();}
 function field(name,label,value='',type='text',required=false){
-  const count=type==='number'&&/頭数|子豚数/.test(label);
+  const count=type==='number'&&/頭数|子豚数|出産総数/.test(label);
   const input=`<input id="${name}" name="${name}" type="${type}" value="${esc(value)}" ${required?'required':''} ${count?'min="0" step="1" inputmode="numeric" placeholder="未入力"':''}>`;
   return `<label for="${name}">${label}</label>`+(count?`<div class="headcount-controls"><button type="button" data-action="headcount-step" data-id="${name}" data-delta="-1" aria-label="${label}を1頭減らす">−1</button>${input}<button type="button" data-action="headcount-step" data-id="${name}" data-delta="1" aria-label="${label}を1頭増やす">＋1</button></div>`:input);
 }
@@ -141,6 +141,10 @@ function sowNumberSelect(name,value='',options={}){
   return (label?`<label for="${esc(id)}">${esc(label)}</label>`:'')+`<select class="sow-number-select" id="${esc(id)}" name="${esc(name)}" aria-label="${esc(ariaLabel)}" ${required?'required':''}>${sowNumberOptions(value,activeOnly)}</select>`;
 }
 function sowSelect(value='',activeOnly=true){return sowNumberSelect('id',value,{required:true,activeOnly});}
+function syncBirthCountPreview(){
+  const out=document.getElementById('birth-stillborn-preview');if(!out)return;
+  try{const c=M.birthCounts(document.getElementById('birthTotal')?.value,document.getElementById('count')?.value);out.textContent='死産 '+c.stillborn+'頭（自動計算）';}catch(e){out.textContent=e.message;}
+}
 function countValue(f){const n=f.get('count');if(n===null||n==='')return null;const v=Number(n);if(!Number.isInteger(v)||v<0)throw Error('子豚頭数は0以上の整数で入力してください。');return v;}
 function makeLog(type,id,note=''){return {key:M.uid(),origin:'operator',type,id,date:today(),t:new Date().toISOString(),note};}
 function profile(id){if(id&&state.sows[id]?.numberPending){editGiltProfile(id);return;}const s=id?state.sows[id]:{};form(id?'個体情報を編集':'新規母豚を追加',`<p class="muted">分からない項目は空欄のまま保存できます。番号を修正すると在室情報と履歴の番号も更新します。</p>${field('id','母豚番号',id||'','text',true)}${field('birthDate','生年月日',s.birthDate,'date')}${sowNumberSelect('mother',s.cardBaseline?.mother||'',{label:'母親番号（不明なら未選択）'})}${notes(s.note)}`,'保存する',f=>{
@@ -220,31 +224,38 @@ function record(type='追記',id='',roomKey='',existing=null,forecastChecked=fal
   const weanBasis=db;
   const legacy=!!existing?.legacy,changesRoom=!legacy&&['分娩','離乳','子豚移動'].includes(type),special=['廃豚','現役復帰'].includes(type);
   if(type==='分娩'&&!existing&&!roomKey&&id)roomKey=state.rooms.find(r=>r.state==='waiting'&&r.sowId===id)?.key||'';
+  const birthRoom=type==='分娩'&&!existing?state.rooms.find(r=>r.key===roomKey&&r.state==='waiting'&&r.sowId===id):null,lockedBirth=!!birthRoom;
   let roomOptions=state.rooms;
   if(!existing&&changesRoom)roomOptions=state.rooms.filter(r=>type==='分娩'?(r.state==='empty'||r.state==='waiting'&&(!id||r.sowId===id)):r.state===(type==='離乳'?'family':'piglets'));
-  let content=`<p class="muted">${legacy?'旧版記録です。内容の修正は履歴に反映し、在室状態は変更しません。':special?'状態の変更を履歴に残します。':changesRoom?'保存すると分娩舎の状態も更新します。':'実際に行った日付を入力してください。'}</p>`;
+  let content=lockedBirth?'':`<p class="muted">${legacy?'旧版記録です。内容の修正は履歴に反映し、在室状態は変更しません。':special?'状態の変更を履歴に残します。':changesRoom?'保存すると分娩舎の状態も更新します。':'実際に行った日付を入力してください。'}</p>`;
   if(existing&&!legacy&&!existing.profileAfter)content+=`<label for="recordType">記録内容</label><select id="recordType">${M.TYPES.filter(t=>!Deaths.TYPES.includes(t)&&(t!=='廃豚'||existing.type==='廃豚')&&!TanakaFinishing.TYPES.includes(t)&&!['分娩舎へ移動','移動取り消し','分娩舎内移動','分娩舎修正','育成舎修正','育成舎から移動'].includes(t)).map(t=>`<option ${t===type?'selected':''}>${t}</option>`).join('')}</select>`;
   if(legacy)content+=sowNumberSelect('id',id,{label:'母豚番号（保存済みの複数番号も保持）'})+field('type','記録内容',type,'text',true);
-  else content+=sowSelect(id,type!=='現役復帰');
+  else content+=lockedBirth?`<input type="hidden" id="id" name="id" value="${esc(id)}">`:sowSelect(id,type!=='現役復帰');
   content+=field('date',type==='分娩'?'出産日':type==='離乳'?'実離乳日':'作業日',existing?.date||(existing?.t&&Number.isFinite(Date.parse(existing.t))?existing.t.slice(0,10):today()),'date',true);
-  if(changesRoom)content+=`<label for="roomKey">${type==='分娩'?'入室先':'対象の部屋'}</label><select id="roomKey" name="roomKey" required><option value="">選択してください</option>${roomOptions.map(r=>`<option value="${r.key}" ${r.key===roomKey?'selected':''}>${esc(roomName(r))}${r.sowId?' · '+esc(r.sowId):''}</option>`).join('')}</select>`;
-  if(!legacy&&type==='分娩')content+=field('birthTime','出産時刻（不明なら空欄）',existing?.birthTime||'','time')+`<p class="muted">頭数は「生存－死産」で記録します。生存頭数が授乳中の子豚数になります。</p><div class="birth-counts"><div>${field('count','生存頭数',existing?.count??'','number',true)}</div><span aria-hidden="true">－</span><div>${field('stillborn','死産頭数（不明なら空欄）',existing?.stillborn??'','number')}</div></div>`;
+  if(lockedBirth)content+=`<input type="hidden" id="roomKey" name="roomKey" value="${esc(roomKey)}">`;
+  else if(changesRoom)content+=`<label for="roomKey">${type==='分娩'?'入室先':'対象の部屋'}</label><select id="roomKey" name="roomKey" required><option value="">選択してください</option>${roomOptions.map(r=>`<option value="${r.key}" ${r.key===roomKey?'selected':''}>${esc(roomName(r))}${r.sowId?' · '+esc(r.sowId):''}</option>`).join('')}</select>`;
+  if(!legacy&&type==='分娩')content+=field('birthTime','出産時刻（不明なら空欄）',existing?.birthTime||'','time')+`<p class="muted">死産を含む総数と、生きて生まれた頭数を入力してください。</p>${existing&&existing.birthTotal===undefined?'<p class="notice">旧記録は総数未登録です。総数を入力した場合だけ新しい記録方式に切り替えます。空欄なら従来の数字を保持します。</p>':''}<div class="birth-counts"><div>${field('birthTotal','出産総数（死産を含む）',existing?.birthTotal??'','number',!existing||existing.birthTotal!==undefined)}</div><span aria-hidden="true">－</span><div>${field('count','生存頭数（生きて生まれた数）',existing?.count??'','number',true)}</div></div><p id="birth-stillborn-preview" class="muted" role="status" aria-live="polite"></p>`;
   if(!legacy&&type==='離乳')content+=field('count','子豚頭数（不明なら空欄）',existing?.count??'','number');
   if(type==='子豚移動'&&!legacy)content+=`<label for="nurseryKey">移動先の育成舎</label><select id="nurseryKey" name="nurseryKey" ${existing&&!existing.nurseryKey?'':'required'}><option value="">${existing?'旧記録：移動先未登録':'選択してください'}</option>${state.nursery.filter(n=>n.state==='empty'||n.key===existing?.nurseryKey).map(n=>`<option value="${n.key}" ${n.key===existing?.nurseryKey?'selected':''}>${esc(nurseryName(n))}</option>`).join('')}</select><p class="muted">全頭を移動し、頭数を引き継ぎます。移動先が未確認の場合は育成舎タブで空きを確認してください。</p>`;
   if(!legacy&&type==='種付け'&&!existing)content+=matingModeField(id);
   if(!legacy&&type==='種付け')content+=field('boar','種雄豚番号（例：B1・B2）',existing?.boar||M.sowCard(db,id).boar||'')+`<label for="matingKind">種付けの区分</label><select id="matingKind" name="matingKind"><option value="normal">通常の種付け</option><option value="return" ${(existing?.remating||!existing&&(requestedRemating||M.isReheatPending(db,id)))?'selected':''}>再発情後の種付け</option></select><p class="muted">実際に種付けした日を記録します。再発情確認とは別に保存し、同じ産次の予定を更新します。</p>`;
   if(type==='種付け'&&!existing)content+='<div id="ff-breeding-verdict"></div>';
   if(type==='再発情確認'&&!existing)content+='<p class="notice">再発情を確認した事実だけを保存します。再発回数を1回増やし、再種付け待ちにします。種付けは実施したときに別操作で記録できます。</p>';
-  content+=notes(existing?.note||'');
+  content+=type==='分娩'&&!existing?`<details><summary>メモ（任意）</summary>${notes('')}</details>`:notes(existing?.note||'');
   form(existing?'記録を修正':(type==='分娩'?'母豚 '+id+' · 分娩':type==='子豚移動'?'育成舎へ移動':type)+'',content,existing?'修正を保存':type==='再発情確認'?'保存':'記録する',f=>{
     const selectedRoom=state.rooms.find(r=>r.key===f.get('roomKey')),target=type==='子豚移動'&&(selectedRoom?.mixed||existing?.id==='')?'':f.get('id');if(!legacy&&!state.sows[target]&&!(type==='子豚移動'&&(selectedRoom?.mixed||existing?.id==='')))throw Error('登録済みの母豚を選んでください。');
+    if(type==='分娩'&&!existing){
+      if(db!==weanBasis)throw Error('記録が更新されています。分娩ボタンから開き直してください。');
+      if(!I.validDate(String(f.get('date')||''))||f.get('date')>today())throw Error('出産日は今日以前の日付で入力してください。');
+      if(lockedBirth&&(target!==id||f.get('roomKey')!==roomKey||selectedRoom?.state!=='waiting'||selectedRoom.sowId!==id||selectedRoom.entryKey!==birthRoom.entryKey))throw Error('対象の母豚・部屋が変わっています。分娩ボタンから開き直してください。');
+    }
     if(!legacy&&type==='種付け'&&!existing&&f.get('matingMode')==='supplement'){save(d=>TanakaSowParity.addBoar(d,target,String(f.get('boar')||'')));return;}
     let l={...(existing||makeLog(type,target)),id:target,date:f.get('date'),note:f.get('note'),type:legacy?String(f.get('type')).trim():type};
     if(type==='離乳'&&!legacy){if(!existing){if(db!==weanBasis)throw Error('記録が更新されています。離乳ボタンから判定を確認し直してください。');if(!FF.valid(String(f.get('date')||''))||f.get('date')>today())throw Error('実際の離乳日を今日以前の日付で入力してください。');if(target!==id||f.get('roomKey')!==roomKey)throw Error('母豚・部屋が変わっています。離乳ボタンから判定を確認し直してください。');l=TanakaWeaning.createLog(db,{id:target,roomKey:f.get('roomKey'),date:f.get('date'),operator:f.get('operator'),count:countValue(f),note:f.get('note'),key:l.key,t:l.t});}else{l.operator=String(f.get('operator')||existing.operator||'').trim();if(FF.valid(l.birthDate))l.nursingDays=FF.distance(l.birthDate,l.date);}}
     if(!l.type)throw Error('記録内容を入力してください。');
     if(!legacy&&type==='種付け'){l.boar=String(f.get('boar')||'').trim();l.remating=f.get('matingKind')==='return';}
     if(type==='子豚移動'&&!legacy){l.nurseryKey=f.get('nurseryKey')||'';if(!existing&&!l.nurseryKey)throw Error('移動先の育成舎を選んでください。');}
-    if(type==='分娩'&&!legacy){l.birthTime=f.get('birthTime')||'';const value=f.get('stillborn');l.stillborn=value===null||value===''?null:Number(value);if(l.stillborn!==null&&(!Number.isInteger(l.stillborn)||l.stillborn<0))throw Error('死産頭数は0以上の整数で入力してください。');}
+    if(type==='分娩'&&!legacy){l.birthTime=f.get('birthTime')||'';if(!existing||existing.birthTotal!==undefined||String(f.get('birthTotal')||'').trim()!=='')Object.assign(l,M.birthCounts(f.get('birthTotal'),f.get('count')));}
     if(type==='分娩'&&!existing&&selectedRoom?.state==='waiting'){l.fromWaiting=true;l.waitingEntryKey=selectedRoom.entryKey||'';}
     if(changesRoom)l.roomKey=f.get('roomKey');if(!legacy&&['分娩','離乳'].includes(type))l.count=countValue(f);
     if(!existing&&page==='detail')sowParitySelection.delete(target);
@@ -254,9 +265,10 @@ function record(type='追記',id='',roomKey='',existing=null,forecastChecked=fal
   const typeSelect=document.getElementById('recordType');if(typeSelect)typeSelect.onchange=()=>{const draft={...existing,type:typeSelect.value,id:document.getElementById('id').value,date:document.getElementById('date').value,note:document.getElementById('note').value,roomKey:document.getElementById('roomKey')?.value||''};record(draft.type,draft.id,draft.roomKey,draft);};
   if(type==='離乳'&&!existing){document.getElementById('date').max=today();document.getElementById('id').setAttribute('aria-readonly','true');}
   showRevisions(existing);
-  if(changesRoom){const select=document.getElementById('roomKey');select.onchange=()=>{const r=state.rooms.find(r=>r.key===select.value);const mixed=type==='子豚移動'&&(existing?existing.id==='':!!r?.mixed),mother=document.getElementById('id');mother.disabled=mixed;mother.required=!mixed;if(!existing&&r?.sowId){mother.innerHTML=sowNumberOptions(r.sowId);mother.value=r.sowId;}};select.onchange();}
+  if(type==='分娩'&&!legacy){syncBirthCountPreview();if(!existing)document.getElementById('date').max=today();}
+  if(changesRoom&&!lockedBirth){const select=document.getElementById('roomKey');select.onchange=()=>{const r=state.rooms.find(r=>r.key===select.value);const mixed=type==='子豚移動'&&(existing?existing.id==='':!!r?.mixed),mother=document.getElementById('id');mother.disabled=mixed;mother.required=!mixed;if(!existing&&r?.sowId){mother.innerHTML=sowNumberOptions(r.sowId);mother.value=r.sowId;}};select.onchange();}
 }
-function editRoom(key,existing=null){const r=existing?{...existing.room,key}:state.rooms.find(r=>r.key===key);form(existing?'分娩舎の修正記録を編集':roomName(r)+'を編集',`<p class="muted">確認できた内容を入力してください。</p><label for="roomState">在室状態</label><select id="roomState" name="state">${Object.entries(names).map(([s,n])=>`<option value="${s}" ${r.state===s?'selected':''}>${n}</option>`).join('')}</select>${sowSelect(r.sowId)}${r.state==='piglets'?`<label for="pigletMixed">子豚の区分</label><select id="pigletMixed" name="pigletMixed"><option value="single" ${!r.mixed?'selected':''}>同じ母豚の子</option><option value="mixed" ${r.mixed?'selected':''}>混成</option></select>${field('birthDate','生まれた月日（混成は一番若い子）',r.birthDate||'','date')}`:''}${r.state==='family'?field('birthDate','出産日',r.birthDate||roomBirthDate(r)||'','date'):''}${['family','piglets'].includes(r.state)?field('birthCount','出生頭数（不明なら空欄）',existing?.room?.birthCount??roomBirthCount(r)??'','number'):''}${field('count','子豚頭数（不明なら空欄）',r.count??'','number')}${field('date','確認日',existing?.date||today(),'date',true)}${notes(existing?.note||'')}`,'保存する',f=>{
+function editRoom(key,existing=null){const r=existing?{...existing.room,key}:state.rooms.find(r=>r.key===key);form(existing?'分娩舎の修正記録を編集':roomName(r)+'を編集',`<p class="muted">確認できた内容を入力してください。</p><label for="roomState">在室状態</label><select id="roomState" name="state">${Object.entries(names).map(([s,n])=>`<option value="${s}" ${r.state===s?'selected':''}>${n}</option>`).join('')}</select>${sowSelect(r.sowId)}${r.state==='piglets'?`<label for="pigletMixed">子豚の区分</label><select id="pigletMixed" name="pigletMixed"><option value="single" ${!r.mixed?'selected':''}>同じ母豚の子</option><option value="mixed" ${r.mixed?'selected':''}>混成</option></select>${field('birthDate','生まれた月日（混成は一番若い子）',r.birthDate||'','date')}`:''}${r.state==='family'?field('birthDate','出産日',r.birthDate||roomBirthDate(r)||'','date'):''}${['family','piglets'].includes(r.state)?field('birthCount','出生頭数（総数・不明なら空欄）',existing?.room?.birthCount??roomBirthCount(r)??'','number'):''}${field('count','子豚頭数（現在の生存数・不明なら空欄）',r.count??'','number')}${field('date','確認日',existing?.date||today(),'date',true)}${notes(existing?.note||'')}`,'保存する',f=>{
   const st=f.get('state'),mixed=st==='piglets'&&f.get('pigletMixed')==='mixed',sowId=st==='empty'||mixed?'':f.get('id'),room={label:r.label||'',state:st,sowId,mixed,birthDate:st==='empty'?'':(f.get('birthDate')??r.birthDate??''),count:['empty','waiting'].includes(st)?null:countValue(f)};
   if(['family','piglets'].includes(st)){const n=f.get('birthCount');room.birthCount=n===null||n===''?null:Number(n);if(room.birthCount!==null&&(!Number.isInteger(room.birthCount)||room.birthCount<0))throw Error('出生頭数は0以上の整数で入力してください。');}
   if(st!=='empty'&&!mixed&&!sowId)throw Error('母豚番号を選んでください。子豚のみの場合は、その母豚番号を選びます。');
@@ -311,7 +323,7 @@ document.addEventListener('click',e=>{
   if(a==='delete-log'&&['edit','records'].includes(page))deleteLog(id);
   if(a==='export')download(JSON.stringify(db,null,2),'tanaka-data-'+today()+'.json');if(a==='import')importData();
 });
-document.addEventListener('input',e=>{if(e.target.closest('.headcount-controls'))syncHeadcountControls();if(e.target.id==='filter'){const q=e.target.value.trim();document.getElementById('histories').innerHTML=history(db.logs.filter(l=>`${l.id} ${l.type} ${l.note||''} ${dateText(l)}`.includes(q)));}});
+document.addEventListener('input',e=>{if(e.target.closest('.headcount-controls'))syncHeadcountControls();if(['birthTotal','count'].includes(e.target.id))syncBirthCountPreview();if(e.target.id==='filter'){const q=e.target.value.trim();document.getElementById('histories').innerHTML=history(db.logs.filter(l=>`${l.id} ${l.type} ${l.note||''} ${dateText(l)}`.includes(q)));}});
 function network(){if(typeof updateCloudBadge==='function'){updateCloudBadge();return;}document.getElementById('network').textContent=navigator.onLine?'端末保存':'オフライン';}window.addEventListener('online',network);window.addEventListener('offline',network);network();
 window.addEventListener('storage',e=>{if(simulation)return;if(e.key===KEY){try{db=M.migrate(JSON.parse(e.newValue));state=M.replay(db);fatal='';dlg.close();render();toast('別画面の更新を反映しました');}catch(err){fatal=err.message;render();}}});
 installGlobalHomeButton();
@@ -358,7 +370,7 @@ function birthCycles(logs,id){
 }
 function birthResults(s){
   const cycles=birthCycles(db.logs,s.id),heads=n=>n===null||n===undefined?'未入力':esc(n)+'頭';
-  return `<h2>出産成績</h2>${cycles.map(c=>`<section class="card"><div class="row"><b>分娩日</b><span>${esc(c.birth.date)}${c.birth.birthTime?' '+esc(c.birth.birthTime):''}</span></div><div class="row"><span class="muted">生存－死産</span><b>${heads(c.birth.count)} － ${heads(c.birth.stillborn)}</b></div><div class="row"><span class="muted">離乳日</span><span>${c.wean?esc(c.wean.date):'離乳の記録なし'}</span></div><div class="row"><span class="muted">離乳した頭数</span><b>${c.wean?heads(c.wean.count):'未記録'}</b></div>${c.birth.note?`<p class="muted history-note">分娩メモ：${esc(c.birth.note)}</p>`:''}${c.wean?.note?`<p class="muted history-note">離乳メモ：${esc(c.wean.note)}</p>`:''}</section>`).join('')||'<div class="card"><p class="muted">新しく記録した分娩がまだありません。元カードの前回成績は上に残しています。</p></div>'}<p class="muted">入力した分娩・離乳の頭数を表示します。里子の受け入れ・移動などがあるため、頭数の差を死亡数とは扱いません。</p>`;
+  return `<h2>出産成績</h2>${cycles.map(c=>`<section class="card"><div class="row"><b>分娩日</b><span>${esc(c.birth.date)}${c.birth.birthTime?' '+esc(c.birth.birthTime):''}</span></div><div class="row"><span class="muted">${c.birth.birthTotal!==undefined?'総数－生存（出生時）':'生存－死産（旧記録）'}</span><b>${c.birth.birthTotal!==undefined?heads(c.birth.birthTotal):heads(c.birth.count)} － ${c.birth.birthTotal!==undefined?heads(c.birth.count):heads(c.birth.stillborn)}</b></div><div class="row"><span class="muted">離乳日</span><span>${c.wean?esc(c.wean.date):'離乳の記録なし'}</span></div><div class="row"><span class="muted">離乳した頭数</span><b>${c.wean?heads(c.wean.count):'未記録'}</b></div>${c.birth.note?`<p class="muted history-note">分娩メモ：${esc(c.birth.note)}</p>`:''}${c.wean?.note?`<p class="muted history-note">離乳メモ：${esc(c.wean.note)}</p>`:''}</section>`).join('')||'<div class="card"><p class="muted">新しく記録した分娩がまだありません。元カードの前回成績は上に残しています。</p></div>'}<p class="muted">入力した分娩・離乳の頭数を表示します。里子の受け入れ・移動などがあるため、頭数の差を死亡数とは扱いません。</p>`;
 }
 
 const cardFields=[['birth','生年月日（元の表記）'],['parity','産次（出産回数）'],['mother','母親番号'],['boar','種豚'],['mating','種付け日'],['reheat','次回再発予定'],['due','分娩予定日'],['wean','前回離乳日'],['result','前回成績（出生→離乳）'],['csf','豚熱'],['swimgen','スイムジェン'],['reheatCount','確認済み再発情回数']];
@@ -421,7 +433,7 @@ function roomBirthCount(room){
   for(let i=logs.length-1;i>=0;i--){const l=logs[i];if(l.legacy)continue;
     if(l.roomKey===room.key&&l.type==='分娩舎修正'&&Object.prototype.hasOwnProperty.call(l.room,'birthCount'))return l.room.birthCount??null;
     if(l.type==='分娩舎内移動'&&(l.roomKey===room.key||l.targetRoomKey===room.key)||l.type==='子豚移動'&&l.roomKey===room.key)return null;
-    if(l.type==='分娩'&&l.roomKey===room.key)return l.id===room.sowId&&l.date===roomBirthDate(room)?l.count??null:null;
+    if(l.type==='分娩'&&l.roomKey===room.key)return l.id===room.sowId&&l.date===roomBirthDate(room)?M.birthTotal(l):null;
     if(l.type==='分娩舎修正'&&l.roomKey===room.key&&(l.room.state==='empty'||l.room.sowId!==room.sowId))return null;
   }
   return room.birthCount??null;
@@ -429,7 +441,7 @@ function roomBirthCount(room){
 function feedBoxCard(r){
   if(r.state==='empty')return '<div class="feed-box feed-empty"><span>空き</span></div>';
   const waiting=r.state==='waiting',birth=roomBirthDate(r),date=waiting?dueMonthDay(r.sowId):birth?monthDayText(birth):'未入力',birthCount=roomBirthCount(r);
-  return simulationGroupBadge('rooms',r.key)+`<div class="feed-box"><div class="feed-number">${r.mixed?'混成':sowButton(r.sowId)}</div><div class="feed-parity">${r.mixed?'':esc(sowParityText(r.sowId))}</div><div class="feed-date"><small>${waiting?'予定日':r.mixed?'一番若い子の出産日':'出産日'}</small><span class="feed-due-value"><strong>${esc(date)}</strong>${waiting?farrowingOverdueBadge(r):''}</span></div><div class="feed-age">${waiting?'':birth?esc(pigletAgeText(birth)):'日令未入力'}</div><div class="feed-count">${waiting?'':`<small>出生－現在</small><strong>${birthCount===null?'―':esc(birthCount)}－${r.count===null?'―':esc(r.count)}</strong>`}</div></div>`;
+  return simulationGroupBadge('rooms',r.key)+`<div class="feed-box"><div class="feed-number">${r.mixed?'混成':sowButton(r.sowId)}</div><div class="feed-parity">${r.mixed?'':esc(sowParityText(r.sowId))}</div><div class="feed-date"><small>${waiting?'予定日':r.mixed?'一番若い子の出産日':'出産日'}</small><span class="feed-due-value"><strong>${esc(date)}</strong>${waiting?farrowingOverdueBadge(r):''}</span></div><div class="feed-age">${waiting?'':birth?esc(pigletAgeText(birth)):'日令未入力'}</div><div class="feed-count">${waiting?'':`<small>総数－生存数</small><strong>${birthCount===null?'―':esc(birthCount)}－${r.count===null?'―':esc(r.count)}</strong>`}</div></div>`;
 }
 
 
