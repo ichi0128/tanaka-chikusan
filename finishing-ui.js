@@ -74,13 +74,37 @@ function finishingSources(){
   return [...nurseryByAge(state.nursery).filter(r=>r.state==='occupied').map(r=>({area:'nursery',r})),...state.finishing.filter(r=>r.state==='occupied').flatMap(r=>r.key==='yard'?F.yardState(r).individuals.filter(p=>TanakaGilts.yardKind(p,state)!=='母豚').map(p=>({area:'finishing',r:{...p,key:'yard',pigKey:p.key,state:'occupied'}})):[{area:'finishing',r}])];
 }
 function finishingSourceName(area,r){return area==='nursery'?'育成舎':finishingPlace(r.key);}
+// Same physical room ordering for selecting either end of a transfer.
+function finishingPickerMap(destination='',area='',sourceKey='',pigKey=''){
+  const sourceMode=!!destination;
+  const attrs=r=>sourceMode?`data-action="fin-source" data-id="${esc(destination)}" data-area="finishing" data-source="${esc(r.key)}"`:`data-action="fin-pick-destination" data-id="${esc(r.key)}" data-area="${esc(area)}" data-source="${esc(sourceKey)}" data-pig="${esc(pigKey)}"`;
+  const cell=(n,col,row)=>{
+    const r=state.finishing.find(r=>r.key==='f'+n),occupied=r?.state==='occupied',chosen=sourceMode?r?.key===destination:area==='finishing'&&r?.key===sourceKey;
+    const enabled=!!r&&!chosen&&(sourceMode?occupied:r.state==='empty');
+    const label=r?finishingPlace(r.key):'未確認',status=chosen?(sourceMode?'移動先':'移動元'):occupied?(sourceMode?'選択できます':'使用中'):r?.state==='empty'?'空室':'未確認';
+    return `<button type="button" class="fin-picker-room ${occupied?'occupied':'vacant'} ${chosen?'selected':''}" style="grid-column:${col};grid-row:${row}" ${r?attrs(r):''} ${enabled?'':'disabled'} aria-label="${esc(label)} ${status}${occupied?' '+r.count+'頭':''}"><b>${r?esc(finishingRoomLabel(r.key))+'番':'未確認'}</b><span class="fin-picker-status">${status}</span>${occupied?`<strong>${r.count}頭 <small>${r.weight??'未入力'}kg</small></strong><span>母 ${r.mixed?'混成':esc(r.sowId||'未入力')}</span><span>${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生日 未入力'}</span>`:''}</button>`;
+  };
+  return `<div class="fin-picker-head"><b>左側</b><span>廊下</span><b>右側</b></div><div class="fin-picker-scroll" role="region" aria-label="${sourceMode?'移動元':'移動先'}を肉豚舎レイアウトから選択" tabindex="0"><div class="fin-picker-direction">東</div><div class="fin-picker-map"><div class="fin-picker-corridor" aria-hidden="true"></div>${Array.from({length:12},(_,i)=>`<span class="fin-picker-number" style="grid-column:2;grid-row:${i+1}" aria-hidden="true">${i+1}</span>`).join('')}${FINISHING_DISPLAY_COLUMNS.left.map((n,i)=>cell(n,1,i+1)).join('')}${FINISHING_DISPLAY_COLUMNS.right.map((n,i)=>cell(n,3,i+1)).join('')}</div><div class="fin-picker-direction">西</div></div>`;
+}
+function finishingPickDestination(area='',sourceKey='',pigKey=''){
+  finishingMoveMode=false;finishingPreferred='';finishingPreferredPig='';
+  const source=sourceKey?(area==='nursery'?state.nursery:state.finishing).find(r=>r.key===sourceKey):null;
+  if(sourceKey&&source?.state!=='occupied'){toast('移動元の状態が変わりました。選び直してください');return;}
+  const available=state.finishing.some(r=>r.key!=='yard'&&r.state==='empty');
+  modal.innerHTML=`<h2>移動先を選択</h2>${source?`<p>移動元：<b>${esc(finishingSourceName(area,source))}</b></p>`:''}<p class="muted">空室をタップしてください。使用中の部屋は選べません。</p>${available?'':'<p class="notice">肉豚舎に空室がありません。</p>'}${finishingPickerMap('',area,sourceKey,pigKey)}${sourceKey&&sourceKey!=='yard'?`<button type="button" class="btn secondary" data-action="fin-pick-destination" data-id="yard" data-area="${esc(area)}" data-source="${esc(sourceKey)}">運動場へ移動</button>`:''}<button type="button" class="btn secondary" data-action="close">閉じる</button>`;
+  if(!dlg.open)dlg.showModal();
+}
 function finishingEmpty(key){
   const r=state.finishing.find(x=>x.key===key);if(!r||key!=='yard'&&r.state!=='empty'){toast('移動先は空室を選んでください');return;}
   const sources=finishingSources().filter(x=>key!=='yard'||x.r.key!=='yard');
-  modal.innerHTML=`<h2>${finishingPlace(key)} · 入室・移動</h2><p class="muted">移動元のグループを選んでください。</p><div class="fin-source-list">${sources.map(({area,r})=>`<button class="row row-action ${r.key===finishingPreferred?'fin-preferred':''}" data-action="fin-source" data-id="${key}" data-area="${area}" data-source="${r.key}" data-pig="${esc(r.pigKey||'')}"><div><b>${finishingSourceName(area,r)}</b><p>${r.mixed?'混成 · ':'母 '+esc(r.sowId||'未入力')+' · '}${r.count===null?'頭数未入力':r.count+'頭'}</p><p class="muted">${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生月日 未入力'}${r.key==='yard'?' · '+(r.weight??'未入力')+'kg':' · '+esc(F.group(r).kind)}</p></div><span>›</span></button>`).join('')||'<p class="muted">移動できるグループはまだ登録されていません。</p>'}</div><button class="btn secondary" data-action="fin-register" data-id="${key}">この部屋の情報を直接入力</button><button class="btn secondary" data-action="close">閉じる</button>`;
+  const preferred=sources.find(x=>x.r.key===finishingPreferred&&(!finishingPreferredPig||x.r.pigKey===finishingPreferredPig));
+  if(preferred){finishingTransfer(key,preferred.area,preferred.r.key,preferred.r.pigKey||'');return;}
+  const other=sources.filter(x=>x.area!=='finishing'||x.r.key==='yard');
+  modal.innerHTML=`<h2>移動元を選択</h2><p>移動先：<b>${esc(finishingPlace(key))}</b></p><p class="muted">豚がいる部屋をタップしてください。</p>${finishingPickerMap(key)}${other.length?`<h3>育成舎・運動場から</h3><div class="fin-source-list">${other.map(({area,r})=>`<button type="button" class="row row-action" data-action="fin-source" data-id="${esc(key)}" data-area="${area}" data-source="${esc(r.key)}" data-pig="${esc(r.pigKey||'')}"><div><b>${esc(finishingSourceName(area,r))}</b><p>${r.mixed?'混成':'母 '+esc(r.sowId||'未入力')} · ${r.count===null?'頭数未入力':r.count+'頭'} · ${r.weight??'未入力'}kg</p><p>${r.birthDate?esc(monthDayText(r.birthDate))+'生':'誕生日 未入力'}</p></div></button>`).join('')}</div>`:''}<button class="btn secondary" data-action="fin-register" data-id="${esc(key)}">この部屋の情報を直接入力</button><button class="btn secondary" data-action="fin-mode">移動先を選び直す</button><button class="btn secondary" data-action="close">閉じる</button>`;
   if(!dlg.open)dlg.showModal();
 }
 function finishingTransfer(key,area,sourceKey,pigKey=''){
+  const basis=db;
   if(key==='yard'&&area==='nursery'){nurseryToYard(sourceKey);return;}
   if(key==='yard'&&area==='finishing'&&state.finishing.find(r=>r.key===sourceKey)?.kind==='育成母豚候補'){finishingConfirmGilt(sourceKey);return;}
   const source=(area==='nursery'?state.nursery:state.finishing).find(r=>r.key===sourceKey),dest=state.finishing.find(r=>r.key===key);
@@ -89,6 +113,7 @@ function finishingTransfer(key,area,sourceKey,pigKey=''){
   const before=F.group(source),fromYard=sourceKey==='yard',pig=fromYard?before.individuals.find(p=>p.key===pigKey):null,g=fromYard?pig:before;
   if(!g){toast('移動する運動場の個体を選んでください');return;}
   form(finishingPlace(key)+'へ移動',`<p><b>${finishingSourceName(area,source)}</b> → <b>${finishingPlace(key)}</b></p><p class="muted">母 ${esc(g.sowId||'未入力')} · ${g.birthDate?esc(monthDayText(g.birthDate))+'生':'誕生日 未入力'} · ${g.weight??'未入力'}kg</p>${fromYard?'<p>選択した個体 1頭を移動します。</p>':`${before.count===null?field('sourceTotal','移動元の現在の全頭数','','number',true):`<p>移動元 ${before.count}頭</p>`}<label for="moveKind">移動する頭数</label><select id="moveKind" name="moveKind"><option value="all">全頭</option><option value="partial">一部の頭数</option></select><div id="partial-field">${field('moveCount','移動する頭数','','number',true)}</div>`}${field('date','移動日',today(),'date',true)}<p class="muted">${key==='yard'?'1頭ずつ別の行に追加し、体重・誕生日・母豚番号を引き継ぎます。':fromYard?'選択した個体の情報を引き継ぎます。体重が未入力の場合、移動先の目安は30kgから始まります。':'誕生日・母豚番号・豚熱・重量・区分・メモを引き継ぎます。'}</p>`,'移動する',f=>{
+    if(db!==basis)throw Error('記録が更新されました。移動元・移動先を選び直してください。');
     const total=before.count===null?Number(f.get('sourceTotal')):before.count,count=fromYard?1:f.get('moveKind')==='all'?total:Number(f.get('moveCount'));
     if(!Number.isInteger(total)||total<=0||!Number.isInteger(count)||count<=0||count>total)throw Error('移動頭数を確認してください。');
     if(!fromYard&&f.get('moveKind')==='partial'&&count>=total)throw Error('全頭を移動する場合は「全頭」を選んでください。');
@@ -160,7 +185,8 @@ document.addEventListener('click',e=>{
     if(a==='fin-shipment-add')shipmentAdd();
     if(a==='fin-shipment-monthly')shipmentMonthly(b.dataset.year||today().slice(0,4));
     if(a==='fin-shipment-delete')shipmentDelete(b.dataset.source,key);
-    if(a==='fin-mode'){finishingMoveMode=!finishingMoveMode;finishingPreferred='';render();}
+    if(a==='fin-mode')finishingPickDestination();
+    if(a==='fin-pick-destination'){if(b.dataset.source)finishingTransfer(key,b.dataset.area,b.dataset.source,b.dataset.pig||'');else finishingEmpty(key);}
     if(a==='fin-empty')finishingEmpty(key);
     if(a==='fin-detail'&&!finishingMoveMode)finishingDetail(key);
     if(a==='fin-yard-add')finishingYardAdd();
@@ -183,7 +209,7 @@ document.addEventListener('click',e=>{
     if(a==='fin-gilt-confirm')finishingConfirmGilt(key);
     if(a==='fin-csf')finishingUpdate(key,g=>g.csf=!g.csf);
     if(a==='fin-kind'){const room=state.finishing.find(r=>r.key===key);if(room?.kind==='育成母豚候補')finishingClearCandidate(key);else finishingUpdate(key,g=>g.kind='育成母豚候補');}
-    if(a==='fin-from'){finishingMoveMode=true;finishingPreferred=key;finishingPreferredPig=b.dataset.pig||'';dlg.close();go('finishing');toast('移動先の空室をタップしてください');}
+    if(a==='fin-from')finishingPickDestination('finishing',key,b.dataset.pig||'');
   }catch(err){toast(err.message);}
 });
 

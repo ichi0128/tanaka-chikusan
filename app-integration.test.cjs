@@ -858,3 +858,26 @@ test('yard redraw and detail return retain the visible sow across sorting, remov
  const saved=b.storage.getItem('tanaka-db');run(`rememberYardViewport();restoreYardViewport();`);assert.equal(b.storage.getItem('tanaka-db'),saved);assert.ok(!saved.includes('yardViewport'));
  run(`dataSession++;nextYard=yardHost(['53','21'],300);render();`);assert.equal(run('fakeYard.scrollLeft'),0);assert.equal(run('yardViewport'),null);
 });
+
+test('meat barn source and destination pickers preserve the physical map and transfer only after headcount confirmation',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context),click=dataset=>{const button={dataset,disabled:false};for(const fn of b.listeners.click)fn({target:{closest:s=>s==='button'?button:null}});};
+ run(`save(d=>{d.finishingBaseline=F.baseline(d);Object.assign(d.finishingBaseline.find(r=>r.key==='f3'),{state:'occupied',count:5,sowId:'46',birthDate:'2026-07-07',weight:40,kind:'肉豚',csf:true,note:'移動確認'});});var pickerBefore=JSON.stringify(db),pickerTotal=F.meatTotal(state);finishingEmpty('f4');`);
+ let html=b.elements.get('modal').innerHTML;
+ assert.match(html,/移動元を肉豚舎レイアウトから選択/);assert.equal((html.match(/class="fin-picker-room /g)||[]).length,24);
+ assert.match(html,/grid-column:1;grid-row:2[^>]*data-source="f3"[^>]*aria-label="肉豚舎 左2番 選択できます 5頭"/);
+ assert.match(html,/data-source="f2"[^>]*disabled/);assert.match(html,/母 46/);assert.match(html,/7月7日生/);assert.equal(run('JSON.stringify(db)'),run('pickerBefore'));
+ click({action:'fin-from',id:'f3'});html=b.elements.get('modal').innerHTML;assert.match(html,/移動先を肉豚舎レイアウトから選択/);assert.match(html,/data-id="f3"[^>]*disabled/);assert.match(html,/data-id="f4"[^>]*aria-label="肉豚舎 右2番 空室"/);
+ run(`var pickerSubmit,pickerForm;form=(title,body,label,action)=>{pickerSubmit=action;pickerForm=body;};`);
+ click({action:'fin-pick-destination',id:'f4',area:'finishing',source:'f3'});assert.match(run('pickerForm'),/肉豚舎 左2番/);assert.match(run('pickerForm'),/肉豚舎 右2番/);assert.equal(run('JSON.stringify(db)'),run('pickerBefore'));
+ run(`pickerSubmit({get:k=>({moveKind:'partial',moveCount:'2',date:today()}[k]||'')});`);
+ assert.equal(run("state.finishing.find(r=>r.key==='f3').count"),3);assert.equal(run("state.finishing.find(r=>r.key==='f4').count"),2);assert.equal(run('F.meatTotal(state)'),run('pickerTotal'));assert.equal(run("state.finishing.find(r=>r.key==='f4').sowId"),'46');assert.equal(run("state.finishing.find(r=>r.key==='f4').csf"),true);
+ assert.throws(()=>run(`pickerSubmit({get:k=>({moveKind:'all',date:today()}[k]||'')})`),/更新/);
+});
+test('map selection handles occupied targets, full barns, preferred nursery sources and stale transfer forms',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`save(d=>{d.finishingBaseline=F.baseline(d);Object.assign(d.finishingBaseline.find(r=>r.key==='f3'),{state:'occupied',count:5,sowId:'46',birthDate:'2026-07-07',weight:40,kind:'肉豚'});});var mapOriginal=JSON.stringify(db);finishingPickDestination('finishing','f3');`);
+ run(`finishingTransfer('f3','finishing','f3');`);assert.equal(run('JSON.stringify(db)'),run('mapOriginal'));
+ run(`var staleSubmit;form=(t,h,s,a)=>staleSubmit=a;finishingTransfer('f4','finishing','f3');save(d=>d.sows[0].note='別操作');var staleDb=JSON.stringify(db);`);assert.throws(()=>run(`staleSubmit({get:k=>({moveKind:'all',date:today()}[k]||'')})`),/更新/);assert.equal(run('JSON.stringify(db)'),run('staleDb'));
+ run(`save(d=>{d.nurseryBaseline=M.replay(d).nursery.map(r=>({...r,state:'empty',count:null}));Object.assign(d.nurseryBaseline[0],{state:'occupied',count:2,sowId:'46',birthDate:'2026-05-01',weight:30});});finishingPreferred='n1';finishingEmpty('f4');`);assert.equal(run('typeof staleSubmit'),'function');
+ run(`save(d=>{for(const r of d.finishingBaseline)if(r.key!=='yard')Object.assign(r,{state:'occupied',count:1,sowId:'46',birthDate:'2026-07-07',weight:40,kind:'肉豚'});});finishingPickDestination();`);assert.match(b.elements.get('modal').innerHTML,/肉豚舎に空室がありません/);
+});
