@@ -640,3 +640,5 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 .fin-yard-compact .yard-quick-actions .btn{font-size:14px;min-height:44px}
 .fin-yard-compact>.btn{width:auto;min-height:44px;font-size:14px;margin:0;padding:6px 10px}
 .fin-yard-compact .fin-yard-hint{font-size:14px;margin:6px 0 0}
+
+.fin-yard-compact .yard-quick-main>.consignment-badge{grid-column:1/-1;justify-self:start;font-size:14px}
