@@ -881,3 +881,15 @@ test('map selection handles occupied targets, full barns, preferred nursery sour
  run(`save(d=>{d.nurseryBaseline=M.replay(d).nursery.map(r=>({...r,state:'empty',count:null}));Object.assign(d.nurseryBaseline[0],{state:'occupied',count:2,sowId:'46',birthDate:'2026-05-01',weight:30});});finishingPreferred='n1';finishingEmpty('f4');`);assert.equal(run('typeof staleSubmit'),'function');
  run(`save(d=>{for(const r of d.finishingBaseline)if(r.key!=='yard')Object.assign(r,{state:'occupied',count:1,sowId:'46',birthDate:'2026-07-07',weight:40,kind:'肉豚'});});finishingPickDestination();`);assert.match(b.elements.get('modal').innerHTML,/肉豚舎に空室がありません/);
 });
+
+test('capacity presentation uses one normal color through ten rooms and red overflow without changing forecasts or saved data',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context),saved=b.storage.getItem('tanaka-db');
+ run(`var colorForecast={day:'2026-11-01',end:'2026-11-04',peak:11,days:[8,9,10,11].map((count,i)=>({date:'2026-11-0'+(i+1),count})),rows:[{id:'test',label:'確認用'}],periods:[8,9,10,11].map((count,i)=>({id:'test',entry:'2026-11-0'+(i+1),exit:'2026-11-0'+(i+1),birth:'2026-11-0'+(i+1),basis:'record',source:'確認用'}))};var capacityGraph=ffMountain(colorForecast),capacityTimeline=ffTimeline(colorForecast);`);
+ assert.equal((run('capacityGraph').match(/fill="#628776" opacity=".87"/g)||[]).length,3);assert.equal((run('capacityGraph').match(/fill="#cf5149" opacity=".87"/g)||[]).length,1);
+ assert.doesNotMatch(run('capacityGraph'),/黄色9室|赤10室|紫11室|#8555ab|#e5b72f/);assert.match(run('capacityGraph'),/10室まで（収容可能）/);assert.match(run('capacityGraph'),/11室以上（オーバー）/);
+ assert.equal((run('capacityTimeline').match(/ff-period record normal/g)||[]).length,3);assert.equal((run('capacityTimeline').match(/ff-period record over/g)||[]).length,1);
+ assert.match(run("ffRiskButtons({...colorForecast,days:colorForecast.days.slice(0,3)})"),/オーバーの期間はありません/);
+ for(const n of [8,9,10]){assert.equal(run(`ffDisplayDecision({peak:${n},level:'warn'})`),'good');assert.equal(run(`ffCapacityTone(${n})`),'normal');}
+ assert.equal(run("ffDisplayDecision({peak:11,level:'bad'})"),'bad');assert.equal(run("ffDisplayDecision({peak:9,level:'warn',uncertain:true})"),'warn');assert.equal(run("ffDisplayDecision({peak:10,level:'warn',earlyWean:true})"),'warn');
+ assert.equal(run('FF.level(9)'),'caution');assert.equal(run('FF.capacityState(10).empty'),0);assert.equal(b.storage.getItem('tanaka-db'),saved);
+});
