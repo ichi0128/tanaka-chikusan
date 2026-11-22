@@ -621,3 +621,22 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 .fin-picker-room.vacant{border-style:dashed}.fin-picker-room:disabled{opacity:1;border-color:var(--border);color:var(--muted);background:var(--soft);cursor:default}
 .fin-picker-room.selected{outline:2px solid var(--accent);outline-offset:-4px}
 .fin-picker-status{font-size:14px}.fin-picker-room:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* Compact meat-yard rows; keep 44px touch targets and shared inventory fields intact. */
+.fin-yard-separate.fin-yard-individuals{margin:10px 0}
+.fin-yard-compact .fin-yard-heading{gap:6px}.fin-yard-compact .fin-yard-heading h3{font-size:16px}
+.fin-yard-compact .fin-yard-heading .btn{font-size:14px;min-height:44px;padding:6px 8px}
+.fin-yard-compact .yard-quick-grid{gap:6px;margin:8px 0;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.fin-yard-compact .yard-quick-card{display:grid;grid-template-columns:minmax(0,1fr) 52px;gap:6px;padding:8px;border-radius:10px;align-items:center}
+.fin-yard-compact .yard-quick-main{display:grid;grid-template-columns:24px minmax(0,1fr);gap:6px;align-items:center;min-width:0}
+.fin-yard-compact .yard-quick-main>small{font-size:14px;color:var(--muted)}
+.fin-yard-compact .yard-quick-fields{gap:4px}.fin-yard-compact .yard-quick-fields label>span{font-size:14px;margin-bottom:3px}
+.fin-yard-compact .yard-quick-fields select{min-height:44px;font-size:18px;padding:6px 3px}
+.fin-yard-compact .yard-quick-divider{padding-bottom:11px}
+.fin-yard-compact .yard-quick-actions{margin:0;font-size:14px;min-width:0}
+.fin-yard-compact .yard-quick-actions summary{min-height:44px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0 5px;list-style:none;cursor:pointer}
+.fin-yard-compact .yard-quick-actions summary::-webkit-details-marker{display:none}
+.fin-yard-compact .yard-quick-actions[open]{grid-column:1/-1}.fin-yard-compact .yard-quick-actions[open] summary{justify-content:flex-start}
+.fin-yard-compact .yard-quick-actions .btn{font-size:14px;min-height:44px}
+.fin-yard-compact>.btn{width:auto;min-height:44px;font-size:14px;margin:0;padding:6px 10px}
+.fin-yard-compact .fin-yard-hint{font-size:14px;margin:6px 0 0}
