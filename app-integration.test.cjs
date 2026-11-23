@@ -194,7 +194,7 @@ test('annual screen distinguishes first-birth summer preference and keeps season
  const b=boot();await new Promise(resolve=>setImmediate(resolve));const saved=b.storage.getItem('tanaka-db');
  vm.runInContext(`db=M.clone(db);db.logs=[];db.sows=[{id:'1',active:true,cardBaseline:{parity:0,mating:'2027-04-10'}},{id:'2',active:true,cardBaseline:{parity:2,mating:'2027-04-10'}}];db.baseline.forEach(r=>Object.assign(r,{state:'empty',sowId:'',count:null,birthDate:''}));state=M.replay(db);simulation={day:'2027-03-01',baseDay:'2027-03-01'};go('forecast');`,b.context);
  const html=b.elements.get('app').innerHTML;
- assert.match(html,/初産・8月の分娩予測<\/small><strong>1件/);assert.match(html,/8\/1〜8\/31 初産のみ回避配慮/);
+ assert.equal(vm.runInContext("ffData().periods.filter(p=>p.birth>=ffData().day&&p.birth<=ffData().end&&FF.periodHeat(p).avoid).length",b.context),1);assert.match(html,/8\/1〜8\/31 初産のみ回避配慮/);
  assert.match(vm.runInContext("ffHeatLabel(FF.compare(ffData(),'1','2027-04-10').heat)",b.context),/初産のみ/);
  assert.match(vm.runInContext("ffHeatLabel(FF.compare(ffData(),'2','2027-04-10').heat)",b.context),/対象外/);
  assert.equal(vm.runInContext("FF.compare(ffData(),'2','2027-04-10').level",b.context),'good');
@@ -892,4 +892,19 @@ test('capacity presentation uses one normal color through ten rooms and red over
  for(const n of [8,9,10]){assert.equal(run(`ffDisplayDecision({peak:${n},level:'warn'})`),'good');assert.equal(run(`ffCapacityTone(${n})`),'normal');}
  assert.equal(run("ffDisplayDecision({peak:11,level:'bad'})"),'bad');assert.equal(run("ffDisplayDecision({peak:9,level:'warn',uncertain:true})"),'warn');assert.equal(run("ffDisplayDecision({peak:10,level:'warn',earlyWean:true})"),'warn');
  assert.equal(run('FF.level(9)'),'caution');assert.equal(run('FF.capacityState(10).empty'),0);assert.equal(b.storage.getItem('tanaka-db'),saved);
+});
+test('breeding cadence follows current active sows, excludes unmated gilts, and leaves records and forecasts intact',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context),saved=b.storage.getItem('tanaka-db');
+ run(`var originalCadenceReplay=M.replay;var cadenceState={sows:Object.fromEntries(Array.from({length:18},(_,i)=>[String(i),{id:String(i),active:true}]))};M.replay=()=>cadenceState;`);
+ assert.equal(run('ffBreedingCadence().count'),18);assert.equal(run('ffBreedingCadence().interval'),155/18);
+ assert.match(run('ffBreedingCadenceSummary()'),/約9日に1頭/);
+ run(`cadenceState.sows.retired={active:false};cadenceState.sows.pending={active:true,numberPending:true};cadenceState.sows.gilt={active:true,giltRegistration:{confirmed:true},giltMated:false};`);
+ assert.equal(run('ffBreedingCadence().count'),18);
+ run('cadenceState.sows.gilt.giltMated=true');assert.equal(run('ffBreedingCadence().count'),19);
+ run(`cadenceState.sows['0'].active=false;cadenceState.sows['1'].active=false;cadenceState.sows['2'].active=false;cadenceState.sows['3'].active=false;`);
+ assert.equal(run('ffBreedingCadence().count'),15);assert.match(run('ffBreedingCadenceSummary()'),/約10日に1頭/);
+ run(`cadenceState.sows={};`);assert.equal(run('ffBreedingCadence().interval'),null);assert.doesNotMatch(run('ffBreedingCadenceSummary()'),/Infinity|NaN/);
+ run('M.replay=originalCadenceReplay');
+ const html=run('farrowingForecastPage()');assert.match(html,/種付け間隔の目安/);assert.match(html,/母豚ごとの年間タイムライン/);assert.match(html,/分娩舎10室の使用見込み/);assert.doesNotMatch(html,/使用見込み 最大|初産・8月の分娩予測/);
+ assert.equal(b.storage.getItem('tanaka-db'),saved);
 });
