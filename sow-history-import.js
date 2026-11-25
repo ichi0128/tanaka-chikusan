@@ -12,10 +12,14 @@ function validate(payload){
 }
 function plan(data,payload,day){
   validate(payload);if(!iso(day))throw Error('確認日を確認してください。');
-  const bySow=new Map(),items=[];
+  const bySow=new Map(),items=[],archiveKnown=new Set((data.archivedFarrowings||[]).map(b=>b.id+':'+b.date));
   for(const r of payload.rows){
     const sow=data.sows.find(s=>s.id===r.sowId&&!s.numberPending),source=r.card.notebookSource,item={sowId:r.sowId,parity:r.parity,birth:r.card.birthDateActual,sourceRecord:r.sourceRecord,page:source.page,line:source.line,review:!!source.needsReview,status:'add',reason:'過去履歴を追加'};
-    if(!sow){item.status='unmatched';item.reason='既存の母豚台帳に番号なし（自動登録しません）';}
+    if(!sow){
+      if(archiveKnown.has(r.sowId+':'+r.card.birthDateActual)){item.status='duplicate';item.reason='同じ過去実績が登録済み';}
+      else if(r.card.birthDateActual>day){item.status='protected';item.reason='未来の日付は実績に追加しません';}
+      else{archiveKnown.add(r.sowId+':'+r.card.birthDateActual);item.archived=true;item.reason='過去実績のみ追加（現在頭数・母豚カードは増やしません）';}
+    }
     else{
       if(!bySow.has(sow.id))bySow.set(sow.id,P.pages(data,sow.id));const pages=bySow.get(sow.id),current=pages[0];
       const same=pages.find(p=>p.card.notebookSource?.sourceSha256===payload.sourceSha256&&p.card.notebookSource?.sourceRecord===r.sourceRecord||p.card.birthDateActual===r.card.birthDateActual||p.parity===r.parity&&/^\d{1,2}\/\d{1,2}$/.test(p.card.birthDateActual||'')&&p.card.birthDateActual===Number(r.card.birthDateActual.slice(5,7))+'/'+Number(r.card.birthDateActual.slice(8)));
@@ -33,6 +37,10 @@ function apply(data,payload,day,expected){
   const result=plan(data,payload,day),PAGES=new Map(),stamp=new Date().toISOString();
   for(const item of result.items.filter(x=>x.status==='add')){
     const r=payload.rows.find(r=>r.sourceRecord===item.sourceRecord),s=data.sows.find(s=>s.id===item.sowId);
+    if(item.archived){
+      data.archivedFarrowings??=[];const key='notebook:'+payload.sourceSha256+':'+r.sourceRecord;
+      data.archivedFarrowings.push({key,id:r.sowId,date:r.card.birthDateActual,count:P.cardPerformance(r.card).birthCount??null,parity:r.parity,card:clone(r.card),source:'過去の分娩ノート',savedAt:stamp});item.key=key;continue;
+    }
     if(!PAGES.has(s.id))PAGES.set(s.id,P.pages(data,s.id));
     // Materialize the same existing projection without starting a new cycle.
     if(!s.parityCards){const all=PAGES.get(s.id).slice().reverse(),current=all.pop();s.parityCards={version:1,history:all,current:{...clone(current),capturedKeys:data.logs.filter(l=>!l.legacy&&l.id===s.id).map(l=>l.key)}};}

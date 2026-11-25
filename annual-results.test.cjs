@@ -59,3 +59,11 @@ test('monthly import reconciles existing daily facts, rejects plans/duplicates/i
  assert.throws(()=>F.monthlyShipmentPlan(d,'2026','1 4','2026-11-06'),/日付付き/);assert.throws(()=>F.monthlyShipmentPlan(d,'2026','12 20','2026-11-06'),/未来月/);assert.throws(()=>F.monthlyShipmentPlan(d,'2026','1 10\n1 10','2026-11-06'),/重複/);assert.throws(()=>F.monthlyShipmentPlan(d,'2026','13 10','2026-11-06'),/1行/);
  F.deleteShipment(d,'monthly',d.shipmentHistory.monthlyAdded[0].key);assert.equal(A.summary(d,'2026').shipments.total,5);assert.equal(d.shipmentHistory.added.length,1);
 });
+
+test('archived births survive missing sow profiles, roundtrip, adjustments and duplicate live records',()=>{
+ const {A,M}=setup(),d=M.migrate(null);d.annualAdjustments={'2026':{farrowings:4}};
+ d.archivedFarrowings=[{key:'archive66',id:'66',date:'2026-03-11',count:9},{key:'archive49',id:'49',date:'2026-03-25',count:11}];
+ M.validate(d);const copy=JSON.parse(JSON.stringify(d));assert.equal(A.summary(copy,'2026').monthly[2].farrowings,2);assert.equal(A.summary(copy,'2026').monthly[2].piglets,20);assert.equal(A.summary(copy,'2026').farrowings.adjustment,4);
+ copy.logs.push({key:'live66',id:'66',date:'2026-03-11',type:'分娩',count:9});assert.equal(A.summary(copy,'2026').monthly[2].farrowings,2);
+ copy.logs.pop();copy.archivedFarrowings.push({...copy.archivedFarrowings[0],key:'duplicate'});assert.throws(()=>M.validate(copy),/過去の分娩/);
+});

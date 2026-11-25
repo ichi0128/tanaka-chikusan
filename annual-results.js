@@ -35,6 +35,10 @@ function births(data){
    rows.push({key:s.id+':'+p.key,id:s.id,date:c.birthDateActual,count:count(P.cardPerformance(c).birthCount)});
   }
  }
+ for(const r of data.archivedFarrowings||[]){
+  if(rows.some(b=>b.id===r.id&&b.date===r.date))continue;
+  rows.push({key:'archive:'+r.key,id:r.id,date:r.date,count:count(r.count),archived:true});
+ }
  return rows.filter(r=>iso(r.date));
 }
 function adjustment(data,year,metric){return data.annualAdjustments?.[year]?.[metric]??0;}
@@ -55,7 +59,14 @@ function setAdjustment(data,year,metric,value,expected){
  data.annualAdjustments??={};data.annualAdjustments[year]??={};data.annualAdjustments[year][metric]=value;
 }
 const validate=M.validate;
-M.validate=function(data){validate(data);const all=data.annualAdjustments;if(all===undefined)return;
+M.validate=function(data){validate(data);
+ if(data.archivedFarrowings!==undefined){
+  if(!Array.isArray(data.archivedFarrowings))throw Error('過去の分娩実績の形式を確認してください。');
+  const keys=new Set(),events=new Set();for(const r of data.archivedFarrowings){const event=r.id+':'+r.date;
+   if(!r||typeof r.key!=='string'||!r.key||keys.has(r.key)||typeof r.id!=='string'||!r.id||!iso(r.date)||events.has(event)||r.count!==null&&count(r.count)===null)throw Error('過去の分娩実績を確認してください。');keys.add(r.key);events.add(event);
+  }
+ }
+ const all=data.annualAdjustments;if(all===undefined)return;
  if(!all||typeof all!=='object'||Array.isArray(all))throw Error('年間実績の補正情報を確認してください。');
  for(const [year,values] of Object.entries(all)){if(!yearOK(year)||!values||typeof values!=='object'||Array.isArray(values)||Object.entries(values).some(([k,v])=>!metrics.includes(k)||!Number.isSafeInteger(v)))throw Error('年間実績の補正値を確認してください。');}
 };
