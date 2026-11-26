@@ -76,6 +76,18 @@ document.addEventListener('click',e=>{
   }catch(err){toast(err.message);}
 });
 
+function reheatWatchControl(id){
+  const date=TanakaSowWork.reheatPlanDate(db,id),available=date&&!TanakaSowWork.reheatReceipt(db,id,date);
+  return `<button type="button" class="sow-quick-mating sow-watch-button" data-action="reheat-watch" data-id="${esc(id)}" aria-label="母豚 ${esc(id)}の再発情確認を様子見で21日延ばす" ${available?'':'disabled title="未完了の再発情確認予定があるときに使えます"'}>様子見</button>`;
+}
+function confirmReheatDeferral(id){
+  const date=TanakaSowWork.reheatPlanDate(db,id);if(!date||TanakaSowWork.reheatReceipt(db,id,date))throw Error('未完了の再発情確認予定を確認してください。');
+  const basis=db,session=dataSession,next=M.addDays(date,21);
+  form('母豚 '+id+' · 様子見',`<p>再発情確認：<b>${esc(sowCardDate(date))} → ${esc(sowCardDate(next))}</b></p><p>確認予定を21日延ばします。</p><p class="muted">種付け・再発情確定の記録はせず、種付け日・分娩予定・再発回数は変えません。</p>`,'21日延ばす',()=>{
+    if(db!==basis||dataSession!==session)throw Error('記録が更新されました。開き直してください。');
+    let log;save(d=>{log=TanakaSowWork.deferReheat(d,{...makeLog('追記',id),id,expectedDate:date});});showWorkAction(log,id+'は様子見：再発情確認を'+sowCardDate(log.action.after)+'へ延ばしました');
+  });
+}
 function reheatControl(id,card){
   const date=TanakaSowWork.reheatPlanDate(db,id),receipt=date&&TanakaSowWork.reheatReceipt(db,id,date);
   if(card.reheatPending||card.cycleCompleted||card.birthDateActual||!date)return `<small>次回再発予定</small><b>${esc(sowCardDate(card.reheat)||'未入力')}</b>`;
@@ -102,9 +114,10 @@ function reheatWorkLog(l){
   if(active)modal.insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" data-action="reheat-undo" data-id="${esc(l.key)}">確認を取り消す</button>`);
 }
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-action="reheat-open"],[data-action="reheat-positive"],[data-action="reheat-undo"],[data-action="reheat-defer"]');if(!b)return;
+  const b=e.target.closest('[data-action="reheat-open"],[data-action="reheat-positive"],[data-action="reheat-undo"],[data-action="reheat-defer"],[data-action="reheat-watch"]');if(!b)return;
   try{
-    if(b.dataset.action==='reheat-open')openReheatCheck(b.dataset.id);
+    if(b.dataset.action==='reheat-watch')confirmReheatDeferral(b.dataset.id);
+    else if(b.dataset.action==='reheat-open')openReheatCheck(b.dataset.id);
     else if(b.dataset.action==='reheat-defer'){if(b.dataset.session!==String(dataSession))throw Error('画面が切り替わりました。開き直してください。');let log;save(d=>{log=TanakaSowWork.deferReheat(d,{...makeLog('追記',b.dataset.id),id:b.dataset.id,expectedDate:b.dataset.date});});dlg.close();showWorkAction(log,log.id+'は様子見：再発情確認を'+sowCardDate(log.action.after)+'へ延ばしました');}
     else if(b.dataset.action==='reheat-positive')record('再発情確認',b.dataset.id,'',null,false,true);
     else{const expected=JSON.stringify(db.inventoryMonths?.[today().slice(0,7)]??null);let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});if(log.action?.originalKind==='farrowing-entry')syncWaitingDraft(log,expected);dlg.close();showWorkAction(log,log.id+(log.action?.originalKind==='reheat-defer'?'の様子見延長を取り消しました':'の再発情なしの確認を取り消しました'));}

@@ -647,3 +647,5 @@ html[data-theme="dark"] .farrowing-overdue-badge.is-late{background:#542b32;colo
 :root[data-theme=dark] .ff-tone-over{color:#ffb4aa}
 
 .ff-cadence h3{margin:0 0 12px}.ff-cadence-value{display:block;font-size:clamp(24px,7vw,34px);line-height:1.4;color:var(--accent)}.ff-cadence p{line-height:1.6}.ff-cadence details{font-size:14px}.ff-cadence summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
+
+.sow-mating-actions{display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:100%;position:relative;z-index:2}.sow-mating-actions>.sow-quick-mating{min-width:44px;min-height:44px;white-space:nowrap;padding:4px 5px;font-size:12px;touch-action:manipulation}.sow-watch-button:disabled{opacity:.45;cursor:default}

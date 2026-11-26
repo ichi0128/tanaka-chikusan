@@ -917,4 +917,8 @@ test('watchful waiting check date appears on the sow card and home without chang
  assert.ok(run("TanakaTasks.collect(db,'2026-11-26').upcoming.some(x=>x.id==='812'&&x.type==='再発情確認'&&x.date==='2026-12-13')"));assert.equal(run("TanakaTasks.collect(db,'2026-11-26').overdue.some(x=>x.id==='812'&&x.type==='再発情確認')"),false);
  assert.match(run("reheatControl('812',TanakaSowParity.pages(db,'812')[0].card)"),/12\/13/);
  run("modal.insertAdjacentHTML=(pos,html)=>{modal.innerHTML+=html;};openReheatCheck('812')");assert.match(run('modal.innerHTML'),/様子見・21日延ばす/);assert.match(run('modal.innerHTML'),/1\/3/);
+ const quick=run("sowCardMarkup(M.replay(db).sows['812'],null,null,false,true)");assert.match(quick,/sow-mating-actions[\s\S]*?種付け<\/button><button[^>]+reheat-watch/);
+ assert.doesNotMatch(run("reheatWatchControl('812')"),/disabled/);run("confirmReheatDeferral('812')");assert.match(run('modal.innerHTML'),/12\/13 → 1\/3/);
+ run("save(d=>TanakaSowWork.clearReheat(d,{id:'812',date:'2026-11-26',key:'watch-clear-test'}))");assert.match(run("reheatWatchControl('812')"),/disabled/);
+
 });
