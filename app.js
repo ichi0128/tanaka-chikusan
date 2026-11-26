@@ -1,6 +1,6 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.20.1';
+const APP_VERSION='1.21.0';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
@@ -232,7 +232,7 @@ function quickWeaning(roomKey){
 }
 function record(type='追記',id='',roomKey='',existing=null,forecastChecked=false,reheatChosen=false){
   if(type==='再発情確認'&&!existing&&!reheatChosen){openReheatCheck(id);return;}
-  if(existing?.action?.kind==='reheat-clear'||existing?.action?.originalKind==='reheat-clear'){reheatWorkLog(existing);return;}
+  if(['reheat-clear','reheat-defer'].includes(existing?.action?.kind)||['reheat-clear','reheat-defer'].includes(existing?.action?.originalKind)){reheatWorkLog(existing);return;}
   if(type==='廃豚'&&!existing){openCulling(id);return;}
   if(existing&&(existing.cullOperation||existing.action?.kind?.startsWith('sow-cull'))){cullingLog(existing);return;}
   if(type==='種付け'&&!existing&&state.sows[id]?.numberPending){assignGiltNumber(id);return;}
@@ -296,7 +296,7 @@ function editRoom(key,existing=null){const r=existing?{...existing.room,key}:sta
 function showRevisions(l){if(!l)return;let html=['edit','records'].includes(page)?`<button class="btn danger" type="button" data-action="delete-log" data-id="${esc(l.key)}">この記録を削除</button>`:'';if(l.profileAfter)html+=`<details><summary>個体情報の変更内容</summary><p class="muted history-note">変更前：${esc(JSON.stringify(l.profileBefore))}<br>変更後：${esc(JSON.stringify(l.profileAfter))}</p></details>`;if(l.revisions?.length)html+=`<details><summary>修正前の記録（${l.revisions.length}件）</summary>${l.revisions.map(r=>`<p class="muted history-note">${esc(dateText(r))} · ${esc(r.id)} · ${esc(r.type)}<br>${esc(r.note)}${r.count!=null?'<br>子豚 '+r.count+'頭':''}${r.room?'<br>'+esc(names[r.room.state])+' · '+esc(r.room.label||'部屋未設定'):''}</p>`).join('')}</details>`;if(html)modal.insertAdjacentHTML('beforeend',html);}
 function deleteLog(key){
   const l=db.logs.find(x=>x.key===key);if(!l)return;
-  if(l.action?.kind==='reheat-clear'||l.action?.originalKind==='reheat-clear'){toast('確認履歴は削除せず、取り消す操作を使ってください。');return;}
+  if(['reheat-clear','reheat-defer'].includes(l.action?.kind)||['reheat-clear','reheat-defer'].includes(l.action?.originalKind)){toast('確認履歴は削除せず、取り消す操作を使ってください。');return;}
   if(GroupMix.TYPES.includes(l.type)){toast('混合記録は専用の取り消し操作で戻してください。');return;}
   if(Deaths.TYPES.includes(l.type)){toast('死亡記録は取り消し操作で戻してください。');return;}
   if(l.privateStockUse){toast('在庫更新の保存記録は削除できません。');return;}

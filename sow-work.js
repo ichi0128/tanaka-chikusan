@@ -68,7 +68,26 @@ function setSwimgen(data,{id,done,expectedPage,...options}){
   log.action={version:1,kind:'swimgen-status',cycleKey:p.key,before:{done:before},after:{done:!!done}};
   P.edit(data,id,p.key,{...clone(p.card),swimgenDone:!!done},JSON.stringify(p));data.logs.push(log);return log;
 }
-function reheatPlanDate(data,id){const p=P.pages(data,id)[0],c=p?.card,mating=P.matingInput(data,id);if(!c||p.awaitingMating||c.reheatPending||c.cycleCompleted||c.birthDateActual||!mating||!c.reheat)return '';try{return M.matingDate(c.reheat,M.addDays(mating,21));}catch{return '';}}
+function reheatBaseDate(data,id){const p=P.pages(data,id)[0],c=p?.card,mating=P.matingInput(data,id);if(!c||p.awaitingMating||c.reheatPending||c.cycleCompleted||c.birthDateActual||!mating||!c.reheat)return '';try{return M.matingDate(c.reheat,M.addDays(mating,21));}catch{return '';}}
+function reheatPlanDate(data,id){
+  let date=reheatBaseDate(data,id);if(!date)return '';
+  const token=reheatToken(data,id,date);
+  for(const l of data.logs){if(l.id===id&&l.action?.kind==='reheat-defer'&&l.action.token===token&&l.action.before===date&&!data.logs.some(u=>u.undoOf===l.key))date=l.action.after;}
+  return date;
+}
+function deferReheat(data,{id,expectedDate,expectedPage,...options}){
+  const p=P.pages(data,id)[0],s=M.replay(data).sows[id],before=reheatPlanDate(data,id);
+  if(!s?.active||s.numberPending||!before||reheatReceipt(data,id,before))throw Error('現在の再発情確認予定を確認してください。');
+  if(expectedDate!==undefined&&before!==expectedDate||expectedPage!==undefined&&JSON.stringify(p)!==expectedPage)throw Error('予定が更新されました。開き直してください。');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(options.date||'')||options.date<P.matingInput(data,id))throw Error('記録日を確認してください。');
+  const after=M.addDays(before,21),log=stamp('追記',id,{...options,note:'再発情は未確認・様子見：確認予定 '+before+' → '+after});
+  log.action={version:1,kind:'reheat-defer',token:reheatToken(data,id,reheatBaseDate(data,id)),before,after};data.logs.push(log);return log;
+}
+registerUndo('reheat-defer',(data,original,options)=>{
+  const i=data.logs.indexOf(original);
+  if(reheatPlanDate(data,original.id)!==original.action.after||data.logs.slice(i+1).some(l=>l.id===original.id&&(['種付け','再発情確認','分娩','離乳'].includes(l.type)||['reheat-clear','reheat-defer'].includes(l.action?.kind)&&!data.logs.some(u=>u.undoOf===l.key))))throw Error('その後の作業があるため、この操作は取り消せません。現在のカードを確認してください。');
+  const log=stamp('追記',original.id,{...options,note:'再発情確認の様子見延長を取消'});log.undoOf=original.key;log.action={version:1,kind:'undo',originalKind:'reheat-defer'};data.logs.push(log);return log;
+});
 function reheatToken(data,id,date){const p=P.pages(data,id)[0];return p?JSON.stringify([p.key,P.matingInput(data,id),date]):'';}
 function reheatReceipt(data,id,date){const token=reheatToken(data,id,date);return data.logs.filter(l=>l.id===id&&l.action?.kind==='reheat-clear'&&l.action.token===token&&!data.logs.some(u=>u.undoOf===l.key)).at(-1);}
 function clearReheat(data,{id,expectedPage,...options}){
@@ -94,5 +113,5 @@ registerUndo('swimgen-status',(data,original,options)=>{
   const p=P.pages(data,original.id)[0];if(p?.key!==original.action.cycleKey||swimgenDone(p.card)!==original.action.after.done||data.logs.slice(data.logs.indexOf(original)+1).some(l=>l.id===original.id&&(l.action?.kind==='swimgen-status'||['種付け','再発情確認','分娩','離乳','スイムジェン 実施'].includes(l.type))))throw Error('その後の作業があるため、この操作は取り消せません。現在のカードを確認してください。');
   const log=setSwimgen(data,{...options,id:original.id,done:original.action.before.done,expectedPage:JSON.stringify(p)});log.undoOf=original.key;return log;
 });
-root.TanakaSowWork={roomLabel,roomLocation,yardOrigin,entry,autoEntry,returnContext,returnToYard,swimgenDone,setSwimgen,registerUndo,undo,reheatReceipt,clearReheat,reheatPlanDate};
+root.TanakaSowWork={roomLabel,roomLocation,yardOrigin,entry,autoEntry,returnContext,returnToYard,swimgenDone,setSwimgen,registerUndo,undo,reheatReceipt,clearReheat,reheatPlanDate,deferReheat};
 })(typeof globalThis!=='undefined'?globalThis:this);

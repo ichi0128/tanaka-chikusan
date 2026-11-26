@@ -61,3 +61,16 @@ test('old baseline checks before schedule import cutoff can be completed from th
  const {M,P,W,d}=setup();const next=M.commit(d,x=>W.clearReheat(x,{id:'98',date:'2026-10-28',key:'old-check'}));a.ok(W.reheatReceipt(next,'98','2026-08-10'));a.equal(JSON.stringify(P.pages(next,'98')),JSON.stringify(P.pages(d,'98')));
  const p=P.pages(d,'812')[0],year=M.commit(d,x=>P.edit(x,'812',p.key,{...p.card,mating:'2026-12-20'},JSON.stringify(p),true));a.equal(W.reheatPlanDate(year,'812'),'2027-01-10');
 });
+test('watchful waiting defers only the check by 21 days, repeats across years, persists and undoes without a reproductive event',()=>{
+ const {c,M,P,W,d}=setup(),id='812';const p=P.pages(d,id)[0];let next=M.commit(d,x=>P.edit(x,id,p.key,{...p.card,mating:'2026-11-01'},JSON.stringify(p),true));
+ const cards=JSON.stringify(P.pages(next,id)),state=JSON.stringify(M.replay(next)),other=JSON.stringify(M.schedules(next,'2026-11-26').filter(x=>x.id===id&&x.type!=='再発情確認'));
+ a.equal(W.reheatPlanDate(next,id),'2026-11-22');next=M.commit(next,x=>W.deferReheat(x,{id,date:'2026-11-26',key:'watch1',expectedDate:'2026-11-22'}));
+ a.equal(W.reheatPlanDate(next,id),'2026-12-13');a.equal(JSON.stringify(P.pages(next,id)),cards);a.equal(JSON.stringify(M.replay(next)),state);a.equal(JSON.stringify(M.schedules(next,'2026-11-26').filter(x=>x.id===id&&x.type!=='再発情確認')),other);
+ a.deepEqual(plain(M.schedules(next,'2026-11-26').filter(x=>x.id===id&&x.type==='再発情確認').map(x=>x.date)),['2026-12-13']);a.equal(next.logs.at(-1).type,'追記');
+ a.throws(()=>M.commit(next,x=>W.deferReheat(x,{id,date:'2026-11-26',expectedDate:'2026-11-22'})),/更新/);
+ next=M.commit(next,x=>W.deferReheat(x,{id,date:'2026-12-14',key:'watch2'}));a.equal(W.reheatPlanDate(next,id),'2027-01-03');a.throws(()=>M.commit(next,x=>W.undo(x,'watch1',{date:'2026-12-14'})),/その後/);
+ next=new c.TanakaCloud.CloudStore({model:M}).validate(M.migrate(JSON.parse(JSON.stringify(next))));a.equal(W.reheatPlanDate(next,id),'2027-01-03');
+ next=M.commit(next,x=>W.undo(x,'watch2',{date:'2026-12-14',key:'undo2'}));a.equal(W.reheatPlanDate(next,id),'2026-12-13');next=M.commit(next,x=>W.undo(x,'watch1',{date:'2026-12-14',key:'undo1'}));a.equal(W.reheatPlanDate(next,id),'2026-11-22');a.equal(JSON.stringify(P.pages(next,id)),cards);
+ next=M.commit(next,x=>W.deferReheat(x,{id,date:'2026-12-14',key:'watch3'}));next=M.commit(next,x=>W.clearReheat(x,{id,date:'2026-12-14',key:'clear3'}));a.ok(!M.schedules(next,'2026-12-14').some(x=>x.id===id&&x.type==='再発情確認'));a.throws(()=>M.commit(next,x=>W.undo(x,'watch3',{date:'2026-12-14'})),/その後/);
+ const page=P.pages(next,id)[0];next=M.commit(next,x=>P.edit(x,id,page.key,{...page.card,mating:'2026-12-01'},JSON.stringify(page),true));a.equal(W.reheatPlanDate(next,id),'2026-12-22');
+});

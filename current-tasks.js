@@ -45,7 +45,7 @@ function collect(data,day,state=M.replay(data)){
   let mating='';try{if(card.mating)mating=M.matingDate(card.matingDateOverride||card.mating,last('種付け')?.date||'2026-01-01');}catch{}
   let legacyDue='';if(!mating&&card.due&&card.due===sow.cardBaseline?.due){try{legacyDue=M.matingDate(card.due,'2026-01-01');}catch{}}
   const due=normalize(card.due,mating?M.addDays(mating,114):'')||legacyDue||(mating?M.addDays(mating,114):'');
-  const reheat=normalize(card.reheat,mating?M.addDays(mating,21):'')||(mating?M.addDays(mating,21):'');
+  const reheat=root.TanakaSowWork.reheatPlanDate(data,sow.id);
   const swim=normalize(card.swimgen,mating?M.addDays(mating,100):due?M.addDays(due,-14):'')||(mating?M.addDays(mating,100):due?M.addDays(due,-14):'');
   const done=type=>!!mating&&logs.some(l=>l.type===type&&l.date>=mating);
   if(valid(reheat)&&!done('再発情確認')&&!root.TanakaSowWork.reheatReceipt(data,sow.id,reheat))add({id:sow.id,date:reheat,label:'再発情確認',type:'再発情確認'});

@@ -16,12 +16,12 @@ function focusYardWorkCard(id){
   if(host&&card&&host.firstElementChild)host.scrollLeft=card.offsetLeft-host.firstElementChild.offsetLeft;
 }
 function showWorkAction(log,message=''){
-  if(log.movement?.to.area==='yard'||['swimgen-status','reheat-clear'].includes(log.action?.kind))focusYardWorkCard(log.id);
+  if(log.movement?.to.area==='yard'||['swimgen-status','reheat-clear','reheat-defer'].includes(log.action?.kind))focusYardWorkCard(log.id);
   lastWorkAction={key:log.key,session:dataSession};
   const host=document.getElementById('work-feedback');
   const text=message||(log.movement?`${log.id}を${log.movement.to.name}へ移動しました`:`${log.id}のスイムジェンを「${log.action.after.done?'済':'未'}」にしました`);
   const automatic=log.autoAssigned===true;
-  host.innerHTML=`<span>${esc(simulation?'【仮データ】'+text:text)}</span>${log.action?.kind==='farrowing-entry'||['swimgen-status','reheat-clear','death'].includes(log.action?.kind)?`<button type="button" data-action="work-undo" data-id="${esc(log.key)}">${automatic?'元に戻す':'取り消す'}</button>`:''}<button type="button" class="work-feedback-close" data-action="work-dismiss" aria-label="操作結果を閉じる">${automatic?'閉じる':'×'}</button>`;host.hidden=false;
+  host.innerHTML=`<span>${esc(simulation?'【仮データ】'+text:text)}</span>${log.action?.kind==='farrowing-entry'||['swimgen-status','reheat-clear','reheat-defer','death'].includes(log.action?.kind)?`<button type="button" data-action="work-undo" data-id="${esc(log.key)}">${automatic?'元に戻す':'取り消す'}</button>`:''}<button type="button" class="work-feedback-close" data-action="work-dismiss" aria-label="操作結果を閉じる">${automatic?'閉じる':'×'}</button>`;host.hidden=false;
 }
 function hideWorkAction(){lastWorkAction=null;const host=document.getElementById('work-feedback');if(host){host.hidden=true;host.innerHTML='';}}
 function roomUsage(room){if(room.state==='empty')return '空き';if(room.state==='piglets')return '使用中：'+(room.mixed?'混成・':'')+'子豚'+(room.count===null?'頭数未入力':room.count+'頭');return '使用中：'+room.sowId+' · '+(room.state==='waiting'?'分娩待ち':'授乳中・子豚'+(room.count===null?'頭数未入力':room.count+'頭'));}
@@ -69,9 +69,9 @@ document.addEventListener('click',e=>{
       const deathUndo=db.logs.find(l=>l.key===b.dataset.id)?.action?.kind==='death';if(deathUndo)checkDeathDraft();
       const expected=JSON.stringify(db.inventoryMonths?.[today().slice(0,7)]??null);let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});if(log.action?.originalKind==='farrowing-entry')syncWaitingDraft(log,expected);
       if(deathUndo)inventoryDrafts.delete(today().slice(0,7));
-      showWorkAction(log,log.type==='死亡取消'?'死亡記録を取り消し、頭数を戻しました':log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'));
+      showWorkAction(log,log.type==='死亡取消'?'死亡記録を取り消し、頭数を戻しました':log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-defer'?'の様子見延長を取り消しました':log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'));
       // A compensating record remains in history; do not offer an undo-of-undo.
-      document.getElementById('work-feedback').innerHTML=`<span>${esc(simulation?'【仮データ】':'')}${esc(log.type==='死亡取消'?'死亡記録を取り消し、頭数を戻しました':log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'))}</span><button type="button" data-action="work-dismiss">閉じる</button>`;
+      document.getElementById('work-feedback').innerHTML=`<span>${esc(simulation?'【仮データ】':'')}${esc(log.type==='死亡取消'?'死亡記録を取り消し、頭数を戻しました':log.movement?log.id+'を'+log.movement.to.name+'へ戻しました（移動取消）':log.id+(log.action?.originalKind==='reheat-defer'?'の様子見延長を取り消しました':log.action?.originalKind==='reheat-clear'?'の再発情なしの確認を取り消しました':'のスイムジェンを元に戻しました'))}</span><button type="button" data-action="work-dismiss">閉じる</button>`;
     }
   }catch(err){toast(err.message);}
 });
@@ -89,22 +89,24 @@ function openReheatCheck(id){
     if(old){reheatWorkLog(old);return;}form('母豚 '+id+' · 再発情確認','<p>現在の確認予定はありません。再発情があった場合は実際の日付を記録できます。</p>','再発情あり',()=>{setTimeout(()=>record('再発情確認',id,'',null,false,true),0);});return;
   }
   const basis=db,session=dataSession;
-  form('母豚 '+id+' · 再発情確認',`<p>確認予定：${esc(sowCardDate(plan.date))}</p><p>再発情はありましたか？</p><p class="muted">「なし」は今回の確認を完了します。分娩予定・再発回数は変わりません。妊娠確定の記録ではありません。</p>`,'再発情なし',()=>{
+  form('母豚 '+id+' · 再発情確認',`<p>確認予定：${esc(sowCardDate(plan.date))}</p><p>再発情はありましたか？</p><p class="muted">見逃したかもしれない場合は「様子見・21日延ばす」で、今の確認予定から21日後へ変更できます。種付け・再発情確定の記録はせず、再発回数や分娩予定も変えません。</p><p class="muted">「なし」は今回の確認を完了します。分娩予定・再発回数は変わりません。妊娠確定の記録ではありません。</p>`,'再発情なし',()=>{
     if(db!==basis||dataSession!==session)throw Error('記録が更新されました。開き直してください。');
     let log;save(d=>{log=TanakaSowWork.clearReheat(d,{...makeLog('追記',id),id,expectedPage:JSON.stringify(p)});});showWorkAction(log,id+'は再発情なしで確認しました');
   });
-  modal.insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" data-action="reheat-positive" data-id="${esc(id)}">再発情あり</button>`);
+  modal.insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" data-action="reheat-positive" data-id="${esc(id)}">再発情あり</button><button type="button" class="btn secondary" data-action="reheat-defer" data-id="${esc(id)}" data-date="${esc(plan.date)}" data-session="${esc(session)}">様子見・21日延ばす（${esc(sowCardDate(M.addDays(plan.date,21)))}）</button>`);
 }
 function reheatWorkLog(l){
   const active=l.action?.kind==='reheat-clear'&&TanakaSowWork.reheatReceipt(db,l.id,l.action.plannedDate)?.key===l.key;
   form('再発情確認の記録',`<p>母豚 ${esc(l.id)}</p><p>${esc(l.note)}</p><p>${esc(dateText(l))}</p>`,'閉じる',()=>{});
+  if(l.action?.kind==='reheat-defer'&&TanakaSowWork.reheatPlanDate(db,l.id)===l.action.after&&!db.logs.some(u=>u.undoOf===l.key))modal.insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" data-action="reheat-undo" data-id="${esc(l.key)}">様子見延長を取り消す</button>`);
   if(active)modal.insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" data-action="reheat-undo" data-id="${esc(l.key)}">確認を取り消す</button>`);
 }
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-action="reheat-open"],[data-action="reheat-positive"],[data-action="reheat-undo"]');if(!b)return;
+  const b=e.target.closest('[data-action="reheat-open"],[data-action="reheat-positive"],[data-action="reheat-undo"],[data-action="reheat-defer"]');if(!b)return;
   try{
     if(b.dataset.action==='reheat-open')openReheatCheck(b.dataset.id);
+    else if(b.dataset.action==='reheat-defer'){if(b.dataset.session!==String(dataSession))throw Error('画面が切り替わりました。開き直してください。');let log;save(d=>{log=TanakaSowWork.deferReheat(d,{...makeLog('追記',b.dataset.id),id:b.dataset.id,expectedDate:b.dataset.date});});dlg.close();showWorkAction(log,log.id+'は様子見：再発情確認を'+sowCardDate(log.action.after)+'へ延ばしました');}
     else if(b.dataset.action==='reheat-positive')record('再発情確認',b.dataset.id,'',null,false,true);
-    else{const expected=JSON.stringify(db.inventoryMonths?.[today().slice(0,7)]??null);let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});if(log.action?.originalKind==='farrowing-entry')syncWaitingDraft(log,expected);dlg.close();showWorkAction(log,log.id+'の再発情なしの確認を取り消しました');}
+    else{const expected=JSON.stringify(db.inventoryMonths?.[today().slice(0,7)]??null);let log;save(d=>{log=TanakaSowWork.undo(d,b.dataset.id,{...makeLog('追記','')});});if(log.action?.originalKind==='farrowing-entry')syncWaitingDraft(log,expected);dlg.close();showWorkAction(log,log.id+(log.action?.originalKind==='reheat-defer'?'の様子見延長を取り消しました':'の再発情なしの確認を取り消しました'));}
   }catch(err){toast(err.message);}
 });

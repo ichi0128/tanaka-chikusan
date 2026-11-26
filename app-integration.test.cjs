@@ -908,3 +908,13 @@ test('breeding cadence follows current active sows, excludes unmated gilts, and 
  const html=run('farrowingForecastPage()');assert.match(html,/種付け間隔の目安/);assert.match(html,/母豚ごとの年間タイムライン/);assert.match(html,/分娩舎10室の使用見込み/);assert.doesNotMatch(html,/使用見込み 最大|初産・8月の分娩予測/);
  assert.equal(b.storage.getItem('tanaka-db'),saved);
 });
+test('watchful waiting check date appears on the sow card and home without changing mating or future birth plans',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`var watchPage=TanakaSowParity.pages(db,'812')[0];save(d=>TanakaSowParity.edit(d,'812',watchPage.key,{...watchPage.card,mating:'2026-11-01'},JSON.stringify(watchPage),true));var watchSavedCard=JSON.stringify(TanakaSowParity.pages(db,'812'));`);
+ assert.ok(run("TanakaTasks.collect(db,'2026-11-26').overdue.some(x=>x.id==='812'&&x.type==='再発情確認'&&x.date==='2026-11-22')"));
+ run(`var watchLog;save(d=>{watchLog=TanakaSowWork.deferReheat(d,{...makeLog('追記','812'),id:'812',date:'2026-11-26',expectedDate:'2026-11-22'});});`);
+ assert.equal(run("JSON.stringify(TanakaSowParity.pages(db,'812'))===watchSavedCard"),true);
+ assert.ok(run("TanakaTasks.collect(db,'2026-11-26').upcoming.some(x=>x.id==='812'&&x.type==='再発情確認'&&x.date==='2026-12-13')"));assert.equal(run("TanakaTasks.collect(db,'2026-11-26').overdue.some(x=>x.id==='812'&&x.type==='再発情確認')"),false);
+ assert.match(run("reheatControl('812',TanakaSowParity.pages(db,'812')[0].card)"),/12\/13/);
+ run("modal.insertAdjacentHTML=(pos,html)=>{modal.innerHTML+=html;};openReheatCheck('812')");assert.match(run('modal.innerHTML'),/様子見・21日延ばす/);assert.match(run('modal.innerHTML'),/1\/3/);
+});
