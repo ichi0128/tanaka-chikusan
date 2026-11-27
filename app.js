@@ -1,6 +1,6 @@
 'use strict';
 // App release version; independent of the saved-data schema version.
-const APP_VERSION='1.22.0';
+const APP_VERSION='1.23.0';
 const M=TanakaModel,KEY='tanaka-db',app=document.getElementById('app'),dlg=document.getElementById('dialog'),modal=document.getElementById('modal');
 let db,state,page='home',selected='',fatal='',toastTimer;
 // Simulation data lives only in this page's memory. Never serialize this session.
@@ -32,7 +32,7 @@ function cardLink(title,value,sub,target,hint='',vacancy='',counts=[]){
 }
 
 function workRecords(logs){return logs.filter(l=>!l.privateStockUse&&!['developer','system'].includes(l.origin));}
-function recordTitle(l){if(l.type==='種付け'&&l.remating)return '再種付け';return ({'移動取り消し':'移動取消','分娩舎修正':'分娩舎の情報を編集','育成舎修正':'育成舎の情報を編集'})[l.type]||l.type;}
+function recordTitle(l){if(l.type==='肉豚出荷'&&l.shipmentKind==='konuki')return '小貫';if(l.type==='種付け'&&l.remating)return '再種付け';return ({'移動取り消し':'移動取消','分娩舎修正':'分娩舎の情報を編集','育成舎修正':'育成舎の情報を編集'})[l.type]||l.type;}
 function history(logs,limit=Infinity){const visible=new Set(M.uniqueMatingLogs(db.logs));return logs.filter(l=>!l.privateStockUse&&visible.has(l)).slice().reverse().slice(0,limit).map(l=>`<button class="row row-action" data-action="log" data-id="${esc(l.key)}"><div><b>${esc(l.mix?mixRecordLabel(l):l.death?deathTargetLabel(l.death.target):l.nursery?.mixed||l.room?.mixed||l.finishingAfter?.mixed||l.sourceBefore?.mixed||l.mixed?'混成':sowIdentityLabel(l.id)||(l.finishingKey?'肉豚舎':l.nurseryKey?'育成舎':'分娩舎'))}　${esc(recordTitle(l))}${l.origin==='simulation'?' · 予測・仮想':''}</b><p class="muted">${esc(dateText(l))}${l.type==='分娩舎内移動'?' · '+esc(l.count)+'頭を移動':''}${l.nurseryKey?' · 育成舎':''}${l.finishingKey?' · '+esc(finishingPlace(l.finishingKey)):''}${l.type==='肉豚舎へ移動'?' · '+esc(l.sourceArea==='nursery'?'育成舎':finishingPlace(l.sourceKey))+'から '+esc(l.count)+'頭':''}${l.type==='肉豚出荷'?' · '+esc(l.count)+'頭出荷':''}${l.death?' · '+esc(l.count)+'頭':''}${l.type==='種付け'&&l.boar?' · '+esc(l.boar):''}${l.legacy?' · 旧版記録':''}${l.updatedAt?' · 修正済み':''}</p>${l.movement?`<p class="muted">${esc(l.movement.from.name)} → ${esc(l.movement.to.name)}</p>`:''}${l.type==='分娩'?`<p class="muted">${l.birthTime?esc(l.birthTime)+' · ':''}${l.birthTotal!==undefined?'総数 '+esc(l.birthTotal)+'頭 － ':''}生存 ${l.count==null?'未入力':esc(l.count)+'頭'}（出生時） · 死産 ${l.stillborn==null?'未入力':esc(l.stillborn)+'頭'}</p>`:''}${l.type==='離乳'&&l.operator?`<p class="muted">操作者：${esc(l.operator)}${l.nursingDays!==null&&l.nursingDays!==undefined?' · 授乳'+l.nursingDays+'日':''}</p>`:''}${l.type==='再発情確認'&&l.failedMating?`<p class="muted">前回種付け：${esc(sowCardDate(l.failedMating.date))} ${esc(l.failedMating.boar||'')} · 不成立（${esc(l.failedMating.parity??'—')}産）</p>`:''}${l.note?`<p class="muted history-note">${esc(l.note)}</p>`:''}</div><span class="chev">›</span></button>`).join('')||'<div class="empty">まだ記録はありません</div>';}
 
 function homeScheduleEntries(){return currentTaskGroups().all;}
@@ -108,7 +108,7 @@ function render(){
   updateSimulationBanner();
   openPigletCare=page==='rooms'?new Set([...document.querySelectorAll('details.piglet-care[open]')].map(el=>el.dataset.careRoom)):new Set();
   if(fatal){app.innerHTML=`<h2>保存データを読み込めません</h2><div class="notice">${esc(fatal)}<br>保存データは削除していません。</div><button class="btn" data-action="raw-export">元データを保存</button><button class="btn secondary" data-action="recovery-export">以前の保存データを取り出す</button>`;return;}
-  app.innerHTML=simulationProgressSummary()+({home,sows:sowList,detail,rooms,nursery,finishing,shipments:shipmentHistory,consignments:consignmentHistory,forecast:farrowingForecastPage,records,edit,schedules,todayTasks:todayTasksPage,updates,inventory:inventoryPage}[page]||home)()+`<footer>田中畜産<br>確認できていない情報は未入力で表示</footer>`;
+  app.innerHTML=simulationProgressSummary()+({home,sows:sowList,detail,rooms,nursery,finishing,shipments:shipmentHistory,konuki:konukiHistory,consignments:consignmentHistory,forecast:farrowingForecastPage,records,edit,schedules,todayTasks:todayTasksPage,updates,inventory:inventoryPage}[page]||home)()+`<footer>田中畜産<br>確認できていない情報は未入力で表示</footer>`;
   restoreYardViewport();
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.page===(page==='detail'?'sows':page==='shipments'?'finishing':page==='forecast'?'rooms':page)?'page':'false'));
   inventoryQueuePlanRepair();

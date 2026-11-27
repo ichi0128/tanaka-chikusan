@@ -106,23 +106,25 @@ TanakaFinishing.validShipment=function(record){
   if(!Number.isSafeInteger(record.count)||record.count<=0)throw Error('出荷頭数は1以上の整数で入力してください。');
 };
 TanakaFinishing.validateShipmentHistory=function(data){
+  for(const l of data.logs||[])if(l.shipmentKind!==undefined&&(l.type!=='肉豚出荷'||!['normal','konuki'].includes(l.shipmentKind)||l.shipmentDestination!==undefined&&typeof l.shipmentDestination!=='string'))throw Error('出荷区分・出荷先を確認してください。');
   const h=data.shipmentHistory;if(h===undefined)return;
   if(!h||!Array.isArray(h.added)||!Array.isArray(h.deletedLogKeys))throw Error('出荷履歴の保存形式を確認してください。');
-  h.added.forEach(TanakaFinishing.validShipment);
+  h.added.forEach(r=>{TanakaFinishing.validShipment(r);if(r.shipmentKind!==undefined&&!['normal','konuki'].includes(r.shipmentKind)||r.destination!==undefined&&typeof r.destination!=='string')throw Error('出荷区分・出荷先を確認してください。');});
   if(h.monthlyAdded!==undefined){
     if(!Array.isArray(h.monthlyAdded)||h.monthlyAdded.some(r=>!r||typeof r.key!=='string'||!r.key||!/^\d{4}-(0[1-9]|1[0-2])$/.test(r.month)||!Number.isSafeInteger(r.count)||r.count<0)||new Set(h.monthlyAdded.map(r=>r.key)).size!==h.monthlyAdded.length||new Set(h.monthlyAdded.map(r=>r.month)).size!==h.monthlyAdded.length)throw Error('月別の出荷実績を確認してください。');
   }
   if(new Set(h.added.map(r=>r.key)).size!==h.added.length||h.deletedLogKeys.some(k=>typeof k!=='string'||!k)||new Set(h.deletedLogKeys).size!==h.deletedLogKeys.length)throw Error('出荷履歴の識別番号を確認してください。');
 };
 TanakaFinishing.addShipment=function(data,record){
+  if(record.shipmentKind!==undefined&&!['normal','konuki'].includes(record.shipmentKind))throw Error('出荷区分を確認してください。');
   TanakaFinishing.validateShipmentHistory(data);TanakaFinishing.validShipment(record);
   const h=data.shipmentHistory||(data.shipmentHistory={added:[],deletedLogKeys:[]});
   if(h.added.some(r=>r.key===record.key))throw Error('同じ出荷実績が既に登録されています。');
-  h.added.push({key:record.key,date:record.date,count:record.count});
+  h.added.push({key:record.key,date:record.date,count:record.count,...(record.shipmentKind==='konuki'?{shipmentKind:'konuki',destination:String(record.destination||'')}: {})});
 };
 TanakaFinishing.deleteShipment=function(data,source,key){
   TanakaFinishing.validateShipmentHistory(data);
-  const record=TanakaFinishing.shipmentSummary(data,'').records.find(r=>r.source===source&&r.key===key);
+  const record=TanakaFinishing.shipmentSummary(data,'','all').records.find(r=>r.source===source&&r.key===key);
   if(!record)throw Error('出荷履歴が変更されています。画面を開き直してください。');
   const h=data.shipmentHistory||(data.shipmentHistory={added:[],deletedLogKeys:[]});
   if(source==='monthly')h.monthlyAdded=h.monthlyAdded.filter(r=>r.key!==key);
@@ -130,9 +132,10 @@ TanakaFinishing.deleteShipment=function(data,source,key){
   else h.deletedLogKeys.push(key);
 };
 // Shared by Home and shipment history; manual additions and exclusions are display totals only.
-TanakaFinishing.shipmentSummary=function(data,month){
+TanakaFinishing.shipmentSummary=function(data,month,kind='normal'){
+  if(!['normal','konuki','all'].includes(kind))throw Error('出荷区分を確認してください。');
   const h=data.shipmentHistory||{added:[],deletedLogKeys:[]},excluded=new Set(h.deletedLogKeys);
-  const records=[...(data.logs||[]).filter(l=>l.type==='肉豚出荷'&&!excluded.has(l.key)&&Number.isInteger(l.count)&&l.count>0&&typeof l.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(l.date)&&Number.isFinite(Date.parse(l.date))&&new Date(l.date).toISOString().slice(0,10)===l.date).map(l=>({key:l.key,source:'log',date:l.date,count:l.count,finishingKey:l.finishingKey||'',note:l.note||''})),...h.added.map(r=>({...r,source:'manual',finishingKey:'',note:''})),...(h.monthlyAdded||[]).map(r=>({...r,date:r.month,source:'monthly',finishingKey:'',note:'月別実績（出荷日不明）'}))].sort((a,b)=>b.date.localeCompare(a.date));
+  const records=[...(data.logs||[]).filter(l=>l.type==='肉豚出荷'&&!excluded.has(l.key)&&Number.isInteger(l.count)&&l.count>0&&typeof l.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(l.date)&&Number.isFinite(Date.parse(l.date))&&new Date(l.date).toISOString().slice(0,10)===l.date).map(l=>({key:l.key,source:'log',date:l.date,count:l.count,finishingKey:l.finishingKey||'',note:l.note||'',shipmentKind:l.shipmentKind||'normal',destination:l.shipmentDestination||''})),...h.added.map(r=>({...r,source:'manual',finishingKey:'',note:''})),...(h.monthlyAdded||[]).map(r=>({...r,date:r.month,source:'monthly',finishingKey:'',note:'月別実績（出荷日不明）'}))].filter(r=>kind==='all'||(r.shipmentKind||'normal')===kind).sort((a,b)=>b.date.localeCompare(a.date));
   const months=new Map();
   for(const record of records){
     const key=record.date.slice(0,7);

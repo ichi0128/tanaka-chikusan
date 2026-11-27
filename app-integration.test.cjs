@@ -928,3 +928,19 @@ test('inventory screen and print show four breeding groups with cull candidates 
  assert.equal(run('groupTotals.sowCount'),run('groupBefore.sowCount-1'));assert.equal(run('groupTotals.farmTotal'),run('groupBefore.farmTotal'));assert.equal(run('groupTotals.cullCount'),1);
  for(const fn of ['inventoryFarmTotals','inventoryPrintFarmTotals']){const html=run(fn+'(groupReport)');assert.match(html,/種豚/);assert.match(html,/母豚/);assert.match(html,/育成母豚 0頭/);assert.match(html,/廃豚予定 1頭/);}
 });
+test('konuki reduces formal room stock but counts separately from normal shipments, annual results and plans',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);seedCandidate(b,5);
+ run(`save(d=>{d.finishingBaseline.find(r=>r.key==='f3').kind='肉豚';});var konukiFarmBefore=I.farmSummary(I.create(db,state,today().slice(0,7),today(),()=> '')).farmTotal,normalBefore=F.shipmentSummary(db,today().slice(0,7)).currentTotal,annualBefore=TanakaAnnual.summary(db,today().slice(0,4)).shipments.automatic;var konukiSubmit,konukiHtml;form=(title,body,label,submit)=>{konukiSubmit=submit;konukiHtml=body;};finishingDetail('f3');`);
+ assert.match(run('modal.innerHTML'),/data-action="fin-konuki"/);
+ run("finishingShip('f3','','konuki')");assert.match(run('konukiHtml'),/年間総出荷数/);assert.match(run('konukiHtml'),/出荷先/);
+ run(`konukiSubmit(new Map([['count','1'],['date',today()],['destination','鹿児島の処理場'],['note','足が弱いため']]));var konukiKey=db.logs.at(-1).key;`);
+ assert.equal(run("state.finishing.find(r=>r.key==='f3').count"),4);assert.equal(run('db.logs.at(-1).shipmentKind'),'konuki');assert.equal(run('recordTitle(db.logs.at(-1))'),'小貫');
+ assert.equal(run("I.farmSummary(I.create(db,state,today().slice(0,7),today(),()=> '')).farmTotal"),run('konukiFarmBefore-1'));
+ assert.equal(run("F.shipmentSummary(db,today().slice(0,7)).currentTotal"),run('normalBefore'));assert.equal(run("F.shipmentSummary(db,today().slice(0,7),'konuki').currentTotal"),1);assert.equal(run("TanakaAnnual.summary(db,today().slice(0,4)).shipments.automatic"),run('annualBefore'));
+ assert.match(run('konukiHistory()'),/小貫合計　1頭/);assert.match(run('konukiHistory()'),/鹿児島の処理場/);assert.equal(run("F.monthlyShipmentPlan(db,today().slice(0,4),Number(today().slice(5,7))+' 0',today()).rows[0].daily"),0);
+ run("finishingShip('f3','','konuki');var konukiStable=JSON.stringify(db)");assert.throws(()=>run("konukiSubmit(new Map([['count','5'],['date',today()]]))"),/頭数|在室/);assert.equal(run('JSON.stringify(db)===konukiStable'),true);
+ run("konukiSubmit(new Map([['count','4'],['date',today()]]))");assert.equal(run("state.finishing.find(r=>r.key==='f3').state"),'empty');assert.equal(run("F.shipmentSummary(db,today().slice(0,7),'konuki').currentTotal"),5);
+ run("var konukiRestored=M.migrate(JSON.parse(localStorage.getItem('tanaka-db')));new TanakaCloud.CloudStore({model:M}).validate(konukiRestored)");assert.equal(run("F.shipmentSummary(konukiRestored,today().slice(0,7),'konuki').currentTotal"),5);
+ run("save(d=>F.addShipment(d,{key:'past-konuki',date:today(),count:2,shipmentKind:'konuki'}))");assert.equal(run("F.shipmentSummary(db,today().slice(0,7),'konuki').currentTotal"),7);assert.equal(run("TanakaAnnual.summary(db,today().slice(0,4)).shipments.automatic"),run('annualBefore'));
+ run("save(d=>F.deleteShipment(d,'log',konukiKey))");assert.equal(run("F.shipmentSummary(db,today().slice(0,7),'konuki').currentTotal"),6);assert.equal(run("state.finishing.find(r=>r.key==='f3').state"),'empty');
+});
