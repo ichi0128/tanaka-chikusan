@@ -37,7 +37,7 @@ function inventoryPrintCount(r){
 }
 function inventoryPrintAggregate(r){
   const groups=[['finishing','肉豚舎'],['yard','運動場'],['farrowing','分娩舎'],['nursery','育成舎']],stats=groups.map(([area])=>I.aggregate(r.rows.filter(row=>row.area===area))),s=I.aggregate(r.rows);
-  return `<section class="sheet portrait aggregate-sheet"><h1>体重別　頭数集計表</h1>${inventoryPrintMeta(r,'② 体重別集計')}<table class="aggregate-report"><thead><tr><th>体重・区分</th>${groups.map(([,label])=>`<th>${label}</th>`).join('')}<th>合計</th><th class="handwrite" aria-label="手書き用空欄"></th></tr></thead><tbody>${I.STOCK.map(k=>`<tr><th>${inventoryLabel(k)}</th>${stats.map(x=>`<td>${x.totals[k]??0}</td>`).join('')}<td class="headcount">${s.totals[k]??0}</td><td class="handwrite"></td></tr>`).join('')}</tbody><tfoot><tr><th>合計</th>${stats.map(x=>`<td>${x.total}</td>`).join('')}<td class="headcount">${s.total}</td><td class="handwrite"></td></tr></tfoot></table><div class="grand-total">肉豚の体重別集計 ${s.total}頭</div>${inventoryPrintFarmTotals(r)}<p class="report-note">①の確認・修正内容から集計。110kg・10kgは通常集計の対象外のため0で表示し、③の計画値は加えません。候補 ${s.candidates}頭は肉豚集計に含み、正式な育成母豚 ${s.gilts}頭は別枠。${s.unclassified?'体重区分未確認 '+s.unclassified+'頭は集計対象外。':''}${s.unknown?'頭数未入力 '+s.unknown+'行あり。':''}</p><footer>② 体重別集計</footer></section>`;
+  return `<section class="sheet portrait aggregate-sheet"><h1>体重別　頭数集計表</h1>${inventoryPrintMeta(r,'② 体重別集計')}<table class="aggregate-report"><thead><tr><th>体重・区分</th>${groups.map(([,label])=>`<th>${label}</th>`).join('')}<th>合計</th><th class="handwrite" aria-label="手書き用空欄"></th></tr></thead><tbody>${I.STOCK.map(k=>`<tr><th>${inventoryLabel(k)}</th>${stats.map(x=>`<td>${x.totals[k]??0}</td>`).join('')}<td class="headcount">${s.totals[k]??0}</td><td class="handwrite"></td></tr>`).join('')}</tbody><tfoot><tr><th>合計</th>${stats.map(x=>`<td>${x.total}</td>`).join('')}<td class="headcount">${s.total}</td><td class="handwrite"></td></tr></tfoot></table><div class="grand-total">肉豚の体重別集計 ${s.total}頭</div>${inventoryPrintFarmTotals(r,true)}<p class="report-note">①の確認・修正内容から集計。110kg・10kgは通常集計の対象外のため0で表示し、③の計画値は加えません。候補 ${s.candidates}頭は肉豚集計に含み、正式な育成母豚 ${s.gilts}頭は別枠。${s.unclassified?'体重区分未確認 '+s.unclassified+'頭は集計対象外。':''}${s.unknown?'頭数未入力 '+s.unknown+'行あり。':''}</p><footer>② 体重別集計</footer></section>`;
 }
 function inventoryPrintPlan(r){
   const actual=I.actualStock(r),plan=I.plannedStock(r),prior=r.previousYearActual||I.yearActual(db,r.month.slice(0,4)),totals=inventoryStockTotals(r);
@@ -87,12 +87,18 @@ function inventoryPrintStyles(){return `
  .count-notebook .notebook-group{margin-bottom:1.5mm}
  .count-notebook .notebook-group h2{margin:1.5mm 0 .8mm}
  .count-notebook .notebook-group>.report-note{margin:.8mm 0}
- .count-notebook .count-summary-by-kind{display:block;line-height:1.35}
- .count-notebook .count-summary-by-kind>span{display:inline-block;margin-right:4mm}
- .count-notebook .count-summary-by-kind>.area-breakdown{display:block;margin-right:0}
+ .count-summary-by-kind{display:block;line-height:1.35}
+ .count-summary-by-kind>span{display:inline-block;margin-right:4mm}
+ .count-summary-by-kind>.area-breakdown{display:block;margin-right:0}
  .count-notebook>.report-note:last-of-type{margin-top:1.5mm}
  .sheet.portrait + .sheet.portrait{break-before:page}
  .room-report tbody tr{height:12mm}.room-report tfoot tr{height:10mm}
+ /* Keep the matching detailed footer on the aggregate sheet within A4. */
+ .aggregate-sheet h1{margin-bottom:2mm}
+ .aggregate-sheet>.report-subtitle{margin:2mm 0}
+ .aggregate-sheet>.grand-total{margin-top:2mm;padding:1.5mm}
+ .aggregate-sheet>.count-summary{margin-top:2mm;padding-top:2mm}
+ .aggregate-sheet>.report-note:last-of-type{margin-top:1.5mm}
  .aggregate-report tbody tr{height:11mm}.aggregate-report tfoot tr{height:12mm}
  h1,h2{break-after:avoid}a{color:inherit;text-decoration:none}
 }

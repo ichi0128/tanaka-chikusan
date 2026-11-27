@@ -276,6 +276,8 @@ test('print output keeps all four report sections, values and final notes withou
  const html=vm.runInContext(`inventoryPrintDocument(printReport,'all')`,b.context);
  assert.equal((html.match(/<section class="sheet /g)||[]).length,4);
  const checks=vm.runInContext(`inventoryPrintDocument(printReport,'check')`,b.context);assert.equal((checks.match(/<section class="sheet /g)||[]).length,3);assert.doesNotMatch(checks,/<section class="sheet[^"]*plan-sheet/);assert.match(checks,/<title>[^<]*確認用/);assert.equal(vm.runInContext('inventoryPrintDocument(printReport)',b.context),checks);
+ const totalsByKind=/<div class="count-summary count-summary-by-kind">[\s\S]*?<\/div>/;
+ const countFooter=vm.runInContext('inventoryPrintCount(printReport)',b.context).match(totalsByKind),aggregateFooter=vm.runInContext('inventoryPrintAggregate(printReport)',b.context).match(totalsByKind);assert.ok(countFooter);assert.ok(aggregateFooter);assert.equal(aggregateFooter[0],countFooter[0]);
  const controls=vm.runInContext('inventoryPrintControls()',b.context);assert.match(controls,/data-print="check"/);assert.match(controls,/③ 提出用を印刷/);assert.doesNotMatch(controls,/data-print="all"|data-inventory-panel="3"/);
  for(const [mode,pages] of [[1,2],[2,1],[3,1]]){
    const part=vm.runInContext(`inventoryPrintDocument(printReport,${mode})`,b.context);
