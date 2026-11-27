@@ -288,6 +288,9 @@ test('print output keeps all four report sections, values and final notes withou
  assert.throws(()=>vm.runInContext(`inventoryPrintDocument(printReport,9)`,b.context),/帳票を選んで/);
  const farrowingPrint=vm.runInContext(`inventoryPrintCount({...I.clone(printReport),sowSnapshot:{ids:['51','18','98'],giltIds:[],cullIds:['18']},rows:[{area:'farrowing',state:'family',sowId:'51',count:11,kind:'肉豚'},{area:'farrowing',state:'waiting',sowId:'18',count:0,kind:'肉豚'},{area:'farrowing',state:'piglets',sowId:'98',count:7,kind:'肉豚'}]})`,b.context);
  assert.match(farrowingPrint,/<h2>分娩舎<\/h2><p class="report-note">母豚 1頭 ／ 廃豚予定 1頭<\/p>/);
+ const breakdown=vm.runInContext(`(()=>{const r={...I.clone(printReport),sowSnapshot:{ids:[...Array.from({length:7},(_,i)=>'f'+i),...Array.from({length:10},(_,i)=>'y'+i),'c'],giltIds:[],cullIds:['c']},rows:[...Array.from({length:7},(_,i)=>({area:'farrowing',state:i?'waiting':'family',sowId:'f'+i,count:i?0:65,kind:'肉豚'})),{area:'nursery',count:31,kind:'肉豚'},{area:'finishing',count:112,kind:'肉豚'},...Array.from({length:3},()=>({area:'yard',count:1,kind:'肉豚'})),{area:'yard',count:1,kind:'母豚',registeredSowId:'c'}]};return inventoryPrintFarmTotals(r,true)})()`,b.context);
+ assert.match(breakdown,/全豚舎の頭数 231頭/);assert.match(breakdown,/分娩舎：子豚 65頭 ／ 母豚 7頭 ／ 廃豚予定 0頭/);assert.match(breakdown,/運動場：肉豚 3頭 ／ 母豚 10頭 ／ 育成母豚 0頭 ／ 廃豚予定 1頭/);assert.doesNotMatch(breakdown,/分娩舎 72頭|運動場 14頭|母豚 17頭/);
+
  assert.equal(b.storage.getItem('tanaka-db'),raw);
  vm.runInContext(`inventoryMonth=weightMonth;inventoryCanEdit=()=>false;var printWritten='';var printOpened={opener:window,document:{open(){},write(html){printWritten=html;},close(){}}};window.open=()=>printOpened;inventoryPrint('all');`,b.context);
  assert.equal(vm.runInContext('printOpened.opener',b.context),null);assert.match(vm.runInContext('printWritten',b.context),/印刷する \/ PDFに保存/);
