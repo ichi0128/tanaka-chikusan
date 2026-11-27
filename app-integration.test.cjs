@@ -968,3 +968,9 @@ test('empty inventory rooms hide stored weight on screen and print, reenable wit
  run('emptyWeightRow.count=2;inventoryRefreshEmptyWeights({rows:[emptyWeightRow]})');assert.doesNotMatch(run('weightSlot.innerHTML'),/disabled|空室/);assert.match(run('weightSlot.innerHTML'),/30kg/);assert.equal(run('inventoryPrintWeight(emptyWeightRow)'),'30kg');
  run('document.querySelector=weightQuery');assert.equal(b.storage.getItem('tanaka-db'),stored);
 });
+test('inventory yard section shows breeding counts even without meat input frames and excludes farrowing candidates',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`save(d=>{TanakaCulling.mark(d,{id:'21',candidate:true,date:today()});TanakaCulling.mark(d,{id:'106',candidate:true,date:today()});});var yardReport=I.create(db,state,today().slice(0,7),today(),roomBirthDate),yardReportBefore=JSON.stringify(yardReport),yardSummaryBefore=I.yardBreedingSummary(yardReport);`);
+ const html=run('inventoryYardGroup([],yardReport)');assert.match(html,/種豚<\/span><strong>2頭/);assert.match(html,/育成母豚<\/span><strong>0頭/);assert.match(html,/廃豚予定<\/span><strong>1頭/);assert.ok(html.indexOf('data-inventory-yard-breeding')<html.indexOf('肉豚などの個体入力'));assert.match(html,/個体入力の小計 0頭/);
+ assert.match(run('inventoryPrintCount(yardReport)'),/種豚 2頭 ／ 母豚 \d+頭 ／ 育成母豚 0頭 ／ 廃豚予定 1頭/);assert.equal(run('JSON.stringify(yardReport)===yardReportBefore'),true);
+});

@@ -84,6 +84,14 @@ function farmSummary(report){
   const cullIds=report.sowSnapshot?.cullIds,cullSows=(cullIds||[]).filter(id=>ids?.includes(id)).length,cullGilts=(cullIds||[]).filter(id=>report.sowSnapshot?.giltIds?.includes(id)&&!ids?.includes(id)).length;
   return {...stats,sowCount:ids?registered-cullSows:null,giltCount:Math.max(0,stats.gilts-cullGilts),cullCount:cullIds?cullSows+cullGilts:null,boarCount,areaTotals,farmTotal:Object.values(areaTotals).reduce((sum,n)=>sum+n,0)+(boarCount??0)};
 }
+// Location counts come from the saved month, not today's live herd.
+function yardBreedingSummary(report){
+  const snap=report.sowSnapshot,ids=snap?.ids,culls=snap?.cullIds,gilts=snap?.giltIds||[];
+  const elsewhere=new Set(report.rows.filter(r=>r.area==='farrowing'&&['family','waiting'].includes(r.state)).map(r=>r.sowId));
+  report.rows.filter(r=>r.area==='nursery'&&r.count).forEach(r=>(r.registeredSowIds||[]).forEach(id=>elsewhere.add(id)));
+  const yardIds=ids?.filter(id=>!elsewhere.has(id)),yardCulls=(culls||[]).filter(id=>!elsewhere.has(id)&&(ids?.includes(id)||gilts.includes(id))),giltCulls=yardCulls.filter(id=>gilts.includes(id)&&!ids?.includes(id)).length;
+  return {boarCount:report.boarSnapshot?root.TanakaModel.activeBoars(report.boarSnapshot).length:null,sowCount:yardIds?yardIds.filter(id=>!culls?.includes(id)).length:null,giltCount:Math.max(0,aggregate(report.rows.filter(r=>r.area==='yard')).gilts-giltCulls),cullCount:culls?yardCulls.length:null};
+}
 function syncBoarSnapshot(report,data){
   const next=boarSnapshot(data);if(JSON.stringify(report.boarSnapshot)===JSON.stringify(next))return false;
   report.boarSnapshot=next;report.status='draft';return true;
@@ -216,5 +224,5 @@ function syncSavedFinishingWeight(data,month,key,weight){
   if(syncFinishingWeight(report,key,weight))saveReport(data,report,JSON.stringify(old));
 }
 function gilts(state){return state.finishing.filter(r=>r.key==='yard').flatMap(r=>root.TanakaFinishing.yardState(r).individuals).filter(p=>(root.TanakaGilts?.yardKind(p,state)||p.kind)==='育成母豚').length;}
-root.TanakaInventory={sowSnapshot,syncSowClassification,boarSnapshot,syncBoarSnapshot,syncSavedBoars,syncFinishingWeight,syncSavedFinishingWeight,CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,rowKind,aggregate,farmSummary,currentStock,actualStock,plannedStock,resetPlan,needsOctoberPlanRepair,repairOctoberPlan,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
+root.TanakaInventory={yardBreedingSummary,sowSnapshot,syncSowClassification,boarSnapshot,syncBoarSnapshot,syncSavedBoars,syncFinishingWeight,syncSavedFinishingWeight,CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,rowKind,aggregate,farmSummary,currentStock,actualStock,plannedStock,resetPlan,needsOctoberPlanRepair,repairOctoberPlan,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
 })(typeof globalThis!=='undefined'?globalThis:this);

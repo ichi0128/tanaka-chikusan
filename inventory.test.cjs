@@ -41,3 +41,8 @@ test('version 3 JSON preserves monthly data, rejects invalid input, and remains 
  const badPlan=plain(db);badPlan.inventoryMonths['2026-10'].monthly[0].actual=1.2;assert.throws(()=>M.validate(badPlan),/出荷計画/);
  const unknown=plain(db);unknown.extra={keep:[null,false,0]};assert.deepEqual(plain(M.migrate(unknown).extra),unknown.extra);
 });
+test('yard breeding breakdown uses saved locations, separates culls and gilts, and never changes stock',()=>{
+ const {I,M}=setup(),r={boarSnapshot:I.boarSnapshot(M.migrate(null)),sowSnapshot:{ids:['1','2','3','4','5'],giltIds:['g1','g2'],cullIds:['2','3','g1']},rows:[{area:'farrowing',state:'family',sowId:'1',count:5,category:'授乳',kind:'肉豚'},{area:'farrowing',state:'waiting',sowId:'2',count:0,category:'',kind:'肉豚'},{area:'nursery',state:'occupied',count:3,registeredSowIds:['4'],category:'30',kind:'肉豚'},{area:'yard',count:1,kind:'母豚',registeredSowId:'3',category:''},{area:'yard',count:1,kind:'育成母豚',category:''},{area:'yard',count:1,kind:'育成母豚',category:''}]};
+ const before=JSON.stringify(r),total=I.farmSummary(r).farmTotal;assert.deepEqual(plain(I.yardBreedingSummary(r)),{boarCount:2,sowCount:1,giltCount:1,cullCount:2});assert.equal(JSON.stringify(r),before);assert.equal(I.farmSummary(r).farmTotal,total);
+ const restored=JSON.parse(JSON.stringify(r));assert.deepEqual(plain(I.yardBreedingSummary(restored)),plain(I.yardBreedingSummary(r)));delete restored.sowSnapshot.cullIds;delete restored.boarSnapshot;assert.equal(I.yardBreedingSummary(restored).cullCount,null);assert.equal(I.yardBreedingSummary(restored).boarCount,null);
+});
