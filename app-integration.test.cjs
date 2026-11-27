@@ -286,6 +286,8 @@ test('print output keeps all four report sections, values and final notes withou
  assert.ok(html.indexOf('<script>')<html.indexOf('</head>'));
  const body=html.slice(html.indexOf('<body>'));assert.ok(body.endsWith('</section></body></html>'));
  assert.throws(()=>vm.runInContext(`inventoryPrintDocument(printReport,9)`,b.context),/帳票を選んで/);
+ const farrowingPrint=vm.runInContext(`inventoryPrintCount({...I.clone(printReport),sowSnapshot:{ids:['51','18','98'],giltIds:[],cullIds:['18']},rows:[{area:'farrowing',state:'family',sowId:'51',count:11,kind:'肉豚'},{area:'farrowing',state:'waiting',sowId:'18',count:0,kind:'肉豚'},{area:'farrowing',state:'piglets',sowId:'98',count:7,kind:'肉豚'}]})`,b.context);
+ assert.match(farrowingPrint,/<h2>分娩舎<\/h2><p class="report-note">母豚 1頭 ／ 廃豚予定 1頭<\/p>/);
  assert.equal(b.storage.getItem('tanaka-db'),raw);
  vm.runInContext(`inventoryMonth=weightMonth;inventoryCanEdit=()=>false;var printWritten='';var printOpened={opener:window,document:{open(){},write(html){printWritten=html;},close(){}}};window.open=()=>printOpened;inventoryPrint('all');`,b.context);
  assert.equal(vm.runInContext('printOpened.opener',b.context),null);assert.match(vm.runInContext('printWritten',b.context),/印刷する \/ PDFに保存/);
