@@ -22,12 +22,14 @@ let inventoryBoarSyncQueued=false;
 function inventorySyncBoarDraft(month,expected){
   const cached=inventoryDrafts.get(month);if(!cached||cached.expected!==expected)return;
   if(!cached.dirty){inventoryDrafts.delete(month);return;}
-  I.syncBoarSnapshot(cached.report,db);cached.expected=JSON.stringify(db.inventoryMonths?.[month]??null);
+  I.syncBoarSnapshot(cached.report,db);I.syncSowClassification(cached.report,db);cached.expected=JSON.stringify(db.inventoryMonths?.[month]??null);
   if(db.inventoryMonths?.[month])cached.report.revisions=I.clone(db.inventoryMonths[month].revisions);
 }
 function inventoryQueueBoarSync(){
   const month=inventoryLocalMonth(),old=db.inventoryMonths?.[month];
-  if(inventoryBoarSyncQueued||!old||JSON.stringify(old.boarSnapshot)===JSON.stringify(I.boarSnapshot(db)))return;
+  if(inventoryBoarSyncQueued||!old)return;
+  const classified=I.clone(old),changed=I.syncSowClassification(classified,db);
+  if(!changed&&JSON.stringify(old.boarSnapshot)===JSON.stringify(I.boarSnapshot(db)))return;
   const cached=inventoryDrafts.get(month),expected=JSON.stringify(old),session=dataSession;
   if(cached?.dirty&&cached.expected!==expected)return;
   inventoryBoarSyncQueued=true;
@@ -36,7 +38,7 @@ function inventoryQueueBoarSync(){
     try{
       if(session!==dataSession||JSON.stringify(db.inventoryMonths?.[month])!==expected)return;
       const current=inventoryDrafts.get(month);if(current?.dirty&&current.expected!==expected)return;
-      save(d=>I.syncSavedBoars(d,month));inventorySyncBoarDraft(month,expected);updated=true;
+      save(d=>{const report=I.clone(d.inventoryMonths[month]);I.syncBoarSnapshot(report,d);I.syncSowClassification(report,d);I.saveReport(d,report,JSON.stringify(d.inventoryMonths[month]));});inventorySyncBoarDraft(month,expected);updated=true;
     }catch(err){toast('種豚頭数を保存できませんでした：'+err.message);}
     finally{inventoryBoarSyncQueued=false;if(updated&&page==='inventory')render();}
   });
@@ -51,6 +53,7 @@ function inventoryContext(){
   if(!inventoryDrafts.has(month)){
     const saved=db.inventoryMonths?.[month],report=saved?I.clone(saved):I.create(db,state,month,today(),roomBirthDate);
     report.rows=saved?inventoryEnsureFinishingRooms(I.individualYardRows(report.rows)):[];
+    if(month===inventoryLocalMonth())I.syncSowClassification(report,db);
     I.preparePlan(report,db);
     inventoryDrafts.set(month,{report,expected:JSON.stringify(saved??null),dirty:false,hasSnapshot:!!saved,editing:month>=inventoryLocalMonth()});
   }
@@ -146,7 +149,7 @@ function inventoryPlan(r,readonly=false){
 function inventoryBirthLabel(value){return value?Number(value.slice(5,7))+'/'+Number(value.slice(8,10)):'未入力';}
 function inventoryFarmTotals(r){
   const s=I.farmSummary(r),complete=s.sowCount!==null&&s.boarCount!==null;
-  return `<div class="inventory-farm-total" data-inventory-farm-total aria-live="polite"><strong>${complete?'全豚舎の頭数':'確認対象 合計'} ${s.farmTotal}頭${s.unknown?' ＋ 頭数未入力 '+s.unknown+'件':''}</strong><small>${[['farrowing','分娩舎'],['nursery','育成舎'],['finishing','肉豚舎'],['yard','運動場']].map(([area,label])=>label+' '+s.areaTotals[area]+'頭').join(' ／ ')} ／ 種豚 ${s.boarCount===null?'未保存':s.boarCount+'頭'}</small><small>母豚 ${s.sowCount===null?'未保存':s.sowCount+'頭'}は分娩舎・運動場に含みます。種豚は保存時に「在籍」の個体のみ。${s.boarCount===null?' この記録には種豚の在籍情報がないため、現在の頭数で補完していません。':''}</small></div>`;
+  return `<div class="inventory-farm-total" data-inventory-farm-total aria-live="polite"><strong>${complete?'全豚舎の頭数':'確認対象 合計'} ${s.farmTotal}頭${s.unknown?' ＋ 頭数未入力 '+s.unknown+'件':''}</strong><small>${[['farrowing','分娩舎'],['nursery','育成舎'],['finishing','肉豚舎'],['yard','運動場']].map(([area,label])=>label+' '+s.areaTotals[area]+'頭').join(' ／ ')} ／ 種豚 ${s.boarCount===null?'未保存':s.boarCount+'頭'}</small><small>種豚 ${s.boarCount===null?'未保存':s.boarCount+'頭'} ／ 母豚 ${s.sowCount===null?'未保存':s.sowCount+'頭'} ／ 育成母豚 ${s.giltCount}頭 ／ 廃豚予定 ${s.cullCount===null?'未保存':s.cullCount+'頭'}</small><small>母豚総数は廃豚予定・育成母豚を含みません。廃豚予定は全豚舎の頭数に含み、場所別の内訳と重複加算しません。種豚は保存時に「在籍」の個体のみ。${s.boarCount===null?' この記録には種豚の在籍情報がないため、現在の頭数で補完していません。':''}</small></div>`;
 }
 
 function inventoryGroupSubtotal(rows){
@@ -291,7 +294,7 @@ document.addEventListener('click',e=>{
     if(action==='refresh'){
       if(c.report.month!==inventoryLocalMonth())throw Error('現在データの取り込みは今月を開いて行ってください。');
       if((db.inventoryMonths?.[c.report.month]||c.hasSnapshot!==false||c.dirty)&&!window.confirm(inventoryMonthLabel(c.report.month)+'の①を現在の豚舎データで取り込み直します。①の修正内容と確認日は置き換わります。出荷計画の手入力と保存済み履歴は残ります。取り込み直した内容を下書きとして保存します。よろしいですか？'))return;
-      const report=c.hasSnapshot===false?I.clone(c.report):inventoryRead();report.date=today();report.boarSnapshot=I.boarSnapshot(db);report.sowSnapshot={ids:Object.values(state.sows).filter(s=>s.active&&!s.numberPending).map(s=>s.id)};report.rows=I.snapshot(db,state,report.date,roomBirthDate);I.syncPlan(report);report.status='draft';inventoryStoreSnapshot(c,report);c.editing=true;render();toast('現在の豚舎データを取り込み、今月の下書きに保存しました');return;
+      const report=c.hasSnapshot===false?I.clone(c.report):inventoryRead();report.date=today();report.boarSnapshot=I.boarSnapshot(db);report.sowSnapshot=I.sowSnapshot(db,state);report.rows=I.snapshot(db,state,report.date,roomBirthDate);I.syncPlan(report);report.status='draft';inventoryStoreSnapshot(c,report);c.editing=true;render();toast('現在の豚舎データを取り込み、今月の下書きに保存しました');return;
     }
     if(action==='carry'){
       const previous=db.inventoryMonths?.[I.previousMonth(c.report.month)];if(!previous)throw Error('前月の保存済み記録がありません。先に前月を保存してください。');

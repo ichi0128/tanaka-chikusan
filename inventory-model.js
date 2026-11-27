@@ -55,6 +55,17 @@ function aggregate(rows){
   return {totals,gilts,candidates,sows,unclassified,unknown,headTotal,total:Object.values(totals).reduce((a,b)=>a+b,0)};
 }
 function boarSnapshot(data){return {boars:root.TanakaModel.boarRecords(data)};}
+function sowSnapshot(data,state=root.TanakaModel.replay(data)){
+  const active=Object.values(state.sows).filter(s=>s.active),gilts=active.filter(s=>root.TanakaGilts?.isGilt(s)||s.numberPending);
+  return {ids:active.filter(s=>!s.numberPending&&!root.TanakaGilts?.isGilt(s)).map(s=>s.id),giltIds:gilts.map(s=>s.id),cullIds:active.filter(s=>s.cullCandidate).map(s=>s.id)};
+}
+function syncSowClassification(report,data){
+  if(!report.sowSnapshot)return false;
+  const next=sowSnapshot(data),ids=report.sowSnapshot.ids;
+  const classification={giltIds:next.giltIds,cullIds:next.cullIds.filter(id=>ids.includes(id)||next.giltIds.includes(id))};
+  if(JSON.stringify(report.sowSnapshot.giltIds)===JSON.stringify(classification.giltIds)&&JSON.stringify(report.sowSnapshot.cullIds)===JSON.stringify(classification.cullIds))return false;
+  Object.assign(report.sowSnapshot,classification);report.status='draft';return true;
+}
 function farmSummary(report){
   const stats=aggregate(report.rows),ids=report.sowSnapshot?.ids,registered=ids?ids.length:0;
   const areaTotals=Object.fromEntries(['farrowing','nursery','finishing','yard'].map(area=>[area,report.rows.filter(r=>r.area===area).reduce((sum,r)=>sum+(r.count??0),0)]));
@@ -70,7 +81,8 @@ function farmSummary(report){
   }
   for(const id of ids||[])if(!counted.has(id)){areaTotals[farrowingIds.has(id)?'farrowing':'yard']++;counted.add(id);}
   const boarCount=report.boarSnapshot?root.TanakaModel.activeBoars(report.boarSnapshot).length:null;
-  return {...stats,sowCount:ids?registered:null,boarCount,areaTotals,farmTotal:Object.values(areaTotals).reduce((sum,n)=>sum+n,0)+(boarCount??0)};
+  const cullIds=report.sowSnapshot?.cullIds,cullSows=(cullIds||[]).filter(id=>ids?.includes(id)).length,cullGilts=(cullIds||[]).filter(id=>report.sowSnapshot?.giltIds?.includes(id)&&!ids?.includes(id)).length;
+  return {...stats,sowCount:ids?registered-cullSows:null,giltCount:Math.max(0,stats.gilts-cullGilts),cullCount:cullIds?cullSows+cullGilts:null,boarCount,areaTotals,farmTotal:Object.values(areaTotals).reduce((sum,n)=>sum+n,0)+(boarCount??0)};
 }
 function syncBoarSnapshot(report,data){
   const next=boarSnapshot(data);if(JSON.stringify(report.boarSnapshot)===JSON.stringify(next))return false;
@@ -140,7 +152,7 @@ function weeklyTotal(report){return report.weekly.reduce((sum,n)=>sum+(n??0),0);
 function create(data,state,month,date,roomBirthDate){
   if(!validMonth(month))fail('対象月を選んでください。');
   const prev=data.inventoryMonths?.[previousMonth(month)],year=month.slice(0,4);
-  const report={month,date,status:'draft',boarSnapshot:boarSnapshot(data),sowSnapshot:{ids:Object.values(state.sows).filter(s=>s.active&&!s.numberPending&&!root.TanakaGilts?.isGilt(s)).map(s=>s.id)},rows:snapshot(data,state,date,roomBirthDate),shipping110:0,stock10:0,
+  const report={month,date,status:'draft',boarSnapshot:boarSnapshot(data),sowSnapshot:sowSnapshot(data,state),rows:snapshot(data,state,date,roomBirthDate),shipping110:0,stock10:0,
     previousStock:prev?plannedStock(prev):Object.fromEntries(STOCK.map(k=>[k,null])),
     carriedFrom:prev?prev.month:'',previousConfirmed:prev?.status==='confirmed',
     monthly:Array.from({length:12},(_,i)=>{const key=year+'-'+String(i+1).padStart(2,'0'),old=prev?.monthly.find(x=>x.month===key);return old?clone(old):{month:key,planned:key>month?20:null,actual:null};}),
@@ -157,6 +169,7 @@ function validateReport(r,month,history=false){
   if(r.stockPlanEdited!==undefined&&(!Array.isArray(r.stockPlanEdited)||r.stockPlanEdited.some(k=>!STOCK.includes(k))))fail('棚卸計画の形式を確認してください。');
   if(r.previousYearActual!==undefined&&(!Array.isArray(r.previousYearActual)||r.previousYearActual.length!==12||r.previousYearActual.some(x=>!count(x))))fail('前年実績を確認してください。');
   if(r.sowSnapshot!==undefined&&(!r.sowSnapshot||!Array.isArray(r.sowSnapshot.ids)||r.sowSnapshot.ids.some(id=>typeof id!=='string'||!/^\d+$/.test(id))||new Set(r.sowSnapshot.ids).size!==r.sowSnapshot.ids.length))fail('母豚頭数の月次記録を確認してください。');
+  for(const field of ['giltIds','cullIds'])if(r.sowSnapshot?.[field]!==undefined&&(!Array.isArray(r.sowSnapshot[field])||r.sowSnapshot[field].some(id=>typeof id!=='string'||!id)||new Set(r.sowSnapshot[field]).size!==r.sowSnapshot[field].length))fail('母豚区分の月次記録を確認してください。');
   if(r.boarSnapshot!==undefined){if(!r.boarSnapshot||!Array.isArray(r.boarSnapshot.boars))fail('種豚頭数の月次記録を確認してください。');root.TanakaModel.validateBoars(r.boarSnapshot);}
   const keys=new Set();
   for(const row of r.rows){
@@ -203,5 +216,5 @@ function syncSavedFinishingWeight(data,month,key,weight){
   if(syncFinishingWeight(report,key,weight))saveReport(data,report,JSON.stringify(old));
 }
 function gilts(state){return state.finishing.filter(r=>r.key==='yard').flatMap(r=>root.TanakaFinishing.yardState(r).individuals).filter(p=>(root.TanakaGilts?.yardKind(p,state)||p.kind)==='育成母豚').length;}
-root.TanakaInventory={boarSnapshot,syncBoarSnapshot,syncSavedBoars,syncFinishingWeight,syncSavedFinishingWeight,CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,rowKind,aggregate,farmSummary,currentStock,actualStock,plannedStock,resetPlan,needsOctoberPlanRepair,repairOctoberPlan,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
+root.TanakaInventory={sowSnapshot,syncSowClassification,boarSnapshot,syncBoarSnapshot,syncSavedBoars,syncFinishingWeight,syncSavedFinishingWeight,CATEGORIES,STOCK,validDate,validMonth,previousMonth,age,category,snapshot,rowKind,aggregate,farmSummary,currentStock,actualStock,plannedStock,resetPlan,needsOctoberPlanRepair,repairOctoberPlan,preparePlan,syncPlan,weeklyTotal,yearActual,create,validate,validateReport,saveReport,gilts,clone,yardIndividualRow,individualYardRows};
 })(typeof globalThis!=='undefined'?globalThis:this);

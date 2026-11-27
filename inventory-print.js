@@ -12,7 +12,7 @@ function inventoryPrintBirth(row){return row.area==='yard'?(F.yardBirthMonth(row
 function inventoryPrintRow(row){return `<td class="headcount">${row?inventoryPrintValue(row.count):'—'}</td><td>${row?inventoryPrintBirth(row):'—'}</td><td>${row?esc(row.sowId||'—'): '—'}${row&&I.rowKind(row)!=='肉豚'?`<small>${esc(I.rowKind(row))}</small>`:''}</td><td class="weight">${row?inventoryPrintWeight(row):'—'}</td>`;}
 function inventoryPrintFarmTotals(r){
   const s=I.farmSummary(r);
-  return `<div class="grand-total">${s.sowCount!==null&&s.boarCount!==null?'全豚舎の頭数':'確認対象 合計'} ${s.farmTotal}頭</div><div class="count-summary">${[['farrowing','分娩舎'],['nursery','育成舎'],['finishing','肉豚舎'],['yard','運動場']].map(([area,label])=>`<span>${label} ${s.areaTotals[area]}頭</span>`).join('')}<span>種豚 ${s.boarCount===null?'未保存':s.boarCount+'頭'}</span></div>`;
+  return `<div class="grand-total">${s.sowCount!==null&&s.boarCount!==null?'全豚舎の頭数':'確認対象 合計'} ${s.farmTotal}頭</div><div class="count-summary">${[['farrowing','分娩舎'],['nursery','育成舎'],['finishing','肉豚舎'],['yard','運動場']].map(([area,label])=>`<span>${label} ${s.areaTotals[area]}頭</span>`).join('')}<span>種豚 ${s.boarCount===null?'未保存':s.boarCount+'頭'}</span><span>母豚 ${s.sowCount===null?'未保存':s.sowCount+'頭'}</span><span>育成母豚 ${s.giltCount}頭</span><span>廃豚予定 ${s.cullCount===null?'未保存':s.cullCount+'頭'}</span></div>`;
 }
 function inventoryPrintCount(r){
   const finishing=r.rows.filter(x=>x.area==='finishing'),sideRows=side=>FINISHING_DISPLAY_COLUMNS[side].map(n=>finishing.find(row=>row.roomKey==='f'+n||row.key==='finishing:f'+n));

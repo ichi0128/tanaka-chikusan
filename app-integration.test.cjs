@@ -922,3 +922,9 @@ test('watchful waiting check date appears on the sow card and home without chang
  run("save(d=>TanakaSowWork.clearReheat(d,{id:'812',date:'2026-11-26',key:'watch-clear-test'}))");assert.match(run("reheatWatchControl('812')"),/disabled/);
 
 });
+test('inventory screen and print show four breeding groups with cull candidates excluded from mother total',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run(`var groupMonth=today().slice(0,7),groupBefore=I.farmSummary(I.create(db,state,groupMonth,today(),roomBirthDate));save(d=>{const r=I.create(d,M.replay(d),groupMonth,today(),roomBirthDate);I.saveReport(d,r,JSON.stringify(d.inventoryMonths?.[groupMonth]??null));TanakaCulling.mark(d,{id:'21',candidate:true,date:today(),key:'classify-21'});});var groupReport=db.inventoryMonths[groupMonth],groupTotals=I.farmSummary(groupReport);`);
+ assert.equal(run('groupTotals.sowCount'),run('groupBefore.sowCount-1'));assert.equal(run('groupTotals.farmTotal'),run('groupBefore.farmTotal'));assert.equal(run('groupTotals.cullCount'),1);
+ for(const fn of ['inventoryFarmTotals','inventoryPrintFarmTotals']){const html=run(fn+'(groupReport)');assert.match(html,/種豚/);assert.match(html,/母豚/);assert.match(html,/育成母豚 0頭/);assert.match(html,/廃豚予定 1頭/);}
+});
