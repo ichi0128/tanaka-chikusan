@@ -72,3 +72,22 @@ test('simulation cannot start while a cloud save or read is running',()=>{
   const s=setup();s.store.busy=true;assert.throws(()=>s.store.pause(),/終わって/);assert.equal(s.store.paused,false);
   s.store.busy=false;s.store.saving=Promise.resolve();assert.throws(()=>s.store.pause(),/終わって/);assert.equal(s.store.paused,false);
 });
+test('compact fingerprints match standard SHA-256 for canonical Unicode data and keep key-order equivalence',()=>{
+ const {fingerprint}=require('./cloud-store.js'),crypto=require('node:crypto');
+ for(const value of [null,'',{},[],{a:'母豚🐷と小貫',b:'\ud800'},fixture(),{large:'あ🐷'.repeat(10000)}])assert.equal(fingerprint(value),'sha256:'+crypto.createHash('sha256').update(signature(value),'utf8').digest('hex'));
+ assert.equal(fingerprint({b:2,a:1}),fingerprint({a:1,b:2}));assert.notEqual(fingerprint([1,2]),fingerprint([2,1]));
+});
+test('legacy full-size binding shrinks under near-full storage and cloud save retains every farm record and backup',async()=>{
+ const remote=fixture();remote.largeRetainedField='農場の過去記録🐷'.repeat(12000);const local=clone(remote);local.sows[0].note='未送信の現場修正';const storage=memory(),{BACKUP}=require('./cloud-store.js');
+ const binding={project:'https://test.supabase.co',userId:'u1',rowId:'row1',revision:1,signature:signature(remote),attempt:null};storage.setItem(META,JSON.stringify(binding));storage.setItem('tanaka-db',JSON.stringify(local));storage.setItem(BACKUP,JSON.stringify(remote));storage.setItem('tanaka-db-before-import-retained','以前の退避は削除しない');
+ const bytes=()=>[...storage.values].reduce((n,[k,v])=>n+2*(k.length+v.length),0),limit=bytes()+600,write=storage.setItem;storage.setItem=(key,value)=>{const prev=storage.getItem(key)||'',delta=2*(String(value).length-prev.length)+(storage.values.has(key)?0:key.length*2);if(bytes()+delta>limit)throw Object.assign(Error('quota'),{name:'QuotaExceededError'});write(key,value);};
+ const originalLocal=storage.getItem('tanaka-db'),originalArchive=storage.getItem('tanaka-db-before-import-retained'),s=setup({local,remote:row(remote),storage});await s.store.login('a','ok');assert.equal(s.store.status,'ready');assert.ok(storage.getItem(META).length<500);assert.equal(s.state.writes.length,0);assert.deepEqual(s.box.data,local);
+ await s.store.flush();assert.equal(s.store.status,'ready');assert.deepEqual(s.state.row.data,local);assert.equal(storage.getItem('tanaka-db'),originalLocal);assert.equal(storage.getItem('tanaka-db-before-import-retained'),originalArchive);assert.deepEqual(JSON.parse(storage.getItem(BACKUP)),remote);assert.ok(storage.getItem(META).length<500);
+});
+test('legacy full-size attempted-write acknowledgement preserves newer local edits after restart',async()=>{
+ const before=fixture(),sent=clone(before),local=clone(before);sent.sows[0].note='クラウドへ到達した記録';local.sows[0].note='その後の端末修正';const storage=memory();storage.setItem(META,JSON.stringify({project:'https://test.supabase.co',userId:'u1',rowId:'row1',revision:1,signature:signature(before),attempt:{rowId:'row1',revision:2,signature:signature(sent)}}));
+ const s=setup({local,remote:row(sent,2),storage});await s.store.login('a','ok');assert.equal(s.store.status,'ready');assert.deepEqual(s.box.data,local);assert.equal(s.state.writes.length,0);assert.match(JSON.parse(storage.getItem(META)).signature,/^sha256:[a-f0-9]{64}$/);
+});
+test('genuine quota failure remains guarded, reports Japanese guidance and never bypasses backups',async()=>{
+ const s=setup({remote:row()});await s.store.login('a','ok');s.box.data.sows[0].note='端末で保持する新記録';const before=clone(s.box.data);s.storage.setItem=()=>{throw Object.assign(Error('Storage quota exceeded'),{name:'QuotaExceededError'});};await assert.rejects(s.store.flush());assert.equal(s.state.writes.length,0);assert.deepEqual(s.box.data,before);assert.equal(s.store.status,'error');assert.match(s.store.message,/保存容量が不足/);assert.match(s.store.message,/記録は削除していません/);
+});
