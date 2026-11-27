@@ -32,7 +32,7 @@ function cloudDisplayState(){
   if(c?.status==='pending')return {label:'クラウド切替待ち',mode:'pending'};
   if(c?.status==='empty')return {label:'初回保存待ち',mode:'empty'};
   if(c?.status==='loading')return {label:'クラウド確認中',mode:'loading'};
-  if(c?.user&&['error','conflict'].includes(c.status))return {label:'端末保存・未同期',mode:c.status};
+  if(c?.user&&['error','conflict'].includes(c.status))return {label:c.status==='error'?'クラウド保存エラー':'クラウド競合・要確認',mode:c.status};
   return {label:online?'端末保存':'オフライン',mode:'local'};
 }
 function updateCloudBadge(){
@@ -47,9 +47,19 @@ function cloudVerificationSummary(){
   const same=!fatal&&db&&TanakaCloud.signature(db)===TanakaCloud.signature(c.row.data);
   return `<p class="muted cloud-verification">本人のクラウド行：確認済み<br>読み込んだ更新番号：${esc(c.row.revision)}<br>最後に確認したクラウドデータとの一致：${same?'一致':'未同期の変更あり'}<br>現在使用中：母豚 ${db?.sows?.length??'—'}頭・履歴 ${db?.logs?.length??'—'}件</p>`;
 }
+function cloudQuickActions(){
+  const display=cloudDisplayState(),c=cloudStore;
+  if(simulation||!c?.user)return '';
+  if(display.mode==='unsynced')return `<button type="button" class="btn secondary" data-cloud="save" ${c.busy||c.saving?'disabled':''}>クラウドへ保存</button><small>端末には保存済みです。未送信の記録をクラウドへ送ります。</small>`;
+  if(display.mode==='saving')return '<button type="button" class="btn secondary" disabled>クラウドへ送信中…</button>';
+  if(display.mode==='offline')return '<small>端末には保存済みです。通信が戻ってからクラウドへ保存してください。</small>';
+  if(['error','conflict','pending','empty'].includes(display.mode))return '<button type="button" class="btn secondary" data-action="page" data-id="edit">クラウドの状態を確認</button>';
+  return '';
+}
 function updateCloudUI(){
   updateCloudBadge();
   const panel=document.getElementById('cloud-settings');if(panel)panel.innerHTML=cloudSettingsBody()+cloudVerificationSummary();
+  const quick=document.getElementById('cloud-actions');if(quick){quick.innerHTML=cloudQuickActions();quick.hidden=!quick.innerHTML;}
   const strip=document.getElementById('cloud-status');
   if(strip){strip.textContent=simulation?'シミュレーション中 · 本番へ保存・同期しません':cloudStore?.message||'端末に保存しています';strip.dataset.state=cloudStore?.status||'signedout';}
 }

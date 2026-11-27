@@ -75,13 +75,13 @@ function ffRiskButtons(f){const risks=FF.riskSegments(f).filter(r=>r.peak>10),bu
 function ffMoveDetails(f){const rows=[...f.periods.filter(p=>p.key?.endsWith(':current')),...f.childStays];return `<details class="card"><summary>子豚の引っ越し予定（実績優先・未入力は60日後の仮予定）</summary>${rows.map(p=>`<p><b>${esc(ffLabel(f,p.id))}</b><br>${p.actualBirth?'実分娩日・誕生日':'分娩予測日'} ${p.birth}<br>引っ越し ${p.moveDate}（${p.moveBasis==='record'?'実績':'仮予定'}）<br><small>${esc(p.moveSource)}</small></p>`).join('')||'<p>予測できる子豚の引っ越しはありません。</p>'}</details>`;}
 // Read the shared current state so retirement, death and first mating use existing rules.
 function ffBreedingCadence(data=db){
-  const count=Object.values(M.replay(data).sows).filter(s=>s.active&&!TanakaGilts.isGilt(s)).length;
+  const count=Object.values(M.replay(data).sows).filter(s=>s.active&&!s.cullCandidate&&!TanakaGilts.isGilt(s)).length;
   const cycle=114+7+30+4;
   return {count,cycle,interval:count?cycle/count:null};
 }
 function ffBreedingCadenceSummary(){
   const c=ffBreedingCadence();
-  return `<section class="card ff-cadence"><h3>種付け間隔の目安</h3><p>母豚 <b>${c.count}頭</b></p><strong class="ff-cadence-value">${c.count?'約'+Math.round(c.interval)+'日に1頭':'対象の母豚がいません'}</strong><p class="muted">分娩舎10室・現在の繁殖周期で計算</p><details><summary>計算の内訳</summary><p>種付けから次の種付けまで：基本${c.cycle}日（分娩まで121日＋授乳30日＋離乳後4日）</p><p>${c.count?c.cycle+'日 ÷ 母豚'+c.count+'頭 ＝ 約'+c.interval.toFixed(1)+'日に1頭':'母豚を登録すると間隔を表示します。'}</p><p>在籍母豚が対象です。種付け前の育成母豚は除き、初回種付け後から含めます。廃豚・死亡した母豚は含めません。</p><p>子豚は60日齢で移動、分娩前の入室を含め1回約72〜75日の使用を想定。母豚数から均等に回す目安で、個別の授乳設定や再発情はこの基本計算には含めません。実際の日程は下の混雑予測で確認してください。</p></details></section>`;
+  return `<section class="card ff-cadence"><h3>種付け間隔の目安</h3><p>母豚 <b>${c.count}頭</b></p><strong class="ff-cadence-value">${c.count?'約'+Math.round(c.interval)+'日に1頭':'対象の母豚がいません'}</strong><p class="muted">分娩舎10室・現在の繁殖周期で計算</p><details><summary>計算の内訳</summary><p>種付けから次の種付けまで：基本${c.cycle}日（分娩まで121日＋授乳30日＋離乳後4日）</p><p>${c.count?c.cycle+'日 ÷ 母豚'+c.count+'頭 ＝ 約'+c.interval.toFixed(1)+'日に1頭':'母豚を登録すると間隔を表示します。'}</p><p>廃豚予定を除く在籍母豚が対象です。種付け前の育成母豚は除き、初回種付け後から含めます。廃豚・死亡した母豚は含めません。</p><p>子豚は60日齢で移動、分娩前の入室を含め1回約72〜75日の使用を想定。母豚数から均等に回す目安で、個別の授乳設定や再発情はこの基本計算には含めません。実際の日程は下の混雑予測で確認してください。</p></details></section>`;
 }
 function farrowingForecastPage(){
   const f=ffData();

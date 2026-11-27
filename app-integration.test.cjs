@@ -113,9 +113,9 @@ test('local edits and saves display pending cloud sync then confirmed cloud stat
 test('failure and conflict never display cloud save success',async()=>{
   const b=boot();await new Promise(resolve=>setImmediate(resolve));
   vm.runInContext("cloudStore.user={id:'owner'};cloudStore.emit('error','保存失敗');",b.context);
-  assert.equal(b.elements.get('network').textContent,'端末保存・未同期');
+  assert.equal(b.elements.get('network').textContent,'クラウド保存エラー');
   vm.runInContext("cloudStore.emit('conflict','競合');",b.context);
-  assert.equal(b.elements.get('network').textContent,'端末保存・未同期');
+  assert.equal(b.elements.get('network').textContent,'クラウド競合・要確認');
 });
 test('first insert is clearly distinguished from an active cloud row',async()=>{
   const b=boot();await new Promise(resolve=>setImmediate(resolve));
@@ -897,7 +897,7 @@ test('breeding cadence follows current active sows, excludes unmated gilts, and 
  const b=boot(),run=s=>vm.runInContext(s,b.context),saved=b.storage.getItem('tanaka-db');
  run(`var originalCadenceReplay=M.replay;var cadenceState={sows:Object.fromEntries(Array.from({length:18},(_,i)=>[String(i),{id:String(i),active:true}]))};M.replay=()=>cadenceState;`);
  assert.equal(run('ffBreedingCadence().count'),18);assert.equal(run('ffBreedingCadence().interval'),155/18);
- assert.match(run('ffBreedingCadenceSummary()'),/約9日に1頭/);
+ assert.match(run('ffBreedingCadenceSummary()'),/約9日に1頭/);run("cadenceState.sows['0'].cullCandidate=true");assert.equal(run('ffBreedingCadence().count'),17);run("cadenceState.sows['0'].cullCandidate=false");
  run(`cadenceState.sows.retired={active:false};cadenceState.sows.pending={active:true,numberPending:true};cadenceState.sows.gilt={active:true,giltRegistration:{confirmed:true},giltMated:false};`);
  assert.equal(run('ffBreedingCadence().count'),18);
  run('cadenceState.sows.gilt.giltMated=true');assert.equal(run('ffBreedingCadence().count'),19);
@@ -943,4 +943,21 @@ test('konuki reduces formal room stock but counts separately from normal shipmen
  run("var konukiRestored=M.migrate(JSON.parse(localStorage.getItem('tanaka-db')));new TanakaCloud.CloudStore({model:M}).validate(konukiRestored)");assert.equal(run("F.shipmentSummary(konukiRestored,today().slice(0,7),'konuki').currentTotal"),5);
  run("save(d=>F.addShipment(d,{key:'past-konuki',date:today(),count:2,shipmentKind:'konuki'}))");assert.equal(run("F.shipmentSummary(db,today().slice(0,7),'konuki').currentTotal"),7);assert.equal(run("TanakaAnnual.summary(db,today().slice(0,4)).shipments.automatic"),run('annualBefore'));
  run("save(d=>F.deleteShipment(d,'log',konukiKey))");assert.equal(run("F.shipmentSummary(db,today().slice(0,7),'konuki').currentTotal"),6);assert.equal(run("state.finishing.find(r=>r.key==='f3').state"),'empty');
+});
+test('home location cards separate planned culls but preserve physical stock and access to their sow cards',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);
+ run("var homeCountsBefore=homeBreedingCounts(),homeTotalBefore=I.farmSummary(I.create(db,state,today().slice(0,7),today(),roomBirthDate)).farmTotal;save(d=>{TanakaCulling.mark(d,{id:'21',candidate:true,date:today()});TanakaCulling.mark(d,{id:'106',candidate:true,date:today()});});var homeCountsAfter=homeBreedingCounts();");
+ assert.equal(run('homeCountsAfter.yardSows'),run('homeCountsBefore.yardSows-1'));assert.equal(run('homeCountsAfter.yardCulls'),1);assert.equal(run('homeCountsAfter.farrowingSows'),run('homeCountsBefore.farrowingSows-1'));assert.equal(run('homeCountsAfter.farrowingCulls'),1);
+ assert.equal(run('I.farmSummary(I.create(db,state,today().slice(0,7),today(),roomBirthDate)).farmTotal'),run('homeTotalBefore'));
+ assert.match(run('home()'),/運動場[^"<]*廃豚予定 1頭/);assert.match(run('home()'),/分娩舎[^"<]*廃豚予定 1頭/);assert.match(run('sowList()'),/data-sow-id="21"/);assert.match(run('sowList()'),/廃豚予定 1頭/);
+});
+test('cloud quick save is available only for known unsent changes; offline, errors and conflicts remain distinct',async()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context);await new Promise(r=>setImmediate(r));
+ run("cloudStore.user={id:'owner'};cloudStore.row={user_id:'owner',revision:1,data:M.clone(db)};cloudStore.emit('ready','一致');");assert.equal(run('cloudQuickActions()'),'');
+ run("save(d=>{d.sows[0].note='未送信の確認';});var cloudQuickLocal=JSON.stringify(db);");assert.match(b.elements.get('cloud-actions').innerHTML,/data-cloud="save"/);assert.match(b.elements.get('cloud-actions').innerHTML,/端末には保存済み/);
+ run('navigator.onLine=false;network()');assert.doesNotMatch(run('cloudQuickActions()'),/data-cloud="save"/);
+ run("navigator.onLine=true;cloudStore.emit('conflict','更新競合');");assert.match(run('cloudQuickActions()'),/クラウドの状態を確認/);assert.doesNotMatch(run('cloudQuickActions()'),/data-cloud="save"/);
+ run("cloudStore.emit('error','送信に失敗');");assert.equal(b.elements.get('network').textContent,'クラウド保存エラー');
+ run("cloudStore.emit('saving','送信中');");assert.match(run('cloudQuickActions()'),/disabled/);
+ run("cloudStore.row={...cloudStore.row,data:M.clone(db)};cloudStore.emit('ready','保存済み');");assert.equal(run('cloudQuickActions()'),'');assert.equal(run('JSON.stringify(db)===cloudQuickLocal'),true);
 });
