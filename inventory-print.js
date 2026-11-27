@@ -7,7 +7,7 @@ function inventoryPrintValue(n){return n===null||n===undefined||n===''?'—':esc
 function inventoryPrintSum(values){const known=values.filter(n=>n!==null&&n!==undefined);return (known.length?known.reduce((a,b)=>a+b,0):'—')+(known.length<values.length?' ※':'');}
 function inventoryPrintHead(rows){return inventoryHeadcountText(rows).replaceAll('室','行');}
 function inventoryPrintMeta(r,part){return `<div class="report-meta"><span>対象月：${inventoryMonthLabel(r.month)}</span><span>確認日：${esc(r.date.replaceAll('-','/'))}</span><span>田中畜産</span></div><div class="report-subtitle">${part}</div>`;}
-function inventoryPrintWeight(row){return row.area==='yard'?inventoryPrintValue(inventoryYardWeight(row)):row.category?inventoryLabel(row.category):'—';}
+function inventoryPrintWeight(row){if(row.count===0)return '—';return row.area==='yard'?inventoryPrintValue(inventoryYardWeight(row)):row.category?inventoryLabel(row.category):'—';}
 function inventoryPrintBirth(row){return row.area==='yard'?(F.yardBirthMonth(row)?F.yardBirthMonth(row)+'月':'—'):(row.birthDate?esc(row.birthDate.slice(5).split('-').map(Number).join('/')):'—');}
 function inventoryPrintRow(row){return `<td class="headcount">${row?inventoryPrintValue(row.count):'—'}</td><td>${row?inventoryPrintBirth(row):'—'}</td><td>${row?esc(row.sowId||'—'): '—'}${row&&I.rowKind(row)!=='肉豚'?`<small>${esc(I.rowKind(row))}</small>`:''}</td><td class="weight">${row?inventoryPrintWeight(row):'—'}</td>`;}
 function inventoryPrintFarmTotals(r){

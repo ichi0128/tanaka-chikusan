@@ -961,3 +961,10 @@ test('cloud quick save is available only for known unsent changes; offline, erro
  run("cloudStore.emit('saving','送信中');");assert.match(run('cloudQuickActions()'),/disabled/);
  run("cloudStore.row={...cloudStore.row,data:M.clone(db)};cloudStore.emit('ready','保存済み');");assert.equal(run('cloudQuickActions()'),'');assert.equal(run('JSON.stringify(db)===cloudQuickLocal'),true);
 });
+test('empty inventory rooms hide stored weight on screen and print, reenable with heads, and preserve saved information',()=>{
+ const b=boot(),run=s=>vm.runInContext(s,b.context),stored=b.storage.getItem('tanaka-db');
+ run(`var emptyWeightRow={area:'finishing',roomKey:'f18',place:'肉豚舎',count:0,category:'30',registeredWeight:30},emptyWeightBefore=JSON.stringify(emptyWeightRow),weightSlot={innerHTML:'',dataset:{emptyWeight:'false'}},weightQuery=document.querySelector;document.querySelector=selector=>selector==='[data-inventory-room-weight="0"]'?weightSlot:null;inventoryRefreshEmptyWeights({rows:[emptyWeightRow]});`);
+ assert.match(run('weightSlot.innerHTML'),/disabled/);assert.match(run('weightSlot.innerHTML'),/—（空室）/);assert.doesNotMatch(run('weightSlot.innerHTML'),/30kg/);assert.match(run('weightSlot.innerHTML'),/type="hidden" name="category_0" value="30"/);assert.equal(run('inventoryPrintWeight(emptyWeightRow)'),'—');assert.equal(run('JSON.stringify(emptyWeightRow)===emptyWeightBefore'),true);
+ run('emptyWeightRow.count=2;inventoryRefreshEmptyWeights({rows:[emptyWeightRow]})');assert.doesNotMatch(run('weightSlot.innerHTML'),/disabled|空室/);assert.match(run('weightSlot.innerHTML'),/30kg/);assert.equal(run('inventoryPrintWeight(emptyWeightRow)'),'30kg');
+ run('document.querySelector=weightQuery');assert.equal(b.storage.getItem('tanaka-db'),stored);
+});
