@@ -514,7 +514,7 @@ test('weekly shipment plan is for the following month in screen, history and pri
  }
 });
 
-test('editing previous inventory stock saves only the displayed month and survives JSON/cloud restore, history and printing',()=>{
+test('editing previous stock and prior-year actuals saves only the displayed month and survives JSON/cloud restore, history and printing',()=>{
  const b=boot();vm.runInContext(`
   save(d=>{for(const month of ['2026-09','2026-10']){const r=I.create(d,M.replay(d),month,month+'-25',()=> '');r.weekly=[7,5,5,5,5];r.plannedStock['110']=15;r.plannedStock['100']=15;r.stockPlanEdited=['110','100'];I.saveReport(d,r,'null');}});
   inventoryMonth='2026-10';var previousContext=inventoryContext();previousContext.editing=true;
@@ -525,12 +525,14 @@ test('editing previous inventory stock saves only the displayed month and surviv
   previousContext.report.weekly.forEach((n,i)=>previousFields.set('week_'+i,n??''));
   previousContext.report.monthly.forEach((x,i)=>{previousFields.set('planned_'+i,x.planned??'');previousFields.set('actual_'+i,x.actual??'');});
   FormData=class{get(name){return previousFields.has(name)?previousFields.get(name):null;}};
+  var photoPrior=[26,30,24,10,25,12,16,20,4,28,15,18];photoPrior.forEach((n,i)=>previousFields.set('prior_actual_'+i,String(n)));
   previousFields.set('stock_previous_110','10');previousFields.set('stock_previous_100','5');previousFields.set('stock_previous_90','');previousFields.set('stock_previous_80','0');
   inventoryUpdate({name:'stock_previous_110'});
   var editedPrevious=inventoryRead();I.syncPlan(editedPrevious);inventoryStoreSnapshot(previousContext,editedPrevious);
  `,b.context);
  const x=JSON.parse(vm.runInContext(`JSON.stringify({r:db.inventoryMonths['2026-10'],before:untouchedOctober,septSame:JSON.stringify(db.inventoryMonths['2026-09'])===untouchedSeptember,farmSame:JSON.stringify({...db,inventoryMonths:null})===untouchedFarm})`,b.context));
  assert.equal(x.r.previousStock['110'],10);assert.equal(x.r.previousStock['100'],5);assert.equal(x.r.previousStock['90'],null);assert.equal(x.r.previousStock['80'],0);
+ assert.deepEqual(x.r.previousYearActual,[26,30,24,10,25,12,16,20,4,28,15,18]);assert.deepEqual(x.r.revisions.at(-1).report.previousYearActual,x.before.previousYearActual);
  assert.ok(x.septSame);assert.ok(x.farmSame);
  for(const field of ['rows','plannedStock','stockPlanEdited','weekly','monthly','date','remarks'])assert.deepEqual(x.r[field],x.before[field],field);
  assert.deepEqual(x.r.revisions.at(-1).report.previousStock,x.before.previousStock);
@@ -539,6 +541,13 @@ test('editing previous inventory stock saves only the displayed month and surviv
  assert.match(vm.runInContext(`inventoryPrintPlan(previousContext.report)`,b.context),/<th>110kg<\/th><td>10<\/td>/);
  vm.runInContext(`var restoredPrevious=M.migrate(JSON.parse(localStorage.getItem('tanaka-db')));M.validate(restoredPrevious);cloudStore.validate(restoredPrevious);cloudStore.replaceLocal(restoredPrevious);inventoryDrafts.clear();`,b.context);
  assert.equal(vm.runInContext(`inventoryContext().report.previousStock['110']`,b.context),10);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(inventoryContext().report.previousYearActual)',b.context)),[26,30,24,10,25,12,16,20,4,28,15,18]);
+ assert.match(vm.runInContext('inventoryPlan(previousContext.report)',b.context),/name="prior_actual_0"[^>]*value="26"/);assert.match(vm.runInContext('inventoryPlan(previousContext.report)',b.context),/228頭/);assert.doesNotMatch(vm.runInContext('inventoryPlan(previousContext.report,true)',b.context),/name="prior_actual_/);
+ assert.match(vm.runInContext('inventoryPrintPlan(previousContext.report)',b.context),/<th>1月<\/th><td>26<\/td>/);
+ assert.deepEqual(JSON.parse(vm.runInContext(`JSON.stringify(I.create(db,state,'2026-11','2026-11-27',roomBirthDate).previousYearActual)`,b.context)),x.r.previousYearActual);
+ vm.runInContext(`inventoryContext().editing=true;previousFields.set('prior_actual_0','');previousFields.set('prior_actual_1','0');`,b.context);assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(inventoryRead().previousYearActual.slice(0,2))',b.context)),[null,0]);
+ vm.runInContext(`previousFields.set('prior_actual_0','-1');`,b.context);assert.throws(()=>vm.runInContext('inventoryRead()',b.context),/0以上の整数/);vm.runInContext(`previousFields.set('prior_actual_0','26');`,b.context);
+
  vm.runInContext(`previousFields.set('stock_previous_100','-1');inventoryContext().editing=true;`,b.context);assert.throws(()=>vm.runInContext('inventoryRead()',b.context),/0以上の整数/);
 });
 
