@@ -80,6 +80,17 @@ function inventoryPrintStyles(){return `
  .plan-sheet>.report-note{margin-top:1mm;margin-bottom:0}
  .sheet{line-height:1.3}.sheet h1{line-height:1.25}.sheet h2,.sheet th,.sheet td{line-height:1.3}
  .sheet.portrait{width:185mm}.sheet.landscape{width:272mm}
+ /* Leave room for the added breeding counts and footer breakdown. Use normal
+    block flow here so Android does not carry a flex gap onto a spare page. */
+ .count-notebook h1{margin-bottom:2mm}
+ .count-notebook>.report-subtitle{margin:2mm 0}
+ .count-notebook .notebook-group{margin-bottom:1.5mm}
+ .count-notebook .notebook-group h2{margin:1.5mm 0 .8mm}
+ .count-notebook .notebook-group>.report-note{margin:.8mm 0}
+ .count-notebook .count-summary-by-kind{display:block;line-height:1.35}
+ .count-notebook .count-summary-by-kind>span{display:inline-block;margin-right:4mm}
+ .count-notebook .count-summary-by-kind>.area-breakdown{display:block;margin-right:0}
+ .count-notebook>.report-note:last-of-type{margin-top:1.5mm}
  .sheet.portrait + .sheet.portrait{break-before:page}
  .room-report tbody tr{height:12mm}.room-report tfoot tr{height:10mm}
  .aggregate-report tbody tr{height:11mm}.aggregate-report tfoot tr{height:12mm}
