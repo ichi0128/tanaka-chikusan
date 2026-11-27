@@ -275,9 +275,11 @@ test('print output keeps all four report sections, values and final notes withou
  vm.runInContext(`var printReport=I.clone(db.inventoryMonths[weightMonth]);printReport.remarks='印刷確認用の備考';printReport.weekly=[3,4,5,6,7];`,b.context);
  const html=vm.runInContext(`inventoryPrintDocument(printReport,'all')`,b.context);
  assert.equal((html.match(/<section class="sheet /g)||[]).length,4);
+ const checks=vm.runInContext(`inventoryPrintDocument(printReport,'check')`,b.context);assert.equal((checks.match(/<section class="sheet /g)||[]).length,3);assert.doesNotMatch(checks,/<section class="sheet[^"]*plan-sheet/);assert.match(checks,/<title>[^<]*確認用/);assert.equal(vm.runInContext('inventoryPrintDocument(printReport)',b.context),checks);
+ const controls=vm.runInContext('inventoryPrintControls()',b.context);assert.match(controls,/data-print="check"/);assert.match(controls,/③ 提出用を印刷/);assert.doesNotMatch(controls,/data-print="all"|data-inventory-panel="3"/);
  for(const [mode,pages] of [[1,2],[2,1],[3,1]]){
    const part=vm.runInContext(`inventoryPrintDocument(printReport,${mode})`,b.context);
-   assert.equal((part.match(/<section class="sheet /g)||[]).length,pages);
+   assert.equal((part.match(/<section class="sheet /g)||[]).length,pages);if(mode===3){assert.doesNotMatch(part,/<section class="sheet portrait/);assert.match(part,/<title>[^<]*出荷計画報告書/);}
  }
  assert.match(html,/印刷確認用の備考/);assert.match(html,/25頭/);assert.match(html,/種豚 2頭/);
  assert.match(html,/単位：頭（体重はkg）。/);assert.match(html,/年間見込は過去月の入力済み実績を優先/);
